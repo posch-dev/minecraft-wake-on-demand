@@ -90,7 +90,7 @@ if not SSH_KEY_PATH:
     if IS_WINDOWS:
         SSH_KEY_PATH = str(Path(os.environ["USERPROFILE"]) / ".ssh" / "id_ed25519")
     else:
-        SSH_KEY_PATH = "/root/.ssh/id_ed25519"
+        SSH_KEY_PATH = str(Path.home() / ".ssh" / "id_ed25519")
 
 DUCKDNS_ENABLED = CFG.get("duckdns", {}).get("enabled", False)
 DUCKDNS_DOMAIN = CFG.get("duckdns", {}).get("domain", "")
