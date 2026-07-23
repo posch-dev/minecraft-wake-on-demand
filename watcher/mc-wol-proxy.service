@@ -5,6 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+User=MC_WOL_USER
+Group=MC_WOL_USER
 ExecStart=/usr/bin/python3 -u /opt/mc-wol-proxy/mc_wol_proxy.py
 Environment=MC_WOL_CONFIG=/opt/mc-wol-proxy/config.yml
 Restart=always

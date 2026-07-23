@@ -11,6 +11,12 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+RUN_USER="${SUDO_USER:-$(whoami)}"
+if [ "$RUN_USER" = "root" ]; then
+    echo "WARNING: No SUDO_USER detected, service will run as root."
+    echo "  Consider running with: sudo -E ./install.sh"
+fi
+
 if [ "$1" = "--uninstall" ]; then
     echo "Stopping and disabling mc-wol-proxy..."
     systemctl stop mc-wol-proxy 2>/dev/null || true
@@ -85,8 +91,8 @@ else
     echo "Config already exists at $INSTALL_DIR/config.yml (not overwritten)"
 fi
 
-cp "$SCRIPT_DIR/mc-wol-proxy.service" "$SERVICE_FILE"
-echo "Installed systemd service"
+sed "s/MC_WOL_USER/$RUN_USER/g" "$SCRIPT_DIR/mc-wol-proxy.service" > "$SERVICE_FILE"
+echo "Installed systemd service (running as $RUN_USER)"
 
 systemctl daemon-reload
 systemctl enable mc-wol-proxy
