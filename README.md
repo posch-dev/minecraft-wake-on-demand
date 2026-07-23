@@ -64,6 +64,8 @@ ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""
 ssh-copy-id -i ~/.ssh/id_ed25519.pub user@server-ip
 ```
 
+The systemd service runs as the user who called `sudo ./install.sh`, so it uses `~/.ssh/id_ed25519` from that user's home directory. You can override this with `ssh_key_path` in `config.yml`.
+
 Restrict the key in the server's `~/.ssh/authorized_keys` so it can only run `docker start` (see [authorized_keys restriction](#authorized_keys-restriction)).
 
 ### 3. Enable WoL on the server PC
@@ -131,6 +133,27 @@ Unicast (recommended) sends the magic packet directly to the server's IP. Works 
 Broadcast sends it to the subnet broadcast address (e.g. `192.168.1.255`). Try this if unicast doesn't wake your machine.
 
 Set `wol.mode` in `config.yml` to `"unicast"` or `"broadcast"`.
+
+## Customizing MOTD and server icon
+
+The watcher shows a custom MOTD in the Minecraft server list when the server is sleeping or starting. You can customize these by editing the files in the `assets/` directory:
+
+| File | Description |
+|------|-------------|
+| `assets/motd-sleeping.json` | Shown when the server is off |
+| `assets/motd-starting.json` | Shown while the server is booting |
+| `assets/server-icon.png` | 64x64 PNG shown in the server list |
+
+Each MOTD file contains a single Minecraft JSON text component, e.g.:
+```json
+{"text":"Server is sleeping - connect to wake it up!","color":"yellow"}
+```
+
+For the server icon, place a 64x64 PNG as `assets/server-icon.png`. The watcher base64-encodes it automatically.
+
+When installed via systemd, assets are at `/opt/mc-wol-proxy/assets/`. Existing assets are never overwritten on reinstall.
+
+If no asset files are found, the values from `config.yml` are used as fallback.
 
 ## DuckDNS
 
