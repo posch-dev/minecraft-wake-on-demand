@@ -2,6 +2,7 @@
 """Minecraft Wake-on-Demand Proxy"""
 
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -81,9 +82,48 @@ WOL_MODE = CFG["wol"]["mode"]
 BROADCAST_ADDR = CFG["wol"]["broadcast_address"]
 BOOT_TIMEOUT = CFG["timeouts"]["boot_timeout"]
 MC_READY_TIMEOUT = CFG["timeouts"]["mc_ready_timeout"]
-MOTD_SLEEPING = CFG["motd"]["sleeping"]
-MOTD_STARTING = CFG["motd"]["starting"]
 MAX_PLAYERS = CFG["motd"]["max_players"]
+
+ASSETS_DIR = Path(os.environ.get("MC_WOL_CONFIG", __file__)).resolve().parent / "assets"
+
+def load_motd(filename, fallback):
+    path = ASSETS_DIR / filename
+    if path.is_file():
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+            json.loads(content)
+            return content
+        except (json.JSONDecodeError, OSError) as e:
+            log.warning("Failed to load %s: %s, using fallback", path, e)
+    return fallback
+
+def load_icon():
+    path = ASSETS_DIR / "server-icon.png"
+    if path.is_file():
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+            encoded = base64.b64encode(data).decode("ascii")
+            return f"data:image/png;base64,{encoded}"
+        except OSError as e:
+            log.warning("Failed to load server icon: %s", e)
+    return None
+
+MOTD_SLEEPING_FALLBACK = CFG["motd"]["sleeping"]
+MOTD_STARTING_FALLBACK = CFG["motd"]["starting"]
+
+
+def get_motd_sleeping():
+    return load_motd("motd-sleeping.json", MOTD_SLEEPING_FALLBACK)
+
+
+def get_motd_starting():
+    return load_motd("motd-starting.json", MOTD_STARTING_FALLBACK)
+
+
+def get_icon():
+    return load_icon()
 
 SSH_KEY_PATH = CFG["server"].get("ssh_key_path") or ""
 if not SSH_KEY_PATH:
@@ -127,12 +167,14 @@ def write_varint(value):
     return bytes(out)
 
 
-def make_status_response(motd_json, max_players, online=0):
+def make_status_response(motd_json, max_players, online=0, icon=None):
     payload = {
-        "version": {"name": "1.21", "protocol": 770},
+        "version": {"name": "", "protocol": -1},
         "players": {"max": max_players, "online": online},
         "description": json.loads(motd_json) if isinstance(motd_json, str) else motd_json,
     }
+    if icon:
+        payload["favicon"] = icon
     payload_str = json.dumps(payload, ensure_ascii=False)
     payload_bytes = payload_str.encode("utf-8")
     data = write_varint(0) + write_varint(len(payload_bytes)) + payload_bytes
@@ -370,14 +412,14 @@ async def handle_client(client_reader, client_writer):
                 client_writer.close()
             return
 
-        motd = MOTD_STARTING if _booting else MOTD_SLEEPING
+        motd = get_motd_starting() if _booting else get_motd_sleeping()
         try:
             status_req = await asyncio.wait_for(client_reader.read(4096), timeout=5)
         except (asyncio.TimeoutError, ConnectionResetError):
             client_writer.close()
             return
 
-        response = make_status_response(motd, MAX_PLAYERS)
+        response = make_status_response(motd, MAX_PLAYERS, icon=get_icon())
         client_writer.write(response)
         await client_writer.drain()
 

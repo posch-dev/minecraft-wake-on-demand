@@ -91,6 +91,21 @@ else
     echo "Config already exists at $INSTALL_DIR/config.yml (not overwritten)"
 fi
 
+# copy default assets (never overwrite existing ones)
+mkdir -p "$INSTALL_DIR/assets"
+for f in "$SCRIPT_DIR/assets"/*; do
+    [ -f "$f" ] || continue
+    dest="$INSTALL_DIR/assets/$(basename "$f")"
+    if [ ! -f "$dest" ]; then
+        cp "$f" "$dest"
+        echo "Copied $(basename "$f") to $INSTALL_DIR/assets/"
+    else
+        echo "Asset $(basename "$f") already exists (not overwritten)"
+    fi
+done
+chown -R "$RUN_USER:$RUN_USER" "$INSTALL_DIR/assets"
+echo "  >>> Customize MOTD and icon in $INSTALL_DIR/assets/ <<<"
+
 sed "s/MC_WOL_USER/$RUN_USER/g" "$SCRIPT_DIR/mc-wol-proxy.service" > "$SERVICE_FILE"
 echo "Installed systemd service (running as $RUN_USER)"
 

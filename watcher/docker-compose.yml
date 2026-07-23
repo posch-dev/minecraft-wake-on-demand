@@ -5,6 +5,7 @@ services:
     network_mode: host
     volumes:
       - ../config.yml:/config.yml:ro
+      - ./assets:/assets:ro
       - ~/.ssh/id_ed25519:/root/.ssh/id_ed25519:ro
     environment:
       MC_WOL_CONFIG: /config.yml
