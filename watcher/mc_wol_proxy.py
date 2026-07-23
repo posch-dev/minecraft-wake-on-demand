@@ -170,6 +170,32 @@ def mc_port_reachable():
         return False
 
 
+def mc_accepts_status():
+    """Check if MC server responds to a status ping (not just port open)."""
+    try:
+        s = socket.create_connection((SERVER_IP, MC_PORT), timeout=3)
+        # send handshake (status request, state=1)
+        host_bytes = SERVER_IP.encode("utf-8")
+        handshake_data = (
+            write_varint(0x00)
+            + write_varint(-1)
+            + write_varint(len(host_bytes)) + host_bytes
+            + struct.pack(">H", MC_PORT)
+            + write_varint(1)
+        )
+        s.sendall(write_varint(len(handshake_data)) + handshake_data)
+        # send status request
+        status_req = write_varint(0x00)
+        s.sendall(write_varint(len(status_req)) + status_req)
+        # try to read response
+        s.settimeout(3)
+        resp = s.recv(4096)
+        s.close()
+        return len(resp) > 0
+    except OSError:
+        return False
+
+
 def ssh_port_reachable():
     try:
         s = socket.create_connection((SERVER_IP, 22), timeout=2)
@@ -256,11 +282,11 @@ async def wait_for_mc():
     log.info("Waiting for Minecraft port %d (timeout %ds)...", MC_PORT, MC_READY_TIMEOUT)
     loop = asyncio.get_event_loop()
     for _ in range(MC_READY_TIMEOUT // 2):
-        if await loop.run_in_executor(None, mc_port_reachable):
-            log.info("Minecraft port is ready")
+        if await loop.run_in_executor(None, mc_accepts_status):
+            log.info("Minecraft server is ready")
             return True
         await asyncio.sleep(2)
-    log.error("Minecraft port not ready within %ds", MC_READY_TIMEOUT)
+    log.error("Minecraft server not ready within %ds", MC_READY_TIMEOUT)
     return False
 
 
