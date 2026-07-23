@@ -1,0 +1,25 @@
+services:
+  minecraft:
+    image: itzg/minecraft-server:latest
+    container_name: minecraft
+    restart: "no"
+    tty: true
+    stdin_open: true
+    ports:
+      - "25565:25565"
+    environment:
+      EULA: "TRUE"
+      TYPE: "PAPER"
+      VERSION: "LATEST"
+      MEMORY: "4G"
+      AUTOPAUSE: "TRUE"
+      AUTOPAUSE_TIMEOUT_EST: "3600"
+      AUTOPAUSE_TIMEOUT_INIT: "600"
+      DIFFICULTY: "normal"
+      MAX_PLAYERS: "10"
+      MOTD: "My Minecraft Server"
+      OPS: ""
+      WHITELIST: ""
+      ENFORCE_WHITELIST: "false"
+    volumes:
+      - ./data:/data
