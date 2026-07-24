@@ -128,9 +128,9 @@ command="C:\Program Files\Docker\Docker\resources\bin\docker.exe start minecraft
 
 ## WoL modes
 
-Unicast (recommended) sends the magic packet directly to the server's IP. Works when the watcher is on WiFi or in a different subnet.
+Broadcast (recommended) sends the magic packet to the subnet broadcast address (e.g. `192.168.1.255`). Works reliably even when the ARP cache has expired (e.g. after the server has been off overnight).
 
-Broadcast sends it to the subnet broadcast address (e.g. `192.168.1.255`). Try this if unicast doesn't wake your machine.
+Unicast sends the magic packet directly to the server's IP. This can fail if the ARP entry for the server has expired.
 
 Set `wol.mode` in `config.yml` to `"unicast"` or `"broadcast"`.
 
