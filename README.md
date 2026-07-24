@@ -134,6 +134,35 @@ Unicast sends the magic packet directly to the server's IP. This can fail if the
 
 Set `wol.mode` in `config.yml` to `"unicast"` or `"broadcast"`.
 
+## Transfer mode
+
+By default, the watcher proxies the entire Minecraft connection through itself. With transfer mode enabled, the watcher only handles the wake-up sequence and then sends a Minecraft transfer packet to redirect the player directly to the server. This removes the watcher from the data path and gives players a direct connection with better performance.
+
+To enable transfer mode:
+
+1. Forward a second port on your router (e.g. `25566`) directly to the server PC's Minecraft port (`25565`)
+2. Set `accepts-transfers=true` in the server's `server.properties`
+3. Configure `transfer` in `config.yml`:
+
+```yaml
+transfer:
+  enabled: true
+  host: "your-domain.duckdns.org"
+  port: 25566
+```
+
+```
+[Player] --> :25565 --> [Watcher] --transfer--> :25566 --> [Server PC]
+                          (wake up only)              (direct connection)
+```
+
+With transfer mode disabled (default), the watcher proxies all traffic:
+
+```
+[Player] --> :25565 --> [Watcher] --proxy--> [Server PC]
+                     (all traffic flows through watcher)
+```
+
 ## Customizing MOTD and server icon
 
 The watcher shows a custom MOTD in the Minecraft server list when the server is sleeping or starting. You can customize these by editing the files in the `assets/` directory:

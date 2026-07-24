@@ -59,6 +59,9 @@ def env_override(cfg):
         "DUCKDNS_UPDATE_INTERVAL_HOURS": ("duckdns", "update_interval_hours", int),
         "BOOT_TIMEOUT": ("timeouts", "boot_timeout", int),
         "MC_READY_TIMEOUT": ("timeouts", "mc_ready_timeout", int),
+        "TRANSFER_ENABLED": ("transfer", "enabled", lambda v: v.lower() == "true"),
+        "TRANSFER_HOST": ("transfer", "host"),
+        "TRANSFER_PORT": ("transfer", "port", int),
     }
     for env_key, spec in mapping.items():
         val = os.environ.get(env_key)
@@ -137,6 +140,10 @@ DUCKDNS_DOMAIN = CFG.get("duckdns", {}).get("domain", "")
 DUCKDNS_TOKEN = CFG.get("duckdns", {}).get("token", "")
 DUCKDNS_INTERVAL = CFG.get("duckdns", {}).get("update_interval_hours", 6)
 
+TRANSFER_ENABLED = CFG.get("transfer", {}).get("enabled", False)
+TRANSFER_HOST = CFG.get("transfer", {}).get("host", "")
+TRANSFER_PORT = CFG.get("transfer", {}).get("port", 25566)
+
 def read_varint(data, offset=0):
     result = 0
     shift = 0
@@ -186,20 +193,58 @@ def make_ping_response(payload_long):
     return write_varint(len(data)) + data
 
 
+def parse_login_start(data, offset=0):
+    try:
+        pkt_len, off = read_varint(data, offset)
+        pkt_id, off = read_varint(data, off)
+        if pkt_id != 0x00:
+            return None, None
+        name_len, off = read_varint(data, off)
+        name = data[off:off + name_len].decode("utf-8")
+        off += name_len
+        uuid_bytes = data[off:off + 16]
+        return name, uuid_bytes
+    except (ValueError, IndexError):
+        return None, None
+
+
+def make_login_success(uuid_bytes, username):
+    username_bytes = username.encode("utf-8")
+    data = (
+        write_varint(0x02)
+        + uuid_bytes
+        + write_varint(len(username_bytes)) + username_bytes
+        + write_varint(0)  # no properties
+        + bytes([0x01])  # strict error handling
+    )
+    return write_varint(len(data)) + data
+
+
+def make_transfer_packet(host, port):
+    host_bytes = host.encode("utf-8")
+    data = (
+        write_varint(0x0B)  # Transfer packet ID (configuration state)
+        + write_varint(len(host_bytes)) + host_bytes
+        + write_varint(port)
+    )
+    return write_varint(len(data)) + data
+
+
 def parse_handshake(data):
     try:
         pkt_len, off = read_varint(data, 0)
+        pkt_end = off + pkt_len
         pkt_id, off = read_varint(data, off)
         if pkt_id != 0x00:
             return None
-        _proto_ver, off = read_varint(data, off)
+        proto_ver, off = read_varint(data, off)
         addr_len, off = read_varint(data, off)
-        _server_addr = data[off:off + addr_len].decode("utf-8", errors="replace")
+        server_addr = data[off:off + addr_len].decode("utf-8", errors="replace")
         off += addr_len
-        _server_port = struct.unpack(">H", data[off:off + 2])[0]
+        server_port = struct.unpack(">H", data[off:off + 2])[0]
         off += 2
         next_state, off = read_varint(data, off)
-        return next_state, _server_addr, _server_port
+        return next_state, server_addr, server_port, proto_ver, pkt_end
     except (ValueError, struct.error, IndexError):
         return None
 
@@ -396,7 +441,7 @@ async def handle_client(client_reader, client_writer):
         client_writer.close()
         return
 
-    next_state, server_addr, server_port = handshake
+    next_state, server_addr, server_port, proto_ver, handshake_end = handshake
 
     if next_state == 1:
         if mc_port_reachable():
@@ -451,6 +496,40 @@ async def handle_client(client_reader, client_writer):
                 client_writer.close()
                 return
 
+        if TRANSFER_ENABLED:
+            try:
+                login_data = initial_data[handshake_end:]
+                if not login_data:
+                    login_data = await asyncio.wait_for(client_reader.read(4096), timeout=10)
+
+                name, uuid_bytes = parse_login_start(login_data)
+                if name is None:
+                    log.warning("Failed to parse login start from %s", addr)
+                    client_writer.close()
+                    return
+
+                client_writer.write(make_login_success(uuid_bytes, name))
+                await client_writer.drain()
+
+                await asyncio.wait_for(client_reader.read(4096), timeout=5)
+
+                log.info("Transferring %s to %s:%d", name, TRANSFER_HOST, TRANSFER_PORT)
+                client_writer.write(make_transfer_packet(TRANSFER_HOST, TRANSFER_PORT))
+                await client_writer.drain()
+
+                try:
+                    client_writer.close()
+                    await client_writer.wait_closed()
+                except OSError:
+                    pass
+            except (asyncio.TimeoutError, ConnectionResetError, OSError) as e:
+                log.error("Transfer failed for %s: %s", addr, e)
+                try:
+                    client_writer.close()
+                except OSError:
+                    pass
+            return
+
         try:
             srv_reader, srv_writer = await asyncio.open_connection(SERVER_IP, MC_PORT)
             log.info("Forwarding connection from %s to %s:%d", addr, SERVER_IP, MC_PORT)
@@ -491,6 +570,10 @@ async def main():
     log.info("Minecraft Wake-on-Demand Proxy listening on 0.0.0.0:%d", LISTEN_PORT)
     log.info("Server: %s (%s) port %d, container '%s'", SERVER_IP, SERVER_MAC, MC_PORT, CONTAINER_NAME)
     log.info("WoL mode: %s", WOL_MODE)
+    if TRANSFER_ENABLED:
+        log.info("Transfer mode: %s:%d", TRANSFER_HOST, TRANSFER_PORT)
+    else:
+        log.info("Proxy mode: full connection forwarding")
 
     tasks = []
 

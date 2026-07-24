@@ -19,6 +19,11 @@ duckdns:
   token: "your-duckdns-token"
   update_interval_hours: 6
 
+transfer:
+  enabled: false                    # true = transfer mode, false = full proxy (default)
+  host: "your-domain.duckdns.org"   # public hostname players get transferred to
+  port: 25566                       # port that forwards directly to the MC server
+
 timeouts:
   boot_timeout: 60                   # seconds to wait for the PC to boot
   mc_ready_timeout: 30               # seconds to wait for MC port after container start
