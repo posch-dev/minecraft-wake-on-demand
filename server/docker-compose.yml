@@ -23,3 +23,16 @@ services:
       ENFORCE_WHITELIST: "false"
     volumes:
       - ./data:/data
+
+  backup:
+    image: itzg/mc-backup
+    depends_on:
+      - minecraft
+    environment:
+      RCON_HOST: minecraft
+      BACKUP_INTERVAL: "24h"
+      PRUNE_BACKUPS_DAYS: 7
+      INITIAL_DELAY: "120"
+    volumes:
+      - ./data:/data:ro
+      - ./backups:/backups
