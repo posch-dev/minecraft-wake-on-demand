@@ -1,20 +1,25 @@
 services:
   minecraft:
-    image: itzg/minecraft-server:latest
+    image: itzg/minecraft-server:2026.8.0-java21
     container_name: minecraft
     restart: "no"
     tty: true
     stdin_open: true
     ports:
+      # Only the game port is published. RCON (25575) must stay on the
+      # internal docker network, never on the LAN or the internet.
       - "25565:25565"
     environment:
       EULA: "TRUE"
+      ENABLE_RCON: "TRUE"
+      RCON_PASSWORD: "${RCON_PASSWORD:?set RCON_PASSWORD in server/.env}"
       TYPE: "PAPER"
-      VERSION: "LATEST"
+      VERSION: "${MC_VERSION:?set MC_VERSION in server/.env}"
       MEMORY: "4G"
       AUTOPAUSE: "TRUE"
       AUTOPAUSE_TIMEOUT_EST: "3600"
       AUTOPAUSE_TIMEOUT_INIT: "600"
+      ONLINE_MODE: "TRUE"
       DIFFICULTY: "normal"
       MAX_PLAYERS: "10"
       MOTD: "My Minecraft Server"
@@ -25,11 +30,12 @@ services:
       - ./data:/data
 
   backup:
-    image: itzg/mc-backup
+    image: itzg/mc-backup:2026.8.0
     depends_on:
       - minecraft
     environment:
       RCON_HOST: minecraft
+      RCON_PASSWORD: "${RCON_PASSWORD:?set RCON_PASSWORD in server/.env}"
       BACKUP_INTERVAL: "24h"
       PRUNE_BACKUPS_DAYS: 7
       INITIAL_DELAY: "120"

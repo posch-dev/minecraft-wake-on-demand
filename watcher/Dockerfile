@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install pyyaml --break-system-packages
+RUN pip install --no-cache-dir --break-system-packages pyyaml==6.0.2
 
 WORKDIR /app
 COPY mc_wol_proxy.py .

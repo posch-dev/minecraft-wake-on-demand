@@ -2,10 +2,26 @@ services:
   mc-wol-proxy:
     build: .
     restart: unless-stopped
+    # Wake-on-LAN has to broadcast on the real LAN, so host networking stays.
     network_mode: host
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # ping needs a raw ICMP socket, nothing else does.
+      - NET_RAW
+    tmpfs:
+      # Scratch space for the ssh client, the root fs is read-only.
+      - /tmp
     volumes:
       - ../config.yml:/config.yml:ro
       - ./assets:/assets:ro
       - ~/.ssh/id_ed25519:/root/.ssh/id_ed25519:ro
+      # Run "touch watcher/known_hosts" once. Without it the accepted host
+      # key is lost on every container recreate.
+      - ./known_hosts:/root/.ssh/known_hosts
     environment:
       MC_WOL_CONFIG: /config.yml
+      SERVER_SSH_KNOWN_HOSTS: /root/.ssh/known_hosts

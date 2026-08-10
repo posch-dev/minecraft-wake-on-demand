@@ -84,8 +84,16 @@ echo "Copied mc_wol_proxy.py to $INSTALL_DIR/"
 
 # never overwrite existing config
 if [ ! -f "$INSTALL_DIR/config.yml" ]; then
-    cp "$REPO_DIR/config.yml" "$INSTALL_DIR/config.yml"
-    echo "Copied config.yml to $INSTALL_DIR/"
+    if [ -f "$REPO_DIR/config.yml" ]; then
+        SOURCE_CONFIG="$REPO_DIR/config.yml"
+    else
+        SOURCE_CONFIG="$REPO_DIR/config.example.yml"
+    fi
+    cp "$SOURCE_CONFIG" "$INSTALL_DIR/config.yml"
+    # The config holds the DuckDNS token, so only the service user may read it.
+    chown "$RUN_USER:$RUN_USER" "$INSTALL_DIR/config.yml"
+    chmod 600 "$INSTALL_DIR/config.yml"
+    echo "Copied $(basename "$SOURCE_CONFIG") to $INSTALL_DIR/config.yml"
     echo "  >>> Edit $INSTALL_DIR/config.yml with your settings! <<<"
 else
     echo "Config already exists at $INSTALL_DIR/config.yml (not overwritten)"
