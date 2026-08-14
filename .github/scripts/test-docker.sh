@@ -21,7 +21,7 @@ ok_if() {
     if "$@"; then pass "$message"; else fail "$message"; fi
 }
 
-# shellcheck disable=SC2329  # runs from the EXIT trap below
+# shellcheck disable=SC2317,SC2329  # runs from the EXIT trap below
 cleanup() {
     docker rm -f "$NAME" >/dev/null 2>&1
     docker rmi "$TAG" >/dev/null 2>&1

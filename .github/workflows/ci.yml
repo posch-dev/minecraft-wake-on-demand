@@ -9,11 +9,13 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
-          go-version-file: watcher/go.mod
+          # The newest patched release, not the floor from go.mod. Building
+          # on the exact minimum ships known standard library holes.
+          go-version: stable
           cache-dependency-path: watcher/go.sum
 
       - name: Formatting
@@ -47,25 +49,31 @@ jobs:
   shell:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # install.sh runs as root on other people's machines, so it gets linted.
+      # The version is pinned because the checks differ between releases and a
+      # distribution upgrade should not turn this red on its own.
       - name: ShellCheck
+        env:
+          SHELLCHECK_VERSION: v0.11.0
         run: |
           set -eu
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq shellcheck
-          shellcheck --version
-          shellcheck watcher/install.sh .github/scripts/*.sh
+          curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" | tar -xJ
+          shellcheck="shellcheck-${SHELLCHECK_VERSION}/shellcheck"
+          "$shellcheck" --version
+          "$shellcheck" watcher/install.sh .github/scripts/*.sh
 
   installer:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
-          go-version-file: watcher/go.mod
+          # The newest patched release, not the floor from go.mod. Building
+          # on the exact minimum ships known standard library holes.
+          go-version: stable
           cache-dependency-path: watcher/go.sum
 
       - name: Build the binary the fake release will serve
@@ -83,7 +91,7 @@ jobs:
   image:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build and smoke test the image
         run: .github/scripts/test-docker.sh

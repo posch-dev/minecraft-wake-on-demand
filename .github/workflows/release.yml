@@ -22,11 +22,13 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
-          go-version-file: watcher/go.mod
+          # The newest patched release, not the floor from go.mod. Building
+          # on the exact minimum ships known standard library holes.
+          go-version: stable
           cache-dependency-path: watcher/go.sum
 
       - name: Work out the version
@@ -119,13 +121,13 @@ jobs:
       # gh attestation verify <file> --repo <owner>/<repo>
       - name: Attest the binaries
         if: steps.version.outputs.dry_run == 'false'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/mc-wol-proxy_*
 
       - name: Publish
         if: steps.version.outputs.dry_run == 'false'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           body_path: release-notes.md

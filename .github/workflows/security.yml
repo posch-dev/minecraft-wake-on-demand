@@ -17,11 +17,13 @@ jobs:
   govulncheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
-          go-version-file: watcher/go.mod
+          # The newest patched release, not the floor from go.mod. Building
+          # on the exact minimum ships known standard library holes.
+          go-version: stable
           cache-dependency-path: watcher/go.sum
 
       # Reports only vulnerabilities the code actually reaches, so a finding

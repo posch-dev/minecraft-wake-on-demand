@@ -30,7 +30,7 @@ fail_if() {
     if "$@"; then fail "$message"; else pass "$message"; fi
 }
 
-# shellcheck disable=SC2329  # runs from the EXIT trap below
+# shellcheck disable=SC2317,SC2329  # runs from the EXIT trap below
 cleanup() {
     if [ -f "$WORK/http.pid" ]; then
         kill "$(cat "$WORK/http.pid")" 2>/dev/null
