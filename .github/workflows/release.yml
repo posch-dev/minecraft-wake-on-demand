@@ -119,7 +119,7 @@ jobs:
       # gh attestation verify <file> --repo <owner>/<repo>
       - name: Attest the binaries
         if: steps.version.outputs.dry_run == 'false'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/mc-wol-proxy_*
 
