@@ -1,0 +1,138 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"os"
+	"os/signal"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+)
+
+// Set via ldflags in the release build.
+var version = "dev"
+
+func main() {
+	command := ""
+	if len(os.Args) > 1 {
+		command = os.Args[1]
+	}
+
+	switch command {
+	case "", "run":
+		os.Exit(runProxy())
+	case "version", "--version", "-v":
+		fmt.Printf("mc-wol-proxy %s\n", version)
+	case "help", "--help", "-h":
+		printUsage(os.Stdout)
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown command %q\n\n", command)
+		printUsage(os.Stderr)
+		os.Exit(2)
+	}
+}
+
+func printUsage(w *os.File) {
+	fmt.Fprint(w, `mc-wol-proxy, Minecraft Wake-on-Demand watcher
+
+Usage:
+  mc-wol-proxy            start the watcher, the same as "run"
+  mc-wol-proxy version    print the version
+  mc-wol-proxy help       print this text
+
+The config is read from MC_WOL_CONFIG, then config.yml next to the binary
+or one directory above it.
+`)
+}
+
+func runProxy() int {
+	cfg, err := LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Config error: %v\n", err)
+		return 1
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	waker := NewWaker(cfg)
+	handler := NewHandler(cfg, waker)
+
+	address := net.JoinHostPort(cfg.Watcher.ListenAddress, strconv.Itoa(cfg.Watcher.ListenPort))
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot listen on %s: %v\n", address, err)
+		return 1
+	}
+
+	logStartup(cfg)
+
+	var tasks sync.WaitGroup
+	if cfg.DuckDNS.Enabled {
+		log.Infof("DuckDNS updater enabled for %s.duckdns.org (every %dh)",
+			cfg.DuckDNS.Domain, cfg.DuckDNS.UpdateIntervalHours)
+		tasks.Add(1)
+		go func() {
+			defer tasks.Done()
+			runDuckDNSUpdater(ctx, cfg)
+		}()
+	}
+
+	// Unblocks the Accept call below when a signal arrives.
+	go func() {
+		<-ctx.Done()
+		log.Infof("Shutting down...")
+		listener.Close()
+	}()
+
+	var conns sync.WaitGroup
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
+				break
+			}
+			log.Warnf("Accept failed: %v", err)
+			continue
+		}
+		conns.Add(1)
+		go func() {
+			defer conns.Done()
+			handler.Handle(ctx, conn)
+		}()
+	}
+
+	conns.Wait()
+	tasks.Wait()
+	log.Infof("Proxy stopped")
+	return 0
+}
+
+func logStartup(cfg *Config) {
+	log.Infof("Minecraft Wake-on-Demand Proxy %s listening on %s:%d",
+		version, cfg.Watcher.ListenAddress, cfg.Watcher.ListenPort)
+	log.Infof("Server: %s (%s) port %d, container '%s'",
+		cfg.Server.IP, cfg.Server.MAC, cfg.Server.MCPort, cfg.Server.ContainerName)
+	log.Infof("WoL mode: %s", cfg.WoL.Mode)
+
+	if !cfg.Transfer.Enabled {
+		log.Infof("Proxy mode: full connection forwarding")
+		return
+	}
+	log.Infof("Transfer mode: %s:%d", cfg.Transfer.Host, cfg.Transfer.Port)
+
+	networks := "any private IP"
+	if nets := cfg.ParsedLocalNetworks(); len(nets) > 0 {
+		parts := make([]string, 0, len(nets))
+		for _, n := range nets {
+			parts = append(parts, n.String())
+		}
+		networks = strings.Join(parts, ", ")
+	}
+	log.Infof("Local players are transferred to %s:%d instead (local networks: %s)",
+		cfg.Server.IP, cfg.Server.MCPort, networks)
+}
