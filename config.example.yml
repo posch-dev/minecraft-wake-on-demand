@@ -38,7 +38,8 @@ limits:
   boot_max_backoff: 900               # upper limit for the failure backoff
 
 motd:
-  sleeping: '{"text":"Server is sleeping, connect to wake it up!","color":"yellow"}'
-  starting: '{"text":"Server is starting, please wait...","color":"gold"}'
+  # \n splits the two lines the server list shows.
+  sleeping: '{"text":"Server currently asleep","color":"gray","extra":[{"text":"\nJoin to wake it up","color":"green"}]}'
+  starting: '{"text":"Server is starting","color":"gold","extra":[{"text":"\nGive it a moment, then join","color":"gray"}]}'
   login_wait: '{"text":"Server is waking up. Please reconnect in a moment.","color":"gold"}'
   max_players: 10

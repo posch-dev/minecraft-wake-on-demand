@@ -1,1 +1,1 @@
-{"text":"Server is sleeping - connect to wake it up!","color":"yellow"}
+{"text":"Server currently asleep","color":"gray","extra":[{"text":"\nJoin to wake it up","color":"green"}]}

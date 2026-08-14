@@ -113,8 +113,11 @@ func splitList(value string) []string {
 }
 
 const (
-	defaultMOTDSleeping  = "{\"text\":\"Server is sleeping, connect to wake it up!\",\"color\":\"yellow\"}"
-	defaultMOTDStarting  = "{\"text\":\"Server is starting, please wait...\",\"color\":\"gold\"}"
+	// Two lines, which is what the server list shows.
+	defaultMOTDSleeping = "{\"text\":\"Server currently asleep\",\"color\":\"gray\"," +
+		"\"extra\":[{\"text\":\"\\nJoin to wake it up\",\"color\":\"green\"}]}"
+	defaultMOTDStarting = "{\"text\":\"Server is starting\",\"color\":\"gold\"," +
+		"\"extra\":[{\"text\":\"\\nGive it a moment, then join\",\"color\":\"gray\"}]}"
 	defaultMOTDLoginWait = "{\"text\":\"Server is waking up. Please reconnect in a moment.\",\"color\":\"gold\"}"
 )
 

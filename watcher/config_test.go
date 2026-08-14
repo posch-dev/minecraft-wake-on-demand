@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -168,5 +171,97 @@ func TestBroadcastAddressFallsBack(t *testing.T) {
 	cfg := loadFrom(t, minimalConfig)
 	if cfg.WoL.BroadcastAddress != "255.255.255.255" {
 		t.Errorf("got %q, want 255.255.255.255", cfg.WoL.BroadcastAddress)
+	}
+}
+
+func motdLines(t *testing.T, raw string) []string {
+	t.Helper()
+	var component struct {
+		Text  string `json:"text"`
+		Extra []struct {
+			Text string `json:"text"`
+		} `json:"extra"`
+	}
+	if err := json.Unmarshal([]byte(raw), &component); err != nil {
+		t.Fatalf("not valid MOTD JSON: %v\n%s", err, raw)
+	}
+	text := component.Text
+	for _, e := range component.Extra {
+		text += e.Text
+	}
+	return strings.Split(text, "\n")
+}
+
+// config.example.yml is the file people copy, so it has to agree with the
+// built in defaults. Otherwise the example quietly documents something the
+// watcher does not do.
+func TestExampleConfigMatchesTheDefaults(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "config.example.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var example Config
+	if err := yaml.Unmarshal(data, &example); err != nil {
+		t.Fatalf("config.example.yml is not valid YAML: %v", err)
+	}
+
+	defaults := defaultConfig()
+	for _, c := range []struct {
+		name    string
+		example string
+		builtin string
+	}{
+		{"motd.sleeping", example.MOTD.Sleeping, defaults.MOTD.Sleeping},
+		{"motd.starting", example.MOTD.Starting, defaults.MOTD.Starting},
+		{"motd.login_wait", example.MOTD.LoginWait, defaults.MOTD.LoginWait},
+	} {
+		var a, b any
+		if err := json.Unmarshal([]byte(c.example), &a); err != nil {
+			t.Errorf("%s in config.example.yml is not valid JSON: %v", c.name, err)
+			continue
+		}
+		if err := json.Unmarshal([]byte(c.builtin), &b); err != nil {
+			t.Errorf("%s default is not valid JSON: %v", c.name, err)
+			continue
+		}
+		if !reflect.DeepEqual(a, b) {
+			t.Errorf("%s differs\n  example: %s\n  default: %s", c.name, c.example, c.builtin)
+		}
+	}
+
+	if example.MOTD.MaxPlayers != defaults.MOTD.MaxPlayers {
+		t.Errorf("motd.max_players: example %d, default %d",
+			example.MOTD.MaxPlayers, defaults.MOTD.MaxPlayers)
+	}
+}
+
+// The server list shows two lines, so both MOTDs use both of them.
+func TestShippedMOTDsRenderTwoLines(t *testing.T) {
+	for _, c := range []struct {
+		file    string
+		builtin string
+	}{
+		{"assets/motd-sleeping.json", defaultMOTDSleeping},
+		{"assets/motd-starting.json", defaultMOTDStarting},
+	} {
+		data, err := os.ReadFile(c.file)
+		if err != nil {
+			t.Fatalf("%s: %v", c.file, err)
+		}
+		lines := motdLines(t, strings.TrimSpace(string(data)))
+		if len(lines) != 2 {
+			t.Errorf("%s renders %d line(s): %q", c.file, len(lines), lines)
+		}
+		for i, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				t.Errorf("%s line %d is empty", c.file, i+1)
+			}
+		}
+
+		builtinLines := motdLines(t, c.builtin)
+		if !reflect.DeepEqual(lines, builtinLines) {
+			t.Errorf("%s and the built in default show different text\n  file:    %q\n  builtin: %q",
+				c.file, lines, builtinLines)
+		}
 	}
 }

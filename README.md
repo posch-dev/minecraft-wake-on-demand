@@ -151,7 +151,7 @@ Always add the port. Minecraft is supposed to assume `25565` on its own, but dep
 
 **The first join:**
 
-1. Add the server in Minecraft. The list shows "Server is sleeping, connect to wake it up!"
+1. Add the server in Minecraft. The list shows "Server currently asleep" and under it "Join to wake it up"
 2. Click Join. The watcher wakes the PC and starts the container.
 3. This takes roughly 30 to 60 seconds. Minecraft usually gives up before that and shows a timeout, or you get "Server is waking up, please reconnect in a moment".
 4. Click Join again. Now you're in.
