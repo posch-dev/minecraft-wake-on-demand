@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -44,8 +45,9 @@ func updateDuckDNS(ctx context.Context, cfg *Config) error {
 		log.Infof("DuckDNS updated successfully for %s.duckdns.org", cfg.DuckDNS.Domain)
 		return nil
 	}
+	// DuckDNS answers "KO" for a wrong domain or token, with status 200.
 	log.Warnf("DuckDNS update returned: %s", sanitizeForLog(answer, 64))
-	return nil
+	return fmt.Errorf("DuckDNS answered %q instead of OK", sanitizeForLog(answer, 64))
 }
 
 func runDuckDNSUpdater(ctx context.Context, cfg *Config) {

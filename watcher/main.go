@@ -25,6 +25,18 @@ func main() {
 	switch command {
 	case "", "run":
 		os.Exit(runProxy())
+	case "check", "init", "setup-ssh":
+		// These print a laid out report, so log lines go to stderr instead of
+		// interleaving with it.
+		log.out = os.Stderr
+		switch command {
+		case "check":
+			os.Exit(runCheck())
+		case "init":
+			os.Exit(runInit())
+		default:
+			os.Exit(runSetupSSH())
+		}
 	case "version", "--version", "-v":
 		fmt.Printf("mc-wol-proxy %s\n", version)
 	case "help", "--help", "-h":
@@ -40,9 +52,14 @@ func printUsage(w *os.File) {
 	fmt.Fprint(w, `mc-wol-proxy, Minecraft Wake-on-Demand watcher
 
 Usage:
-  mc-wol-proxy            start the watcher, the same as "run"
-  mc-wol-proxy version    print the version
-  mc-wol-proxy help       print this text
+  mc-wol-proxy              start the watcher, the same as "run"
+  mc-wol-proxy init         answer a few questions and write config.yml
+  mc-wol-proxy setup-ssh    create the SSH key and install it on the server
+  mc-wol-proxy check        test the setup and say what is missing
+  mc-wol-proxy version      print the version
+  mc-wol-proxy help         print this text
+
+Setting up from scratch is init, then setup-ssh, then check.
 
 The config is read from MC_WOL_CONFIG, then config.yml next to the binary
 or one directory above it.
