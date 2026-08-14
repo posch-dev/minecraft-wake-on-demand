@@ -14,10 +14,16 @@ import (
 // A burst of connections shares one probe instead of hammering the server.
 const mcReachableTTL = 2 * time.Second
 
+// The discard protocol port, where wake capable hardware listens.
+const wolPort = 9
+
 type Waker struct {
 	cfg    *Config
 	pinger *Pinger
 	ssh    *SSHRunner
+
+	// Always 9 in production, the tests point it at a local listener.
+	wolPort int
 
 	// Serializes whole boot sequences, only one wake runs at a time.
 	bootMu sync.Mutex
@@ -34,9 +40,10 @@ type Waker struct {
 
 func NewWaker(cfg *Config) *Waker {
 	return &Waker{
-		cfg:    cfg,
-		pinger: &Pinger{},
-		ssh:    NewSSHRunner(cfg),
+		cfg:     cfg,
+		wolPort: wolPort,
+		pinger:  &Pinger{},
+		ssh:     NewSSHRunner(cfg),
 	}
 }
 
@@ -50,14 +57,23 @@ func (w *Waker) Booting() bool {
 	return w.booting
 }
 
-func (w *Waker) SendMagicPacket() error {
-	mac, err := ParseMAC(w.cfg.Server.MAC)
+// Six 0xFF bytes followed by the MAC sixteen times, 102 bytes in total.
+func buildMagicPacket(mac string) ([]byte, error) {
+	parsed, err := ParseMAC(mac)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	payload := bytes.Repeat([]byte{0xFF}, 6)
 	for i := 0; i < 16; i++ {
-		payload = append(payload, mac...)
+		payload = append(payload, parsed...)
+	}
+	return payload, nil
+}
+
+func (w *Waker) SendMagicPacket() error {
+	payload, err := buildMagicPacket(w.cfg.Server.MAC)
+	if err != nil {
+		return err
 	}
 
 	target := w.cfg.Server.IP
@@ -77,7 +93,7 @@ func (w *Waker) SendMagicPacket() error {
 		}
 	}
 
-	conn, err := dialer.Dial("udp", net.JoinHostPort(target, "9"))
+	conn, err := dialer.Dial("udp", net.JoinHostPort(target, strconv.Itoa(w.wolPort)))
 	if err != nil {
 		return fmt.Errorf("cannot open WoL socket: %w", err)
 	}

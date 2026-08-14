@@ -22,16 +22,19 @@ const sshPort = 22
 type SSHRunner struct {
 	cfg *Config
 
+	// Always 22 in production, the tests point it at a local server.
+	port int
+
 	// known_hosts is rewritten on accept-new, so one writer at a time.
 	knownHostsMu sync.Mutex
 }
 
 func NewSSHRunner(cfg *Config) *SSHRunner {
-	return &SSHRunner{cfg: cfg}
+	return &SSHRunner{cfg: cfg, port: sshPort}
 }
 
 func (r *SSHRunner) Address() string {
-	return net.JoinHostPort(r.cfg.Server.IP, strconv.Itoa(sshPort))
+	return net.JoinHostPort(r.cfg.Server.IP, strconv.Itoa(r.port))
 }
 
 // OpenSSH refuses group or world readable keys and so do we, an unattended
