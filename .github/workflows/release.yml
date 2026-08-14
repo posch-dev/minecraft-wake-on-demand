@@ -3,6 +3,14 @@ name: release
 on:
   push:
     tags: ["v*"]
+  # A dry run builds and checks everything a real release does, but publishes
+  # nothing. Use it to prove the workflow before tagging.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to dry run against CHANGELOG.md, for example 2.0.0"
+        required: true
+        default: "2.0.0"
 
 permissions:
   contents: write
@@ -21,6 +29,23 @@ jobs:
           go-version-file: watcher/go.mod
           cache-dependency-path: watcher/go.sum
 
+      - name: Work out the version
+        id: version
+        run: |
+          set -eu
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ inputs.version }}"
+            version="${version#v}"
+            echo "dry_run=true" >> "$GITHUB_OUTPUT"
+            echo "DRY RUN for $version, nothing will be published"
+          else
+            version="${GITHUB_REF_NAME#v}"
+            echo "dry_run=false" >> "$GITHUB_OUTPUT"
+            echo "release for $version"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
       - name: Test
         working-directory: watcher
         run: go test ./...
@@ -28,14 +53,14 @@ jobs:
       - name: Build every target
         working-directory: watcher
         env:
-          VERSION: ${{ github.ref_name }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -eu
           mkdir -p ../dist
           build() {
             CGO_ENABLED=0 GOOS="$1" GOARCH="$2" GOARM="$3" go build \
               -trimpath \
-              -ldflags="-s -w -X main.version=${VERSION}" \
+              -ldflags="-s -w -X main.version=${TAG}" \
               -o "../dist/$4" .
             echo "built $4"
           }
@@ -45,25 +70,33 @@ jobs:
           build linux   arm   6   mc-wol-proxy_linux_armv6
           build windows amd64 ""  mc-wol-proxy_windows_amd64.exe
 
+      - name: Check the binaries are what they claim
+        run: |
+          set -eu
+          chmod +x dist/mc-wol-proxy_linux_amd64
+          got="$(./dist/mc-wol-proxy_linux_amd64 version)"
+          want="mc-wol-proxy ${{ steps.version.outputs.tag }}"
+          echo "  $got"
+          [ "$got" = "$want" ] || { echo "expected '$want'"; exit 1; }
+          for f in dist/mc-wol-proxy_linux_arm64 dist/mc-wol-proxy_linux_armv7 dist/mc-wol-proxy_linux_armv6; do
+            file "$f" | grep -qi arm || { echo "$f is not an arm binary"; exit 1; }
+          done
+          file dist/mc-wol-proxy_windows_amd64.exe | grep -qi "PE32" \
+            || { echo "the windows build is not a PE executable"; exit 1; }
+          echo "all five binaries look right"
+
       # install.sh refuses to install a binary that is not listed here.
       - name: Checksums
         working-directory: dist
-        run: sha256sum * > checksums.txt
+        run: |
+          sha256sum * > checksums.txt
+          cat checksums.txt
 
-      # Lets anyone prove a binary came from this workflow and this commit:
-      # gh attestation verify <file> --repo ${{ github.repository }}
-      - name: Attest the binaries
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: dist/mc-wol-proxy_*
-
-      # Only the section for this tag, so the notes are about this release.
+      # Only the section for this version, so the notes are about this release.
       - name: Release notes from CHANGELOG.md
-        env:
-          VERSION: ${{ github.ref_name }}
         run: |
           set -eu
-          version="${VERSION#v}"
+          version="${{ steps.version.outputs.version }}"
           awk -v ver="$version" '
             !found && /^## / {
               heading = substr($0, 4)
@@ -79,11 +112,27 @@ jobs:
             echo "CHANGELOG.md has no section for $version, add one before tagging."
             exit 1
           fi
-          echo "Release notes:"
+          echo "--- release notes ---"
           cat release-notes.md
 
-      - uses: softprops/action-gh-release@v2
+      # Lets anyone prove a binary came from this workflow and this commit:
+      # gh attestation verify <file> --repo <owner>/<repo>
+      - name: Attest the binaries
+        if: steps.version.outputs.dry_run == 'false'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/mc-wol-proxy_*
+
+      - name: Publish
+        if: steps.version.outputs.dry_run == 'false'
+        uses: softprops/action-gh-release@v2
         with:
           files: dist/*
           body_path: release-notes.md
           generate_release_notes: true
+
+      - name: Dry run summary
+        if: steps.version.outputs.dry_run == 'true'
+        run: |
+          echo "Everything a release does was built and checked. Nothing was published."
+          echo "Tag with: git tag ${{ steps.version.outputs.tag }} && git push origin ${{ steps.version.outputs.tag }}"

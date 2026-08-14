@@ -1,0 +1,33 @@
+name: security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # x/crypto and x/net are compiled into the binary, so a newly disclosed
+  # vulnerability has to surface without waiting for someone to commit.
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: watcher/go.mod
+          cache-dependency-path: watcher/go.sum
+
+      # Reports only vulnerabilities the code actually reaches, so a finding
+      # here is worth acting on rather than noise from an unused dependency.
+      - name: govulncheck
+        working-directory: watcher
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...

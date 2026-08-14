@@ -115,6 +115,11 @@ binaries, but the responsibility now sits with this repository rather than with
 your package manager. If you build from source, pull and rebuild after such an
 update.
 
+`govulncheck` runs on every push and once a week on a schedule, so a newly
+disclosed vulnerability surfaces without anyone having to commit first. It
+reports only the ones the code actually reaches, which keeps a finding worth
+acting on.
+
 ### Host key checking
 
 Controlled by `server.ssh_strict_host_key`:
