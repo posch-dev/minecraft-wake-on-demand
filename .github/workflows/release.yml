@@ -125,7 +125,7 @@ jobs:
 
       - name: Publish
         if: steps.version.outputs.dry_run == 'false'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           body_path: release-notes.md
