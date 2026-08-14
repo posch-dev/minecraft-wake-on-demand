@@ -1,0 +1,11 @@
+# Everything is stored with LF. Without this the repository keeps whatever the
+# committing machine used, and gofmt and shell scripts both refuse CRLF.
+* text=auto eol=lf
+
+# Scripts Windows itself runs want CRLF on disk.
+*.bat text eol=crlf
+*.vbs text eol=crlf
+
+*.png binary
+*.ico binary
+*.jar binary
