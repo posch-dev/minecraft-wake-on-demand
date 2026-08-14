@@ -1,10 +1,16 @@
 #!/bin/bash
 set -e
 
-INSTALL_DIR="/opt/mc-wol-proxy"
-SERVICE_FILE="/etc/systemd/system/mc-wol-proxy.service"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
+SERVICE_FILE="/etc/systemd/system/mc-wol-proxy.service"
+
+# Overridable so the install can be pointed at a mirror, and so the installer
+# itself can be tested without publishing a release.
+INSTALL_DIR="${MC_WOL_INSTALL_DIR:-/opt/mc-wol-proxy}"
+REPO="${MC_WOL_REPO:-posch-dev/minecraft-wake-on-demand}"
+API_BASE="${MC_WOL_API_BASE:-https://api.github.com}"
+DOWNLOAD_BASE="${MC_WOL_DOWNLOAD_BASE:-https://github.com}"
 
 if [ "$EUID" -ne 0 ]; then
     echo "Please run as root: sudo ./install.sh"
@@ -32,8 +38,8 @@ if [ "$1" = "--uninstall" ]; then
             read -r -p "Delete config at $INSTALL_DIR/config.yml? [y/N] " confirm
             if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
                 echo "Keeping config. Removing everything else..."
-                rm -f "$INSTALL_DIR/mc_wol_proxy.py"
-                echo "Removed $INSTALL_DIR/mc_wol_proxy.py"
+                rm -f "$INSTALL_DIR/mc-wol-proxy" "$INSTALL_DIR/known_hosts"
+                echo "Removed $INSTALL_DIR/mc-wol-proxy"
                 # Remove dir only if empty
                 rmdir "$INSTALL_DIR" 2>/dev/null || echo "Directory not empty, kept $INSTALL_DIR"
             else
@@ -53,34 +59,90 @@ fi
 
 echo "=== Minecraft Wake-on-Demand Proxy Installer ==="
 
-if ! command -v python3 &>/dev/null; then
-    echo "ERROR: Python 3 is required but not installed."
-    echo "  Install with: sudo apt install python3 python3-pip"
-    exit 1
-fi
-
-if ! python3 -c "import yaml" 2>/dev/null; then
-    echo "Installing pyyaml..."
-    pip3 install pyyaml || python3 -m pip install pyyaml
-fi
-
-missing=""
-if ! command -v ping &>/dev/null; then
-    missing="$missing iputils-ping"
-fi
-if ! command -v ssh &>/dev/null; then
-    missing="$missing openssh-client"
-fi
-if [ -n "$missing" ]; then
-    echo "WARNING: Missing packages:$missing"
-    echo "  Install with: sudo apt install$missing"
-    exit 1
-fi
+case "$(uname -m)" in
+    x86_64|amd64)   GOARCH="amd64" ;;
+    aarch64|arm64)  GOARCH="arm64" ;;
+    armv7l|armv7)   GOARCH="armv7" ;;
+    armv6l|armv6)   GOARCH="armv6" ;;
+    *)
+        echo "ERROR: Unsupported architecture $(uname -m)."
+        echo "  Build from source instead: sudo ./install.sh --build"
+        exit 1
+        ;;
+esac
+echo "Architecture: $(uname -m) -> $GOARCH"
 
 mkdir -p "$INSTALL_DIR"
+BINARY="$INSTALL_DIR/mc-wol-proxy"
 
-cp "$SCRIPT_DIR/mc_wol_proxy.py" "$INSTALL_DIR/mc_wol_proxy.py"
-echo "Copied mc_wol_proxy.py to $INSTALL_DIR/"
+if [ "$1" = "--build" ]; then
+    if ! command -v go &>/dev/null; then
+        echo "ERROR: --build needs the Go toolchain, which is not installed."
+        echo "  Install it with: sudo apt install golang-go"
+        echo "  Or drop --build to download a prebuilt binary instead."
+        exit 1
+    fi
+    echo "Building from source with $(go version | awk '{print $3}')..."
+    ( cd "$SCRIPT_DIR" && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$BINARY" . )
+    echo "Built $BINARY"
+else
+    # Downloads the release asset and refuses to install it unless the
+    # checksum published alongside it matches.
+    if command -v curl &>/dev/null; then
+        FETCH="curl -fsSL"
+    elif command -v wget &>/dev/null; then
+        FETCH="wget -qO-"
+    else
+        echo "ERROR: Neither curl nor wget is available."
+        echo "  Install one with: sudo apt install curl"
+        exit 1
+    fi
+
+    echo "Looking up the latest release..."
+    VERSION="$($FETCH "$API_BASE/repos/$REPO/releases/latest" \
+        | grep -m1 '"tag_name"' | cut -d'"' -f4 || true)"
+    if [ -z "$VERSION" ]; then
+        echo "ERROR: Could not find a release to download."
+        echo "  Build from source instead: sudo ./install.sh --build"
+        exit 1
+    fi
+    echo "Latest release: $VERSION"
+
+    ASSET="mc-wol-proxy_linux_${GOARCH}"
+    BASE="$DOWNLOAD_BASE/$REPO/releases/download/$VERSION"
+    TMP="$(mktemp -d)"
+    trap 'rm -rf "$TMP"' EXIT
+
+    echo "Downloading $ASSET..."
+    if ! $FETCH "$BASE/$ASSET" > "$TMP/$ASSET"; then
+        echo "ERROR: Download failed."
+        echo "  Build from source instead: sudo ./install.sh --build"
+        exit 1
+    fi
+    if ! $FETCH "$BASE/checksums.txt" > "$TMP/checksums.txt"; then
+        echo "ERROR: Could not download checksums.txt, refusing to install unverified."
+        exit 1
+    fi
+
+    EXPECTED="$(grep " $ASSET\$" "$TMP/checksums.txt" | awk '{print $1}')"
+    ACTUAL="$(sha256sum "$TMP/$ASSET" | awk '{print $1}')"
+    if [ -z "$EXPECTED" ]; then
+        echo "ERROR: $ASSET is not listed in checksums.txt, refusing to install."
+        exit 1
+    fi
+    if [ "$EXPECTED" != "$ACTUAL" ]; then
+        echo "ERROR: Checksum mismatch, refusing to install."
+        echo "  expected $EXPECTED"
+        echo "  actual   $ACTUAL"
+        exit 1
+    fi
+    echo "Checksum verified."
+
+    install -m 755 "$TMP/$ASSET" "$BINARY"
+    echo "Installed $BINARY"
+fi
+
+chmod 755 "$BINARY"
 
 # never overwrite existing config
 if [ ! -f "$INSTALL_DIR/config.yml" ]; then
@@ -94,9 +156,10 @@ if [ ! -f "$INSTALL_DIR/config.yml" ]; then
     chown "$RUN_USER:$RUN_USER" "$INSTALL_DIR/config.yml"
     chmod 600 "$INSTALL_DIR/config.yml"
     echo "Copied $(basename "$SOURCE_CONFIG") to $INSTALL_DIR/config.yml"
-    echo "  >>> Edit $INSTALL_DIR/config.yml with your settings! <<<"
+    NEEDS_CONFIG=1
 else
     echo "Config already exists at $INSTALL_DIR/config.yml (not overwritten)"
+    NEEDS_CONFIG=0
 fi
 
 # copy default assets (never overwrite existing ones)
@@ -106,23 +169,39 @@ for f in "$SCRIPT_DIR/assets"/*; do
     dest="$INSTALL_DIR/assets/$(basename "$f")"
     if [ ! -f "$dest" ]; then
         cp "$f" "$dest"
-        echo "Copied $(basename "$f") to $INSTALL_DIR/assets/"
-    else
-        echo "Asset $(basename "$f") already exists (not overwritten)"
     fi
 done
 chown -R "$RUN_USER:$RUN_USER" "$INSTALL_DIR/assets"
-echo "  >>> Customize MOTD and icon in $INSTALL_DIR/assets/ <<<"
 
-sed "s/MC_WOL_USER/$RUN_USER/g" "$SCRIPT_DIR/mc-wol-proxy.service" > "$SERVICE_FILE"
+# known_hosts lives next to the binary so the unit can keep the home read only
+touch "$INSTALL_DIR/known_hosts"
+chown "$RUN_USER:$RUN_USER" "$INSTALL_DIR/known_hosts"
+chmod 600 "$INSTALL_DIR/known_hosts"
+
+# The unit ships with the default paths, so they follow INSTALL_DIR.
+sed -e "s/MC_WOL_USER/$RUN_USER/g" -e "s|/opt/mc-wol-proxy|$INSTALL_DIR|g" \
+    "$SCRIPT_DIR/mc-wol-proxy.service" > "$SERVICE_FILE"
+systemctl daemon-reload
 echo "Installed systemd service (running as $RUN_USER)"
 
-systemctl daemon-reload
+if [ "$NEEDS_CONFIG" = "1" ]; then
+    echo ""
+    echo "=== Almost done ==="
+    echo "There is no config yet. Fill one in with:"
+    echo ""
+    echo "  sudo MC_WOL_CONFIG=$INSTALL_DIR/config.yml $BINARY init"
+    echo "  sudo MC_WOL_CONFIG=$INSTALL_DIR/config.yml $BINARY setup-ssh"
+    echo ""
+    echo "Then start it with: sudo systemctl enable --now mc-wol-proxy"
+    exit 0
+fi
+
 systemctl enable mc-wol-proxy
-systemctl start mc-wol-proxy
+systemctl restart mc-wol-proxy
 
 echo ""
 echo "=== Installation complete ==="
 systemctl status mc-wol-proxy --no-pager || true
 echo ""
-echo "View logs: journalctl -u mc-wol-proxy -f"
+echo "Check the setup: sudo MC_WOL_CONFIG=$INSTALL_DIR/config.yml $BINARY check"
+echo "View logs:       journalctl -u mc-wol-proxy -f"

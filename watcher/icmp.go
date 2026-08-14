@@ -55,6 +55,16 @@ func (p *Pinger) detect() {
 			p.mode = pingExec
 		}
 		log.Infof("Host reachability checks use %s", p.mode)
+
+		// The container image ships no ping binary, so falling back to it
+		// there means the wake sequence would never see the PC come up.
+		if p.mode == pingExec {
+			if _, err := exec.LookPath("ping"); err != nil {
+				log.Errorf("No ICMP socket and no ping command available, " +
+					"the watcher cannot tell when the server PC has booted. " +
+					"Grant CAP_NET_RAW to the process or install iputils-ping.")
+			}
+		}
 	})
 }
 

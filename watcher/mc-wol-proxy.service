@@ -7,10 +7,25 @@ Wants=network-online.target
 Type=simple
 User=MC_WOL_USER
 Group=MC_WOL_USER
-ExecStart=/usr/bin/python3 -u /opt/mc-wol-proxy/mc_wol_proxy.py
+ExecStart=/opt/mc-wol-proxy/mc-wol-proxy
 Environment=MC_WOL_CONFIG=/opt/mc-wol-proxy/config.yml
+Environment=SERVER_SSH_KNOWN_HOSTS=/opt/mc-wol-proxy/known_hosts
 Restart=always
 RestartSec=5
+
+# Lets the watcher open an ICMP socket without running as root.
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# The SSH key lives in the user's home, known_hosts is kept next to the binary.
+ProtectHome=read-only
+ReadWritePaths=/opt/mc-wol-proxy
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
 
 [Install]
 WantedBy=multi-user.target

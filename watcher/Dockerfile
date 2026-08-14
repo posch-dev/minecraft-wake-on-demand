@@ -1,17 +1,27 @@
-FROM python:3.12-slim
+FROM golang:1.25-alpine AS build
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    iputils-ping \
-    openssh-client \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
 
-RUN pip install --no-cache-dir --break-system-packages pyyaml==6.0.2
+COPY go.mod go.sum ./
+RUN go mod download
 
-WORKDIR /app
-COPY mc_wol_proxy.py .
+COPY *.go ./
+
+ARG VERSION=docker
+RUN CGO_ENABLED=0 go build \
+    -trimpath \
+    -ldflags="-s -w -X main.version=${VERSION}" \
+    -o /out/mc-wol-proxy .
+
+FROM scratch
+
+# DuckDNS is reached over HTTPS, which needs a trust store.
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /out/mc-wol-proxy /mc-wol-proxy
 
 ENV MC_WOL_CONFIG=/config.yml
+ENV HOME=/
 
 EXPOSE 25565
 
-CMD ["python3", "-u", "mc_wol_proxy.py"]
+ENTRYPOINT ["/mc-wol-proxy"]
