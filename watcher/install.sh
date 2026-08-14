@@ -190,10 +190,11 @@ echo "Installed systemd service (running as $RUN_USER)"
 if [ "$NEEDS_CONFIG" = "1" ]; then
     echo ""
     echo "=== Almost done ==="
-    echo "There is no config yet. Fill one in with:"
+    echo "There is no config yet. Run these three, in this order:"
     echo ""
     echo "  sudo MC_WOL_CONFIG=$INSTALL_DIR/config.yml $BINARY init"
     echo "  sudo MC_WOL_CONFIG=$INSTALL_DIR/config.yml $BINARY setup-ssh"
+    echo "  sudo MC_WOL_CONFIG=$INSTALL_DIR/config.yml $BINARY check"
     echo ""
     echo "Then start it with: sudo systemctl enable --now mc-wol-proxy"
     exit 0

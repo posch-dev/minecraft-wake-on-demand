@@ -21,11 +21,10 @@ from strangers. Everything below exists because of that.
 
 ## Design decisions
 
-**The proxy never blocks on network calls.** Reachability is probed with
-`asyncio.open_connection` and the result is cached for two seconds behind a lock.
-A synchronous probe in the event loop would let a handful of connections per
-second freeze the whole watcher while the server is asleep, which is its normal
-state.
+**The proxy never blocks on network calls.** Every connection is handled in its
+own goroutine, and reachability is probed once and cached for two seconds behind
+a mutex. Without that, a handful of connections per second could each open their
+own probe against a server that is asleep, which is its normal state.
 
 **Waking the server is rate limited.** A login attempt on a sleeping server
 triggers Wake-on-LAN, an SSH call and a container start. Without a limit anyone
@@ -43,11 +42,11 @@ every connection. The counter resets on the first success. Clients that arrive
 during a cooldown get a proper disconnect message, not a dropped socket.
 
 **The packet parser is defensive.** VarInts are rejected past 35 bits,
-incomplete reads raise instead of indexing out of bounds, and the initial client
-exchange has timeouts so a half open connection cannot be held forever.
-Usernames are limited to the protocol's 16 characters, must decode as UTF-8, must
-come with a complete 16 byte UUID, and are stripped of non-printable characters
-before they reach the log.
+incomplete reads return an error instead of indexing out of bounds, and the
+initial client exchange has timeouts so a half open connection cannot be held
+forever. Usernames are limited to the protocol's 16 characters, must decode as
+UTF-8, must come with a complete 16 byte UUID, and are stripped of non-printable
+characters before they reach the log.
 
 **Transfer targets depend on where the client came from.** In transfer mode the
 watcher hands the player a new address to connect to. Clients from a private
@@ -57,9 +56,16 @@ client cannot choose for itself, and `transfer.local_networks` narrows what
 counts as local. The only thing a local client gains is the address it would
 have reached anyway.
 
-**Commands are argument lists.** No `shell=True` anywhere, so an address or
-container name cannot break out into a shell. Config is read with
-`yaml.safe_load`.
+**Nothing is handed to a shell.** The watcher spawns no processes at all in its
+normal operation. SSH and ICMP are libraries compiled into the binary, so there
+is no command line for a config value to break out of. `server.container_name`
+is still checked against what Docker accepts as a name, because it is the one
+value that ends up inside the remote command string.
+
+**The config is validated at startup.** A bad MAC, a port outside 1 to 65535, an
+unknown `wol.mode` or a MOTD that is not valid JSON stops the watcher with a
+message naming the field, rather than failing later at the moment a player tries
+to join.
 
 ## Your secrets
 
@@ -69,7 +75,8 @@ tracked. Never move your real values into the example file.
 
 The installer copies the config to `/opt/mc-wol-proxy/config.yml`, chowns it to
 the service user and sets mode 600, so the token is not world readable on the
-watcher.
+watcher. `mc-wol-proxy init` writes it with mode 600 for the same reason, and
+reads the token without echoing it to the screen.
 
 `server/.env` holds the RCON password. Compose refuses to start without it
 rather than falling back to an image default. RCON's port 25575 is not published
@@ -85,14 +92,42 @@ command="docker start minecraft",no-port-forwarding,no-X11-forwarding,no-agent-f
 ```
 
 Even if the key leaks, it can then only start that one container.
+`mc-wol-proxy setup-ssh` installs the key in exactly this form by default, so
+this is what you get unless you decline it.
 
-Host key checking is controlled by `server.ssh_strict_host_key`:
+The key must not be readable by other users and must not have a passphrase. The
+watcher refuses to start otherwise, the first because it is the rule OpenSSH
+applies and the second because an unattended service cannot type one.
+
+### Which SSH implementation
+
+SSH is `golang.org/x/crypto/ssh`, the Go team's implementation, compiled into
+the binary. The watcher does not implement any cryptography of its own. What it
+does implement is the host key policy below, on top of
+`golang.org/x/crypto/ssh/knownhosts`, which parses the same `known_hosts` format
+OpenSSH writes.
+
+The tradeoff worth knowing about: with the system `ssh` binary, a distro update
+patched a vulnerability for you. Compiled in, it is only patched when a new
+release of this project is built. Dependabot watches `golang.org/x/*` weekly and
+opens a pull request for it, and the release workflow turns that into new
+binaries, but the responsibility now sits with this repository rather than with
+your package manager. If you build from source, pull and rebuild after such an
+update.
+
+### Host key checking
+
+Controlled by `server.ssh_strict_host_key`:
 
 | Value | Behaviour |
 |-------|-----------|
-| `accept-new` (default) | trust the key on first sight, refuse if it ever changes |
+| `accept-new` (default) | trust the key on first sight and log its fingerprint, refuse if it ever changes |
 | `yes` | only accept a key that is already in `known_hosts` |
-| `no` | accept anything, logs a warning at startup |
+| `no` | accept anything, logs the fingerprint of every key it accepts |
+
+A changed host key is a hard failure in both `accept-new` and `yes`. That is the
+case host key checking exists for, and the error names the two things it can
+mean: the server was reinstalled, or someone is intercepting the connection.
 
 `accept-new` still takes the first connection on trust. To close that window,
 pin the key before starting the watcher and switch to `yes`:
@@ -101,19 +136,57 @@ pin the key before starting the watcher and switch to `yes`:
 ssh-keyscan -H 192.168.1.100 >> ~/.ssh/known_hosts
 ```
 
-In Docker the accepted key is stored in `watcher/known_hosts`, which is mounted
-into the container. Without that file the key would be trusted anew after every
-container recreate, which defeats the point.
+`mc-wol-proxy setup-ssh` closes it differently: it shows you the fingerprint and
+asks before trusting it, so you can compare it against the server.
+
+Where the file lives depends on the deployment. Under systemd it is
+`/opt/mc-wol-proxy/known_hosts`, so the unit can keep the home directory read
+only. In Docker it is `watcher/state/known_hosts`, on a mounted directory rather
+than a mounted file, because Docker creates a directory in place of a bind
+mounted file that does not exist yet. That is what used to silently throw the
+accepted key away on every container recreate.
 
 ## Container hardening
 
-The watcher container drops all capabilities and adds back only `NET_RAW` for
-ping, runs with `no-new-privileges`, and has a read-only root filesystem with a
-tmpfs on `/tmp`. Host networking is required because Wake-on-LAN broadcasts on
-the real LAN.
+The image is built on `scratch` and contains the binary and a CA bundle, nothing
+else. There is no shell, no package manager and no interpreter to abuse if
+something does go wrong. It drops all capabilities and adds back only `NET_RAW`,
+which ICMP needs, runs with `no-new-privileges` and has a read-only root
+filesystem.
+
+Host networking is required because Wake-on-LAN broadcasts on the real LAN.
+
+The systemd unit gets the same treatment: `NoNewPrivileges`,
+`ProtectSystem=strict`, a read only home, a single writable path and `CAP_NET_RAW`
+as an ambient capability so it does not need root to open an ICMP socket.
 
 Image tags and the Minecraft version are pinned, so restarting a container never
 pulls a different build than the one you reviewed.
+
+## Verifying what you install
+
+Release binaries are built by the workflow in `.github/workflows/release.yml`
+and published with a `checksums.txt`. `install.sh` downloads that file and
+refuses to install a binary whose hash does not match, or one that is not listed
+in it at all. If you would rather not trust the release at all, build from
+source with `sudo ./install.sh --build`.
+
+Each binary also carries build provenance, so you can check that a download
+really came out of that workflow and that commit rather than from someone who
+got hold of the release page:
+
+```bash
+gh attestation verify mc-wol-proxy_linux_arm64 --repo posch-dev/minecraft-wake-on-demand
+```
+
+This is not a code signature. Windows will still warn about an unsigned
+executable downloaded from the internet, because signing needs a certificate
+from a certificate authority and this project does not have one.
+
+`install.sh` reads `MC_WOL_INSTALL_DIR`, `MC_WOL_REPO`, `MC_WOL_API_BASE` and
+`MC_WOL_DOWNLOAD_BASE` from the environment if they are set, which is there for
+mirrors and for testing the installer. Anything you point those at is trusted to
+serve the binary, so only use them with a source you control.
 
 ## Things you can tighten
 
@@ -122,6 +195,8 @@ pulls a different build than the one you reviewed.
 - Turn on the Minecraft whitelist if the server is meant for a fixed group.
 - Pin the SSH host key and switch to `ssh_strict_host_key: "yes"`.
 - Keep the pinned image tags current, they do not update themselves.
+- Watch for Dependabot pull requests on `golang.org/x/crypto` and cut a release
+  when one lands.
 
 ## Reporting a vulnerability
 

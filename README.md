@@ -24,8 +24,8 @@ Show MOTD     Send WoL packet
 ## What you need
 
 **Watcher** (the always-on device):
-- A Linux or Windows machine that's always running
-- Python 3 or Docker
+- A Linux or Windows machine that's always running (e.g. Raspberry Pi)
+- Nothing preinstalled, it's a single binary
 
 **Server** (the PC that sleeps):
 - Docker with [itzg/minecraft-server](https://github.com/itzg/docker-minecraft-server)
@@ -38,29 +38,24 @@ Show MOTD     Send WoL packet
 
 ## Quick start
 
-The steps are ordered so the reboots come first and you only edit the config once, when you already have every value it asks for.
-
 ### 1. Prepare the server PC
 
-This is the BIOS and reboot part, so it goes first:
-
 - Enable Wake-on-LAN in the BIOS/UEFI
-- Enable WoL in the operating system's network adapter settings as well, both have to be on
+- Enable WoL in the operating system's network adapter settings
 - Give the PC a static IP or a DHCP reservation in your router
-- Set the operating system to sleep after 30 minutes of inactivity or so
 
-Write down the **MAC address** and the **local IP** of the PC, you need both in step 6.
+- Write down the **local IP** and **MAC address** of the PC.
 
-Nothing in this project sends the server PC to sleep, that part is the power settings above. The Minecraft container pauses itself when the last player leaves, so the PC goes idle on its own and the sleep timer takes over from there.
+**Nothing in this project ever sends the server PC to sleep. The watcher only wakes it up.** Putting it back to sleep is your job, either through the operating system's power settings or with a small script on a timer, and the Minecraft container pauses itself once the last player leaves so the machine really does go idle.
 
 ### 2. Get a DuckDNS subdomain (recommended)
 
 Most home connections change their public IP every few days, which would leave your friends with a dead address. DuckDNS gives you a name that follows it.
 
 1. Get a free subdomain at [duckdns.org](https://www.duckdns.org/)
-2. Write down the subdomain and the token, they go into the config in step 6
+2. Write down both, the subdomain and the token, step 5 asks for them
 
-You can skip this if you have a fixed public IP, or if nobody outside your network is going to join. Set `duckdns.enabled: false` in step 6 and your friends use your public IP instead.
+You can skip this if you have a fixed public IP, or if nobody outside your network is going to join.
 
 ### 3. Forward the port
 
@@ -92,64 +87,58 @@ docker compose up -d
 
 After this, the watcher handles starting it via SSH. You don't need to touch it again.
 
-### 5. Set up SSH access
+### 5. Install and set up the watcher
 
-The watcher needs to be able to SSH into the server to run `docker start minecraft`. Generate a key on the watcher:
+**Linux:**
 
 ```bash
-ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""
-ssh-copy-id -i ~/.ssh/id_ed25519.pub user@server-ip
+sudo ./watcher/install.sh
 ```
 
-**Recommended:** lock the key down so it can only start the container. On the server, edit `~/.ssh/authorized_keys` and put this in front of the key:
+**Windows:**
 
-```
-command="docker start minecraft",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... watcher@host
-```
+1. Download `mc-wol-proxy_windows_amd64.exe` from the [releases page](https://github.com/posch-dev/minecraft-wake-on-demand/releases)
+2. Rename it to `mc-wol-proxy.exe` and put it in the `watcher` folder
+3. For autostart later, put a shortcut to `watcher\windows-start.vbs` in your `shell:startup` folder
 
-> On a Windows server, use the full path: `"C:\Program Files\Docker\Docker\resources\bin\docker.exe start minecraft"`
-
-### 6. Edit the watcher config
-
-On the watcher, copy the example config:
+**Docker:**
 
 ```bash
 cp config.example.yml config.yml
 ```
 
-Edit `config.yml`, never `config.example.yml`. Everything you noted down in the earlier steps goes in here:
+Fill in `config.yml` by hand, then `cd watcher && docker compose up -d`. The three commands below are available in the other two setups, the table further down lists what goes in the file.
+
+---
+
+Now let the watcher set itself up. On Linux, `install.sh` prints these three lines with the right paths already filled in:
+
+```bash
+mc-wol-proxy init        # asks a handful of questions and writes config.yml
+mc-wol-proxy setup-ssh   # creates the SSH key and installs it on the server
+mc-wol-proxy check       # confirms everything is wired up
+```
+
+**`init`** asks for the server's IP, your login name on it, and your DuckDNS details if you want them. If the server PC is switched on it reads the MAC address off the network itself, otherwise it asks you for the one you noted down in step 1. The broadcast address it works out from the IP. Everything else has a sensible default, so pressing Enter is usually the right answer.
+
+**`setup-ssh`** creates the key, shows you the server's host key fingerprint so you can confirm it is the right machine, asks for your server password once, and installs the key. By default it restricts the key so it can only run `docker start`, which means a leaked key cannot do anything else. The password is used for that one login and is not stored.
+
+**`check`** goes through the whole setup and tells you which step is wrong in plain words. Run it any time something misbehaves.
+
+If you would rather fill the config in by hand, copy `config.example.yml` to `config.yml` and set these:
 
 | Setting | What to put |
 |---------|-------------|
-| `server.mac` | MAC address of your server PC, from step 1 |
+| `server.mac` | MAC address of your server PC |
 | `server.ip` | Local IP of your server PC, from step 1 |
-| `server.ssh_user` | Your SSH username on the server |
+| `server.ssh_user` | Your login name on the server |
 | `duckdns.enabled` | `false` if you skipped step 2, then ignore the two rows below |
 | `duckdns.domain` | Your DuckDNS subdomain, without `.duckdns.org` |
 | `duckdns.token` | Your DuckDNS token |
 
 Everything else has sensible defaults. Check the comments in the file for details.
 
-### 7. Start the watcher
-
-**Linux with Docker** (recommended):
-```bash
-cd watcher
-touch known_hosts
-docker compose up -d
-```
-
-**Linux with systemd** (good for Raspberry Pi):
-```bash
-sudo ./watcher/install.sh
-```
-
-**Windows:**
-1. Install PyYAML: `pip install pyyaml`
-2. Run `watcher\windows-start.bat`
-3. For autostart: put a shortcut to `watcher\windows-start.vbs` in your `shell:startup` folder
-
-### 8. Connect and play
+### 6. Connect and play
 
 Everyone connects to the **watcher**, never to the server PC directly. The server PC is asleep, so nothing there would answer.
 
@@ -159,8 +148,6 @@ Everyone connects to the **watcher**, never to the server PC directly. The serve
 | You, on the same network as the server | the watcher's local IP and port, for example `192.168.1.50:25565` |
 
 Always add the port. Minecraft is supposed to assume `25565` on its own, but depending on the client it doesn't, and the address then just fails to connect. Writing it out always works. If you changed `listen_port` in `config.yml`, use that number instead.
-
-Why the split: your router only forwards connections that arrive from the outside. Many routers can't send a connection from inside your network back in through your own public address. If yours can (it's called NAT loopback or hairpinning), the public address works from home too and you can use one address everywhere.
 
 **The first join:**
 
@@ -172,6 +159,18 @@ Why the split: your router only forwards connections that arrive from the outsid
 Only the first player after a sleep goes through this. Everyone joining while the server is already up connects straight away.
 
 ---
+
+## Commands
+
+| Command | What it does |
+|---------|--------------|
+| `mc-wol-proxy` | starts the watcher, this is what the service runs |
+| `mc-wol-proxy init` | asks for your settings and writes `config.yml` |
+| `mc-wol-proxy setup-ssh` | creates the SSH key and installs it on the server |
+| `mc-wol-proxy check` | tests the setup and reports what is missing |
+| `mc-wol-proxy version` | prints the version |
+
+The config is looked for in `MC_WOL_CONFIG`, then next to the binary, then one directory above it.
 
 ## Extra options
 
@@ -190,9 +189,9 @@ transfer:
   port: 25566
 ```
 
-Players still connect to the watcher as described in step 8, the redirect happens by itself.
+`mc-wol-proxy init` offers this as a question, so you can also set it up there.
 
-Players on your own network are not sent out to your public address. The watcher looks at where the connection came from and redirects anyone with a local IP straight to `server.ip` instead, so no router loopback is involved and you get the same direct connection your friends get.
+Players still connect to the watcher as described in step 6, the redirect happens by itself.
 
 If your network uses addresses the watcher doesn't recognise as local, list them explicitly:
 
@@ -205,13 +204,15 @@ Left empty, every private address counts as local, which is what you want in a n
 
 ### Custom MOTD and server icon
 
-You can customize what players see in their server list when the server is sleeping. Edit the files in `assets/`:
+You can customize what players see in their server list when the server is sleeping. Edit the files in `watcher/assets/`:
 
 | File | What it does |
 |------|-------------|
-| `assets/motd-sleeping.json` | Text shown when server is off |
-| `assets/motd-starting.json` | Text shown while server is booting |
-| `assets/server-icon.png` | 64x64 PNG for the server list |
+| `motd-sleeping.json` | Text shown when server is off |
+| `motd-starting.json` | Text shown while server is booting |
+| `server-icon.png` | 64x64 PNG for the server list |
+
+These are read fresh on every request, so a change takes effect without restarting the watcher.
 
 ### WoL modes
 
@@ -221,21 +222,39 @@ You can customize what players see in their server list when the server is sleep
 
 Set `wol.mode` in `config.yml`.
 
+### Building it yourself
+
+The binary is built from `watcher/`. With Go installed:
+
+```bash
+cd watcher
+go build -o mc-wol-proxy .
+```
+
+`sudo ./watcher/install.sh --build` does the same thing and installs the result, which is the way to go on an architecture without a published release.
+
 ---
 
 ## Troubleshooting
+
+**Start here:**
+
+```bash
+mc-wol-proxy check
+```
+
+It walks through the config, the SSH key, the server PC, the container and DuckDNS in the order they depend on each other, and names the step that is broken. Most of the cases below turn into one line of output.
 
 **Server won't wake up:**
 - Double-check WoL is enabled in BIOS *and* OS network settings
 - Verify the MAC address in `config.yml`
 - Try switching between broadcast and unicast mode
 
-**SSH not working:**
-- Test it manually: `ssh -i ~/.ssh/id_ed25519 user@server-ip docker start minecraft`
-- Make sure the key is in the server's `authorized_keys`
+**"No ICMP socket and no ping command available" in the log:**
+- The watcher cannot tell when the PC has finished booting. In Docker, make sure `cap_add: NET_RAW` is still in `docker-compose.yml`. Under systemd, make sure `AmbientCapabilities=CAP_NET_RAW` is still in the unit file.
 
 **Friends can connect but you can't, or the other way round:**
-- From inside your network, use the watcher's local IP, not the public address (see step 8)
+- From inside your network, use the watcher's local IP, not the public address (see step 6)
 - From outside, check that port `25565` is forwarded to the watcher and not to the server PC
 
 **Server shows up as offline in the list:**
@@ -259,7 +278,8 @@ the defaults already protect against, and what you can lock down further, it is
 all written up in [SECURITY.md](SECURITY.md).
 
 The short version: the defaults are safe for a home setup, and the one thing
-worth doing beyond this guide is restricting the SSH key as shown in step 5.
+worth doing beyond this guide is restricting the SSH key, which `setup-ssh` does
+for you unless you tell it not to.
 
 ## Credits
 
