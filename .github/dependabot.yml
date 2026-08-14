@@ -1,0 +1,24 @@
+version: 2
+
+updates:
+  # The SSH and ICMP implementations are compiled into the binary, so a fix in
+  # x/crypto only reaches users once a new release is built here.
+  - package-ecosystem: gomod
+    directory: /watcher
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      golang-x:
+        patterns:
+          - "golang.org/x/*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: docker
+    directory: /watcher
+    schedule:
+      interval: monthly

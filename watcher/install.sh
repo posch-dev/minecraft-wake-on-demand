@@ -124,7 +124,10 @@ else
         exit 1
     fi
 
-    EXPECTED="$(grep " $ASSET\$" "$TMP/checksums.txt" | awk '{print $1}')"
+    # sha256sum writes "hash  name" in text mode and "hash *name" in binary
+    # mode, so the name is compared with any leading star stripped.
+    EXPECTED="$(awk -v want="$ASSET" '{ name = $2; sub(/^\*/, "", name); if (name == want) print $1 }' \
+        "$TMP/checksums.txt")"
     ACTUAL="$(sha256sum "$TMP/$ASSET" | awk '{print $1}')"
     if [ -z "$EXPECTED" ]; then
         echo "ERROR: $ASSET is not listed in checksums.txt, refusing to install."

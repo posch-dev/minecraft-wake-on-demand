@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: watcher/go.mod
+          cache-dependency-path: watcher/go.sum
+
+      - name: Formatting
+        working-directory: watcher
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        working-directory: watcher
+        run: go vet ./...
+
+      - name: Test
+        working-directory: watcher
+        run: go test -race ./...
+
+      # A Raspberry Pi is the main target, so a broken arm build has to fail here.
+      - name: Cross compile
+        working-directory: watcher
+        run: |
+          set -eu
+          for target in linux/amd64 linux/arm64 linux/arm windows/amd64; do
+            CGO_ENABLED=0 GOOS="${target%/*}" GOARCH="${target#*/}" \
+              go build -o /dev/null . && echo "ok $target"
+          done

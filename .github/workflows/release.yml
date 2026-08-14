@@ -1,0 +1,89 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  # Both are needed to attest the binaries.
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: watcher/go.mod
+          cache-dependency-path: watcher/go.sum
+
+      - name: Test
+        working-directory: watcher
+        run: go test ./...
+
+      - name: Build every target
+        working-directory: watcher
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -eu
+          mkdir -p ../dist
+          build() {
+            CGO_ENABLED=0 GOOS="$1" GOARCH="$2" GOARM="$3" go build \
+              -trimpath \
+              -ldflags="-s -w -X main.version=${VERSION}" \
+              -o "../dist/$4" .
+            echo "built $4"
+          }
+          build linux   amd64 ""  mc-wol-proxy_linux_amd64
+          build linux   arm64 ""  mc-wol-proxy_linux_arm64
+          build linux   arm   7   mc-wol-proxy_linux_armv7
+          build linux   arm   6   mc-wol-proxy_linux_armv6
+          build windows amd64 ""  mc-wol-proxy_windows_amd64.exe
+
+      # install.sh refuses to install a binary that is not listed here.
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > checksums.txt
+
+      # Lets anyone prove a binary came from this workflow and this commit:
+      # gh attestation verify <file> --repo ${{ github.repository }}
+      - name: Attest the binaries
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/mc-wol-proxy_*
+
+      # Only the section for this tag, so the notes are about this release.
+      - name: Release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -eu
+          version="${VERSION#v}"
+          awk -v ver="$version" '
+            !found && /^## / {
+              heading = substr($0, 4)
+              sub(/ .*$/, "", heading)
+              if (heading == ver) { found = 1 }
+              next
+            }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+
+          if [ ! -s release-notes.md ]; then
+            echo "CHANGELOG.md has no section for $version, add one before tagging."
+            exit 1
+          fi
+          echo "Release notes:"
+          cat release-notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body_path: release-notes.md
+          generate_release_notes: true
