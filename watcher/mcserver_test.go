@@ -144,11 +144,15 @@ func TestMCPortReachableIsCached(t *testing.T) {
 		t.Error("the second call probed again instead of using the cache")
 	}
 
-	// force has to bypass it, which is what the boot sequence relies on.
+	// force has to bypass it, which is what the boot sequence relies on. The
+	// cache is pushed into the past first, because two calls microseconds
+	// apart can read the same wall clock on a coarse timer.
+	waker.reachChecked = time.Now().Add(-time.Hour)
+	stale := waker.reachChecked
 	if !waker.MCPortReachable(ctx, true) {
 		t.Fatal("forced probe should still find the server")
 	}
-	if waker.reachChecked.Equal(checkedAt) {
+	if !waker.reachChecked.After(stale) {
 		t.Error("force did not refresh the cache")
 	}
 }

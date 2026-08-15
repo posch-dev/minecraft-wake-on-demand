@@ -203,3 +203,52 @@ func TestIsLocalClientHonoursConfiguredNetworks(t *testing.T) {
 		t.Error("10.0.0.5 is outside the configured network")
 	}
 }
+
+// TCP is free to split a write anywhere. The handler used to parse only what
+// the first read returned, so a handshake arriving in pieces was dropped and
+// the client saw the connection close with no answer.
+func TestHandshakeSplitAcrossReads(t *testing.T) {
+	cfg := sleepingConfig()
+	h := NewHandler(cfg, NewWaker(cfg))
+	client := serveOnce(t, h)
+
+	combined := append(buildHandshake(770, "watcher.local", 25565, 1), makeStatusRequest()...)
+
+	// One byte at a time is the worst case the handler has to survive.
+	for i := 0; i < len(combined); i++ {
+		if _, err := client.Write(combined[i : i+1]); err != nil {
+			t.Fatalf("write %d: %v", i, err)
+		}
+	}
+
+	payload := decodeStatus(t, readFrame(t, client))
+	if string(payload.Description) != defaultMOTDSleeping {
+		t.Errorf("description = %s, want the sleeping MOTD", payload.Description)
+	}
+}
+
+// The same, with the handshake split at every possible offset.
+func TestHandshakeSplitAtEveryOffset(t *testing.T) {
+	handshake := buildHandshake(770, "watcher.local", 25565, 1)
+	request := makeStatusRequest()
+
+	for split := 1; split < len(handshake); split++ {
+		cfg := sleepingConfig()
+		h := NewHandler(cfg, NewWaker(cfg))
+		client := serveOnce(t, h)
+
+		if _, err := client.Write(handshake[:split]); err != nil {
+			t.Fatalf("split %d, first write: %v", split, err)
+		}
+		rest := append(append([]byte{}, handshake[split:]...), request...)
+		if _, err := client.Write(rest); err != nil {
+			t.Fatalf("split %d, second write: %v", split, err)
+		}
+
+		payload := decodeStatus(t, readFrame(t, client))
+		if string(payload.Description) != defaultMOTDSleeping {
+			t.Errorf("split %d: description = %s", split, payload.Description)
+		}
+		client.Close()
+	}
+}

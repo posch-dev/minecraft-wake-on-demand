@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"strconv"
@@ -37,16 +38,8 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
 	addr := conn.RemoteAddr()
 
-	conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
-	buf := make([]byte, readBufferSize)
-	n, err := conn.Read(buf)
-	if err != nil || n == 0 {
-		return
-	}
-	initial := buf[:n]
-
-	handshake, err := parseHandshake(initial)
-	if err != nil {
+	initial, handshake := h.readHandshake(conn)
+	if handshake == nil {
 		return
 	}
 
@@ -56,6 +49,35 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 	case 2:
 		h.handleLogin(ctx, conn, initial, handshake, addr)
 	}
+}
+
+// TCP may split the handshake across reads, so it is accumulated until it
+// parses. Returns everything read, which usually carries the packet after the
+// handshake as well, and a nil handshake when the client sent nothing usable.
+func (h *Handler) readHandshake(conn net.Conn) ([]byte, *Handshake) {
+	conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
+
+	buf := make([]byte, 0, readBufferSize)
+	chunk := make([]byte, readBufferSize)
+	for len(buf) < readBufferSize {
+		n, err := conn.Read(chunk)
+		if n > 0 {
+			buf = append(buf, chunk[:n]...)
+			handshake, parseErr := parseHandshake(buf)
+			if parseErr == nil {
+				return buf, handshake
+			}
+			// Anything other than a short read is a packet that will not
+			// become valid by waiting for more of it.
+			if !errors.Is(parseErr, ErrIncompleteVarInt) && !errors.Is(parseErr, ErrShortPacket) {
+				return nil, nil
+			}
+		}
+		if err != nil {
+			return nil, nil
+		}
+	}
+	return nil, nil
 }
 
 func (h *Handler) handleStatus(ctx context.Context, conn net.Conn, initial []byte, hs *Handshake) {
