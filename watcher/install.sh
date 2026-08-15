@@ -99,8 +99,10 @@ else
     fi
 
     echo "Looking up the latest release..."
-    VERSION="$($FETCH "$API_BASE/repos/$REPO/releases/latest" \
-        | grep -m1 '"tag_name"' | cut -d'"' -f4 || true)"
+    # Fetched into a variable first. Piping straight into grep -m1 closes the
+    # pipe early, and curl then prints a write error that reads like a crash.
+    RELEASE_JSON="$($FETCH "$API_BASE/repos/$REPO/releases/latest" || true)"
+    VERSION="$(printf '%s' "$RELEASE_JSON" | grep -m1 '"tag_name"' | cut -d'"' -f4 || true)"
     if [ -z "$VERSION" ]; then
         echo "ERROR: Could not find a release to download."
         echo "  Build from source instead: sudo ./install.sh --build"
