@@ -1,0 +1,35 @@
+name: dependabot auto-merge
+
+# pull_request_target runs with a writable token, which pull_request does not
+# for Dependabot. In exchange this workflow must never check out or execute the
+# code from the pull request, so it does neither.
+on: pull_request_target
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: What kind of update is this
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+
+      # Patch only. A minor or major bump can change behaviour, and the two
+      # libraries that matter here, x/crypto and x/net, are compiled into the
+      # binary, so those get looked at by hand.
+      - name: Enable auto-merge for patch updates
+        if: steps.meta.outputs.update-type == 'version-update:semver-patch'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Say why nothing happened
+        if: steps.meta.outputs.update-type != 'version-update:semver-patch'
+        run: |
+          echo "${{ steps.meta.outputs.dependency-names }} is a ${{ steps.meta.outputs.update-type }}."
+          echo "Only patch updates merge on their own, this one needs a look."
