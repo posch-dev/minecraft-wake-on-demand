@@ -8,9 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-)
-
-// Port 1 on loopback refuses instantly, which is the sleeping server case
+) // Port 1 on loopback refuses instantly, which is the sleeping server case
 // without waiting for a timeout.
 func sleepingConfig() *Config {
 	cfg := defaultConfig()
@@ -284,5 +282,87 @@ func TestHandshakeSplitAtEveryOffset(t *testing.T) {
 			t.Errorf("split %d: description = %s", split, payload.Description)
 		}
 		client.Close()
+	}
+}
+
+func TestAllowedHostnamesEmptyPermitsAll(t *testing.T) {
+	cfg := sleepingConfig()
+	h := NewHandler(cfg, NewWaker(cfg))
+
+	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
+	hs := &Handshake{ServerAddress: "1.2.3.4", NextState: 1}
+	if !h.isAllowedHostname(hs, remote) {
+		t.Error("empty allowed_hostnames should permit all connections")
+	}
+}
+
+func TestAllowedHostnamesBlocksUnknownRemote(t *testing.T) {
+	cfg := sleepingConfig()
+	cfg.Watcher.AllowedHostnames = StringList{"mc.example.org"}
+	h := NewHandler(cfg, NewWaker(cfg))
+
+	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
+	hs := &Handshake{ServerAddress: "1.2.3.4", NextState: 1}
+	if h.isAllowedHostname(hs, remote) {
+		t.Error("remote IP not in allowed list should be blocked")
+	}
+}
+
+func TestAllowedHostnamesAllowsMatchingRemote(t *testing.T) {
+	cfg := sleepingConfig()
+	cfg.Watcher.AllowedHostnames = StringList{"mc.example.org", "192.168.1.100"}
+	h := NewHandler(cfg, NewWaker(cfg))
+
+	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
+	hs := &Handshake{ServerAddress: "mc.example.org", NextState: 1}
+	if !h.isAllowedHostname(hs, remote) {
+		t.Error("hostname match from remote IP should be allowed")
+	}
+}
+
+func TestAllowedHostnamesLocalBypassesCheck(t *testing.T) {
+	cfg := sleepingConfig()
+	cfg.Watcher.AllowedHostnames = StringList{"mc.example.org"}
+	h := NewHandler(cfg, NewWaker(cfg))
+
+	loopback, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:5000")
+	hs := &Handshake{ServerAddress: "scanner.ip", NextState: 1}
+	if !h.isAllowedHostname(hs, loopback) {
+		t.Error("local client should bypass hostname check")
+	}
+}
+
+func TestAllowedHostnamesMatchIsCaseInsensitive(t *testing.T) {
+	cfg := sleepingConfig()
+	cfg.Watcher.AllowedHostnames = StringList{"MC.Example.Org"}
+	h := NewHandler(cfg, NewWaker(cfg))
+
+	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
+	hs := &Handshake{ServerAddress: "mc.example.org", NextState: 1}
+	if !h.isAllowedHostname(hs, remote) {
+		t.Error("hostname matching should be case-insensitive")
+	}
+}
+
+func TestAllowedHostnamesAutoPopulatedFromDuckDNS(t *testing.T) {
+	cfg := sleepingConfig()
+	cfg.DuckDNS.Enabled = true
+	cfg.DuckDNS.Domain = "my-world"
+	cfg.DuckDNS.Token = "secret"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if len(cfg.Watcher.AllowedHostnames) != 1 {
+		t.Fatalf("expected 1 auto-populated hostname, got %d", len(cfg.Watcher.AllowedHostnames))
+	}
+	if cfg.Watcher.AllowedHostnames[0] != "my-world.duckdns.org" {
+		t.Errorf("expected my-world.duckdns.org, got %q", cfg.Watcher.AllowedHostnames[0])
+	}
+
+	h := NewHandler(cfg, NewWaker(cfg))
+	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
+	hs := &Handshake{ServerAddress: "my-world.duckdns.org", NextState: 1}
+	if !h.isAllowedHostname(hs, remote) {
+		t.Error("auto-populated DuckDNS domain should be accepted")
 	}
 }

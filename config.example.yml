@@ -1,6 +1,7 @@
 watcher:
-  listen_address: "0.0.0.0"           # "0.0.0.0" = all interfaces, or a single LAN IP
+  listen_address: "0.0.0.0"         # "0.0.0.0" = all interfaces, or a single LAN IP
   listen_port: 25565
+  allowed_hostnames: []              # hostnames/domains to accept; empty = auto from DuckDNS when enabled, or no filtering.
 
 server:
   mac: "AA:BB:CC:DD:EE:FF"            # MAC address of the server PC

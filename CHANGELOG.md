@@ -11,6 +11,10 @@ notes, so a version has to be listed here before it is tagged.
   in `.server-version.json` next to the config. The server list ping while the
   server is asleep reports the real version instead of protocol -1, so clients
   no longer show "Incompatible Version".
+- Optional `watcher.allowed_hostnames` list. When non-empty, the watcher drops
+  connections from non-local IPs whose handshake ServerAddress is not in the
+  list, keeping port scanners and internet crawlers from getting any response.
+  Auto-populated from the DuckDNS domain when DuckDNS is enabled.
 
 ### Fixed
 

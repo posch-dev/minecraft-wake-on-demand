@@ -197,7 +197,34 @@ serve the binary, so only use them with a source you control.
 
 - Set `watcher.listen_address` to a single LAN IP if the watcher has more than
   one interface and only one of them should serve Minecraft.
+- Set `watcher.allowed_hostnames` to your public domain (and LAN IP, if both
+  are used). When non-empty, the watcher drops any connection from a non-local
+  IP whose handshake ServerAddress does not match the list. That keeps port
+  scanners and internet crawlers from getting even a sleeping MOTD back, at the
+  cost of rejecting players who connect by raw IP instead of the domain name.
+  When DuckDNS is enabled, this list is populated automatically with your
+  DuckDNS domain.
 - Turn on the Minecraft whitelist if the server is meant for a fixed group.
+- Protect the transfer port (25566 in transfer mode) with a host firewall.
+  That port is published directly to the Minecraft container and the watcher
+  cannot filter it, so a port scanner reaches the server without passing
+  through the watcher's hostname check. An iptables rule that only allows new
+  connections to 25566 from IPs that recently connected to 25565 closes the
+  gap:
+
+  ```bash
+  # IPs that hit the watcher within the last 120 seconds get 25566 opened.
+  # Everything else is dropped before it reaches the container.
+  # Works with UFW via `ufw insert` or as raw iptables rules on the host.
+  iptables -A INPUT -p tcp --dport 25565 -m recent --set --name MCKNOWN
+  iptables -A INPUT -p tcp --dport 25566 -m recent --rcheck --seconds 120 --name MCKNOWN -j ACCEPT
+  iptables -A INPUT -p tcp --dport 25566 -j DROP
+  ```
+
+  UFW does not expose the `recent` match directly, so either use raw iptables
+  rules (saved in `/etc/iptables/rules.v4` or a netfilter-persistent unit) or
+  let UFW manage the broad allow/drop stanzas and append the `recent` rules
+  after with `iptables -A` so they land in the right chain.
 - Pin the SSH host key and switch to `ssh_strict_host_key: "yes"`.
 - Keep the pinned image tags current, they do not update themselves.
 - Watch for Dependabot pull requests on `golang.org/x/crypto` and cut a release

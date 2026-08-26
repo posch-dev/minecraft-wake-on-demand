@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -40,6 +41,10 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 
 	initial, handshake := h.readHandshake(conn)
 	if handshake == nil {
+		return
+	}
+
+	if !h.isAllowedHostname(handshake, addr) {
 		return
 	}
 
@@ -275,6 +280,25 @@ func (h *Handler) isLocalClient(addr net.Addr) bool {
 		return false
 	}
 	return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()
+}
+
+// When allowed_hostnames is non-empty, only connections from local IPs or
+// with a ServerAddress matching the list are accepted. Port scanners that
+// connect via raw IP are dropped without a response.
+func (h *Handler) isAllowedHostname(hs *Handshake, addr net.Addr) bool {
+	if len(h.cfg.Watcher.AllowedHostnames) == 0 {
+		return true
+	}
+	if h.isLocalClient(addr) {
+		return true
+	}
+	for _, allowed := range h.cfg.Watcher.AllowedHostnames {
+		if strings.EqualFold(allowed, hs.ServerAddress) {
+			return true
+		}
+	}
+	log.Infof("Dropping connection from %s: hostname %q not in allowed list", addr, hs.ServerAddress)
+	return false
 }
 
 func trailing(data []byte, offset int) []byte {

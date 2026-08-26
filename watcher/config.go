@@ -29,8 +29,9 @@ type Config struct {
 }
 
 type WatcherConfig struct {
-	ListenAddress string `yaml:"listen_address"`
-	ListenPort    int    `yaml:"listen_port"`
+	ListenAddress    string     `yaml:"listen_address"`
+	ListenPort       int        `yaml:"listen_port"`
+	AllowedHostnames StringList `yaml:"allowed_hostnames"`
 }
 
 type ServerConfig struct {
@@ -229,6 +230,9 @@ func applyEnvOverrides(cfg *Config) {
 	setString("SERVER_CONTAINER_NAME", &cfg.Server.ContainerName)
 	setString("WATCHER_LISTEN_ADDRESS", &cfg.Watcher.ListenAddress)
 	setInt("WATCHER_LISTEN_PORT", &cfg.Watcher.ListenPort)
+	if v, ok := os.LookupEnv("WATCHER_ALLOWED_HOSTNAMES"); ok {
+		cfg.Watcher.AllowedHostnames = splitList(v)
+	}
 	setString("WOL_MODE", &cfg.WoL.Mode)
 	setString("WOL_BROADCAST_ADDRESS", &cfg.WoL.BroadcastAddress)
 	setBool("DUCKDNS_ENABLED", &cfg.DuckDNS.Enabled)
@@ -319,6 +323,9 @@ func (c *Config) Validate() error {
 		}
 		if c.DuckDNS.UpdateIntervalHours < 1 {
 			return fmt.Errorf("duckdns.update_interval_hours is %d, it has to be at least 1", c.DuckDNS.UpdateIntervalHours)
+		}
+		if len(c.Watcher.AllowedHostnames) == 0 {
+			c.Watcher.AllowedHostnames = StringList{c.DuckDNS.Domain + ".duckdns.org"}
 		}
 	}
 
