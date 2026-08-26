@@ -236,11 +236,11 @@ func TestSaveAndLoadVersionCacheRoundTrip(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.Path = filepath.Join(dir, "config.yml")
 
-	waker := NewWaker(cfg)
+	waker := NewWaker(&cfg)
 	sv := &ServerVersion{Name: "1.21.4", Protocol: 769, Updated: time.Now()}
 	waker.saveVersionCache(sv)
 
-	waker2 := NewWaker(cfg)
+	waker2 := NewWaker(&cfg)
 	cached := waker2.CachedVersion()
 	if cached == nil {
 		t.Fatal("cached version was not loaded")
@@ -255,7 +255,7 @@ func TestLoadVersionCacheNoFile(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.Path = filepath.Join(dir, "config.yml")
 
-	waker := NewWaker(cfg)
+	waker := NewWaker(&cfg)
 	if waker.CachedVersion() != nil {
 		t.Error("expected nil version when no cache file exists")
 	}
@@ -271,7 +271,7 @@ func TestLoadVersionCacheCorruptFile(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.Path = filepath.Join(dir, "config.yml")
 
-	waker := NewWaker(cfg)
+	waker := NewWaker(&cfg)
 	if waker.CachedVersion() != nil {
 		t.Error("expected nil version when cache file is corrupt")
 	}
@@ -279,7 +279,7 @@ func TestLoadVersionCacheCorruptFile(t *testing.T) {
 
 func TestLearnVersionCachesInMemory(t *testing.T) {
 	server := startFakeMCServer(t, true, nil)
-	cfg, waker := wakerFor(server)
+	_, waker := wakerFor(server)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -299,7 +299,7 @@ func TestLearnVersionCachesInMemory(t *testing.T) {
 
 func TestLearnVersionIgnoresEmptyVersion(t *testing.T) {
 	server := startFakeMCServer(t, true, nil)
-	cfg, waker := wakerFor(server)
+	_, waker := wakerFor(server)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -322,7 +322,7 @@ func TestLearnVersionIgnoresEmptyVersion(t *testing.T) {
 
 func TestLearnVersionDoesNotUpdateWhenSame(t *testing.T) {
 	server := startFakeMCServer(t, true, nil)
-	cfg, waker := wakerFor(server)
+	_, waker := wakerFor(server)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -348,8 +348,14 @@ func TestLearnVersionDoesNotUpdateWhenSame(t *testing.T) {
 func TestVersionCachesToFileViaLearnVersion(t *testing.T) {
 	dir := t.TempDir()
 	server := startFakeMCServer(t, true, nil)
-	cfg, waker := wakerFor(server)
+	cfg := defaultConfig()
+	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
+	cfg.Server.IP = "127.0.0.1"
+	cfg.Server.MCPort = server.port
+	cfg.Server.SSHUser = "tester"
+	cfg.WoL.BroadcastAddress = "127.0.0.1"
 	cfg.Path = filepath.Join(dir, "config.yml")
+	waker := NewWaker(&cfg)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -360,7 +366,7 @@ func TestVersionCachesToFileViaLearnVersion(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	waker2 := NewWaker(cfg)
+	waker2 := NewWaker(&cfg)
 	cached := waker2.CachedVersion()
 	if cached == nil {
 		t.Fatal("version was not persisted to disk")

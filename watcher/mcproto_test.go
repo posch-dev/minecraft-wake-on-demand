@@ -295,11 +295,11 @@ func TestLoginSuccessProtocol767IncludesStrictByte(t *testing.T) {
 
 	// Parse past frame, packet ID, UUID, username, properties count.
 	_, off, _ := readVarInt(raw, 0)
-	_, off, _ = readVarInt(raw, off) // packet ID
-	off += 16                        // UUID
+	_, off, _ = readVarInt(raw, off)
+	off += 16
 	nameLen, off, _ := readVarInt(raw, off)
-	off += int(nameLen)         // username bytes
-	_, off, _ = readVarInt(raw, off) // properties count (0)
+	off += int(nameLen)
+	_, off, _ = readVarInt(raw, off)
 
 	if off >= len(raw) {
 		t.Fatal("packet too short, strict error handling byte is missing")
