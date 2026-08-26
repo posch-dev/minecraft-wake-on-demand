@@ -3,6 +3,27 @@
 Notable changes per release. The section matching a tag becomes that release's
 notes, so a version has to be listed here before it is tagged.
 
+## [Unreleased]
+
+### Added
+
+- Server version is now learned from a status probe on first boot and cached
+  in `.server-version.json` next to the config. The server list ping while the
+  server is asleep reports the real version instead of protocol -1, so clients
+  no longer show "Incompatible Version".
+
+### Fixed
+
+- The Login Success packet no longer carries a stale `0x01` strict error
+  handling byte for clients whose protocol is outside 766-767, which crashed
+  1.21.2+ and other versions with `DecoderException: 1 extra byte`.
+
+### Changed
+
+- Minimum supported version in transfer mode is 1.20.5 (protocol 766), the
+  first version with the clientbound Transfer packet. Proxy mode still supports
+  1.7.6+.
+
 ## 2.0.0
 
 The watcher is written in Go and ships as a single binary. Your `config.yml`

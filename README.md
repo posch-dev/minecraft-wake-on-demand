@@ -202,6 +202,17 @@ transfer:
 
 Left empty, every private address counts as local, which is what you want in a normal home network.
 
+### Minecraft version compatibility
+
+The watcher speaks the modern Minecraft protocol (Java Edition) and supports:
+
+- **Transfer mode** (`transfer.enabled: true`): **1.20.5** or newer. This is the earliest version with the clientbound Transfer packet that the watcher uses to hand players off.
+- **Proxy mode** (`transfer.enabled: false`): all versions back to **1.7.6** (protocol 5), since it is plain TCP forwarding.
+
+The server list ping the watcher answers while the server is asleep now reports the real server version, learned from a previous status probe and cached in `.server-version.json` next to the config. Before the server has been reached once, it echoes the client's own protocol version so the signal bars stay green.
+
+**Strict error handling** is a boolean field inside the Login Success packet that only exists in protocols 766-767 (1.20.5 and 1.21/1.21.1). The watcher includes it for those versions and omits it everywhere else, because an extra byte crashes modern clients with a `DecoderException`.
+
 ### Custom MOTD and server icon
 
 You can customize what players see in their server list when the server is sleeping. Edit the files in `watcher/assets/`:

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -165,6 +167,38 @@ func TestLoginWhileSleepingSendsWaitMessage(t *testing.T) {
 	}
 	if got := string(frame[off : off+int(strLen)]); got != defaultMOTDLoginWait {
 		t.Errorf("reason = %s", got)
+	}
+}
+
+func TestStatusPingWhileSleepingShowsCachedVersion(t *testing.T) {
+	dir := t.TempDir()
+	cfg := sleepingConfig()
+	cfg.Path = filepath.Join(dir, "config.yml")
+
+	cachePath := filepath.Join(dir, ".server-version.json")
+	sv := &ServerVersion{Name: "1.21.4", Protocol: 769, Updated: time.Now()}
+	data, _ := json.Marshal(sv)
+	if err := os.WriteFile(cachePath, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	waker := NewWaker(cfg)
+	h := NewHandler(cfg, waker)
+	client := serveOnce(t, h)
+
+	if _, err := client.Write(buildHandshake(770, "watcher.local", 25565, 1)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Write(makeStatusRequest()); err != nil {
+		t.Fatal(err)
+	}
+
+	payload := decodeStatus(t, readFrame(t, client))
+	if payload.Version.Name != "1.21.4" {
+		t.Errorf("version name = %q, want 1.21.4", payload.Version.Name)
+	}
+	if payload.Version.Protocol != 769 {
+		t.Errorf("version protocol = %d, want 769", payload.Version.Protocol)
 	}
 }
 

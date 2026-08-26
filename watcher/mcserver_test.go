@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"testing"
@@ -53,7 +55,7 @@ func startFakeMCServer(t *testing.T, answerStatus bool, echo []byte) *fakeMCServ
 
 				if answerStatus {
 					motd := "{\"text\":\"the real server\",\"color\":\"green\"}"
-					response, _ := makeStatusResponse(motd, 42, 7, "")
+					response, _ := makeStatusResponse(motd, 42, 7, "", "1.21.4", 769)
 					conn.Write(response)
 				}
 				if echo != nil {
@@ -227,4 +229,143 @@ func readFull(conn net.Conn, buf []byte) (int, error) {
 		}
 	}
 	return total, nil
+}
+
+func TestSaveAndLoadVersionCacheRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	cfg := defaultConfig()
+	cfg.Path = filepath.Join(dir, "config.yml")
+
+	waker := NewWaker(cfg)
+	sv := &ServerVersion{Name: "1.21.4", Protocol: 769, Updated: time.Now()}
+	waker.saveVersionCache(sv)
+
+	waker2 := NewWaker(cfg)
+	cached := waker2.CachedVersion()
+	if cached == nil {
+		t.Fatal("cached version was not loaded")
+	}
+	if cached.Name != "1.21.4" || cached.Protocol != 769 {
+		t.Errorf("cached = %+v", cached)
+	}
+}
+
+func TestLoadVersionCacheNoFile(t *testing.T) {
+	dir := t.TempDir()
+	cfg := defaultConfig()
+	cfg.Path = filepath.Join(dir, "config.yml")
+
+	waker := NewWaker(cfg)
+	if waker.CachedVersion() != nil {
+		t.Error("expected nil version when no cache file exists")
+	}
+}
+
+func TestLoadVersionCacheCorruptFile(t *testing.T) {
+	dir := t.TempDir()
+	cachePath := filepath.Join(dir, ".server-version.json")
+	if err := os.WriteFile(cachePath, []byte("not valid json"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := defaultConfig()
+	cfg.Path = filepath.Join(dir, "config.yml")
+
+	waker := NewWaker(cfg)
+	if waker.CachedVersion() != nil {
+		t.Error("expected nil version when cache file is corrupt")
+	}
+}
+
+func TestLearnVersionCachesInMemory(t *testing.T) {
+	server := startFakeMCServer(t, true, nil)
+	cfg, waker := wakerFor(server)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if !waker.mcAcceptsStatus(ctx) {
+		t.Fatal("server should be reachable")
+	}
+
+	cached := waker.CachedVersion()
+	if cached == nil {
+		t.Fatal("version was not learned from the status response")
+	}
+	if cached.Name != "1.21.4" || cached.Protocol != 769 {
+		t.Errorf("cached = %+v, want name=1.21.4 protocol=769", cached)
+	}
+}
+
+func TestLearnVersionIgnoresEmptyVersion(t *testing.T) {
+	server := startFakeMCServer(t, true, nil)
+	cfg, waker := wakerFor(server)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if !waker.mcAcceptsStatus(ctx) {
+		t.Fatal("server should be reachable")
+	}
+
+	waker.versionMu.Lock()
+	waker.version = nil
+	waker.versionMu.Unlock()
+
+	response, _ := makeStatusResponse("{\"text\":\"x\"}", 10, 0, "", "", 0)
+	waker.learnVersion(response)
+
+	if waker.CachedVersion() != nil {
+		t.Error("empty version should not be cached")
+	}
+}
+
+func TestLearnVersionDoesNotUpdateWhenSame(t *testing.T) {
+	server := startFakeMCServer(t, true, nil)
+	cfg, waker := wakerFor(server)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if !waker.mcAcceptsStatus(ctx) {
+		t.Fatal("server should be reachable")
+	}
+
+	first := waker.CachedVersion()
+	if first == nil {
+		t.Fatal("version should have been learned")
+	}
+
+	response, _ := makeStatusResponse("{\"text\":\"x\"}", 10, 0, "", "1.21.4", 769)
+	waker.learnVersion(response)
+
+	cached := waker.CachedVersion()
+	if !cached.Updated.Equal(first.Updated) {
+		t.Error("learning the same version should not bump Updated")
+	}
+}
+
+func TestVersionCachesToFileViaLearnVersion(t *testing.T) {
+	dir := t.TempDir()
+	server := startFakeMCServer(t, true, nil)
+	cfg, waker := wakerFor(server)
+	cfg.Path = filepath.Join(dir, "config.yml")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if !waker.mcAcceptsStatus(ctx) {
+		t.Fatal("server should be reachable")
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	waker2 := NewWaker(cfg)
+	cached := waker2.CachedVersion()
+	if cached == nil {
+		t.Fatal("version was not persisted to disk")
+	}
+	if cached.Name != "1.21.4" || cached.Protocol != 769 {
+		t.Errorf("cached = %+v, want name=1.21.4 protocol=769", cached)
+	}
 }

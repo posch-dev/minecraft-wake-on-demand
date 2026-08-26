@@ -43,3 +43,4 @@ motd:
   starting: '{"text":"Server is starting","color":"gold","extra":[{"text":"\nGive it a moment, then join","color":"gray"}]}'
   login_wait: '{"text":"Server is waking up. Please reconnect in a moment.","color":"gold"}'
   max_players: 10
+# .server-version.json appears next to this file after the first successful status probe.

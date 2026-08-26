@@ -397,6 +397,19 @@ func (c *Config) AssetsDir() string {
 	return "assets"
 }
 
+// Last-seen server version, cached so the status ping advertises a compatible protocol while the server sleeps.
+func (c *Config) VersionCachePath() string {
+	if c.Path != "" {
+		if abs, err := filepath.Abs(c.Path); err == nil {
+			return filepath.Join(filepath.Dir(abs), ".server-version.json")
+		}
+	}
+	if exe, err := os.Executable(); err == nil {
+		return filepath.Join(filepath.Dir(exe), ".server-version.json")
+	}
+	return ".server-version.json"
+}
+
 // Empty means the platform default, matching what the ssh client would pick.
 func (c *Config) ResolvedSSHKeyPath() string {
 	if c.Server.SSHKeyPath != "" {
