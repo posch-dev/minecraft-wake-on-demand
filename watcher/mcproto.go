@@ -151,9 +151,9 @@ type statusPayload struct {
 	Favicon     string          `json:"favicon,omitempty"`
 }
 
-func makeStatusResponse(motdJSON string, maxPlayers, online int, icon string) ([]byte, error) {
+func makeStatusResponse(motdJSON string, maxPlayers, online int, icon string, versionName string, versionProtocol int) ([]byte, error) {
 	payload := statusPayload{
-		Version:     statusVersion{Name: "", Protocol: -1},
+		Version:     statusVersion{Name: versionName, Protocol: versionProtocol},
 		Players:     statusPlayers{Max: maxPlayers, Online: online},
 		Description: json.RawMessage(motdJSON),
 		Favicon:     icon,
@@ -215,12 +215,15 @@ func parseLoginStart(data []byte) (string, []byte, error) {
 	return name, uuid, nil
 }
 
-func makeLoginSuccess(uuid []byte, username string) []byte {
+// Strict error handling byte exists only in protocols 766-767 (1.20.5-1.21.1); other versions crash with "1 extra byte".
+func makeLoginSuccess(uuid []byte, username string, protocolVersion int32) []byte {
 	body := writeVarInt(packetIDLoginSuccess)
 	body = append(body, uuid...)
 	body = append(body, writeString(username)...)
 	body = append(body, writeVarInt(0)...) // no properties
-	body = append(body, 0x01)              // strict error handling
+	if protocolVersion >= 766 && protocolVersion <= 767 {
+		body = append(body, 0x01) // strict error handling
+	}
 	return framePacket(body)
 }
 

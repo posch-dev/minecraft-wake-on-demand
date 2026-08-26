@@ -82,7 +82,11 @@ if __name__ == "__main__":
     if len(sys.argv) != 3:
         raise SystemExit("usage: mc-status-ping.py <host> <port>")
     payload = status(sys.argv[1], int(sys.argv[2]))
+    version = payload.get("version", {})
     print("players: %d/%d" % (payload["players"]["online"], payload["players"]["max"]),
+          file=sys.stderr)
+    print("version: %s (protocol %d)"
+          % (version.get("name", "?"), version.get("protocol", "?")),
           file=sys.stderr)
     for line in render(payload["description"]).split("\n"):
         print(line)

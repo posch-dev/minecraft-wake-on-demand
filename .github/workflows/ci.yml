@@ -36,6 +36,9 @@ jobs:
         working-directory: watcher
         run: go test -race ./...
 
+      - name: Protocol version tests
+        run: python3 .github/scripts/test-protocol-versions.py
+
       # A Raspberry Pi is the main target, so a broken arm build has to fail here.
       - name: Cross compile
         working-directory: watcher

@@ -136,7 +136,7 @@ func TestParseHandshakeRejectsGarbage(t *testing.T) {
 
 func TestStatusResponseDecodes(t *testing.T) {
 	motd := "{\"text\":\"sleeping\",\"color\":\"yellow\"}"
-	raw, err := makeStatusResponse(motd, 10, 0, "data:image/png;base64,AAA")
+	raw, err := makeStatusResponse(motd, 10, 0, "data:image/png;base64,AAA", "1.21.4", 769)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,8 +165,11 @@ func TestStatusResponseDecodes(t *testing.T) {
 	if decoded.Players.Max != 10 || decoded.Players.Online != 0 {
 		t.Errorf("players = %+v", decoded.Players)
 	}
-	if decoded.Version.Protocol != -1 {
-		t.Errorf("protocol = %d, want -1", decoded.Version.Protocol)
+	if decoded.Version.Protocol != 769 {
+		t.Errorf("protocol = %d, want 769", decoded.Version.Protocol)
+	}
+	if decoded.Version.Name != "1.21.4" {
+		t.Errorf("version name = %q, want 1.21.4", decoded.Version.Name)
 	}
 	if string(decoded.Description) != motd {
 		t.Errorf("description = %s", decoded.Description)
@@ -177,7 +180,7 @@ func TestStatusResponseDecodes(t *testing.T) {
 }
 
 func TestStatusResponseOmitsEmptyFavicon(t *testing.T) {
-	raw, err := makeStatusResponse("{\"text\":\"x\"}", 5, 0, "")
+	raw, err := makeStatusResponse("{\"text\":\"x\"}", 5, 0, "", "", 770)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +265,7 @@ func TestTransferPacket(t *testing.T) {
 
 func TestLoginSuccessAndDisconnect(t *testing.T) {
 	uuid := bytes.Repeat([]byte{0x07}, 16)
-	raw := makeLoginSuccess(uuid, "Notch")
+	raw := makeLoginSuccess(uuid, "Notch", 767)
 	_, off, _ := readVarInt(raw, 0)
 	pktID, off, err := readVarInt(raw, off)
 	if err != nil || pktID != 0x02 {
@@ -285,6 +288,85 @@ func TestLoginSuccessAndDisconnect(t *testing.T) {
 	}
 }
 
+// Protocol 767 (1.21.1) must include the strict error handling byte.
+func TestLoginSuccessProtocol767IncludesStrictByte(t *testing.T) {
+	uuid := bytes.Repeat([]byte{0x07}, 16)
+	raw := makeLoginSuccess(uuid, "Notch", 767)
+
+	// Parse past frame, packet ID, UUID, username, properties count.
+	_, off, _ := readVarInt(raw, 0)
+	_, off, _ = readVarInt(raw, off) // packet ID
+	off += 16                        // UUID
+	nameLen, off, _ := readVarInt(raw, off)
+	off += int(nameLen)         // username bytes
+	_, off, _ = readVarInt(raw, off) // properties count (0)
+
+	if off >= len(raw) {
+		t.Fatal("packet too short, strict error handling byte is missing")
+	}
+	if raw[off] != 0x01 {
+		t.Errorf("strict error handling byte = %x, want 0x01", raw[off])
+	}
+	// Should be the last byte of the body.
+	if off+1 != len(raw) {
+		t.Errorf("unexpected trailing bytes after strict error handling")
+	}
+}
+
+// Protocol 766 (1.20.5) must also include the strict error handling byte.
+func TestLoginSuccessProtocol766IncludesStrictByte(t *testing.T) {
+	uuid := bytes.Repeat([]byte{0x07}, 16)
+	raw := makeLoginSuccess(uuid, "Notch", 766)
+
+	_, off, _ := readVarInt(raw, 0)
+	_, off, _ = readVarInt(raw, off)
+	off += 16
+	nameLen, off, _ := readVarInt(raw, off)
+	off += int(nameLen)
+	_, off, _ = readVarInt(raw, off)
+
+	if off >= len(raw) {
+		t.Fatal("packet too short, strict error handling byte is missing")
+	}
+	if raw[off] != 0x01 {
+		t.Errorf("strict error handling byte = %x, want 0x01", raw[off])
+	}
+}
+
+// Protocol 768 (1.21.2) must NOT include the strict error handling byte.
+func TestLoginSuccessProtocol768OmitsStrictByte(t *testing.T) {
+	uuid := bytes.Repeat([]byte{0x07}, 16)
+	raw := makeLoginSuccess(uuid, "Notch", 768)
+
+	_, off, _ := readVarInt(raw, 0)
+	_, off, _ = readVarInt(raw, off)
+	off += 16
+	nameLen, off, _ := readVarInt(raw, off)
+	off += int(nameLen)
+	_, off, _ = readVarInt(raw, off)
+
+	if off != len(raw) {
+		t.Errorf("packet has %d bytes after properties, want 0 (no strict byte)", len(raw)-off)
+	}
+}
+
+// Protocol 776 (26.x) must NOT include the strict error handling byte.
+func TestLoginSuccessProtocol776OmitsStrictByte(t *testing.T) {
+	uuid := bytes.Repeat([]byte{0x07}, 16)
+	raw := makeLoginSuccess(uuid, "Notch", 776)
+
+	_, off, _ := readVarInt(raw, 0)
+	_, off, _ = readVarInt(raw, off)
+	off += 16
+	nameLen, off, _ := readVarInt(raw, off)
+	off += int(nameLen)
+	_, off, _ = readVarInt(raw, off)
+
+	if off != len(raw) {
+		t.Errorf("packet has %d bytes after properties, want 0 (no strict byte)", len(raw)-off)
+	}
+}
+
 // A status handshake carries protocol version -1, the case that used to hang.
 func TestStatusHandshakeIsWellFormed(t *testing.T) {
 	raw := makeStatusHandshake("192.168.1.100", 25565)
@@ -300,5 +382,22 @@ func TestStatusHandshakeIsWellFormed(t *testing.T) {
 	}
 	if hs.ServerAddress != "192.168.1.100" {
 		t.Errorf("address = %q", hs.ServerAddress)
+	}
+}
+
+func TestStatusResponseEchoesClientProtocol(t *testing.T) {
+	raw, err := makeStatusResponse("{\"text\":\"sleeping\"}", 10, 0, "", "", 770)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, off, _ := readVarInt(raw, 0)
+	_, off, _ = readVarInt(raw, off)
+	strLen, off, _ := readVarInt(raw, off)
+	var decoded statusPayload
+	if err := json.Unmarshal(raw[off:off+int(strLen)], &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Version.Protocol != 770 {
+		t.Errorf("protocol = %d, want 770", decoded.Version.Protocol)
 	}
 }

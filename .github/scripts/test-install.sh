@@ -135,14 +135,17 @@ journalctl -u mc-wol-proxy --no-pager -n 6 -o cat 2>/dev/null | indent
 
 echo ""
 echo "=== 4. it answers a real status ping ==="
-MOTD="$(python3 "$REPO_ROOT/.github/scripts/mc-status-ping.py" 127.0.0.1 25599 2>/dev/null)"
+ERR_FILE="$WORK/status-err.txt"
+MOTD="$(python3 "$REPO_ROOT/.github/scripts/mc-status-ping.py" 127.0.0.1 25599 2>"$ERR_FILE")"
 if [ -z "$MOTD" ]; then
     fail "no status response"
+    cat "$ERR_FILE" | indent
 else
     echo "$MOTD" | indent
     LINES="$(echo "$MOTD" | wc -l)"
     ok_if "MOTD renders two lines (got $LINES)" test "$LINES" -eq 2
     ok_if "it is the sleeping MOTD" grep -qi "asleep" <<<"$MOTD"
+    ok_if "status ping reports a version" grep -q "version:" "$ERR_FILE"
 fi
 
 echo ""

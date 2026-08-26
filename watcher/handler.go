@@ -91,8 +91,7 @@ func (h *Handler) handleStatus(ctx context.Context, conn net.Conn, initial []byt
 		motd = h.assets.MOTDStarting()
 	}
 
-	// Clients are free to pack handshake, status request and ping into one
-	// segment, so only read again when nothing followed the handshake.
+	// Clients can pack handshake, status request, and ping in one segment; read only when nothing followed.
 	rest := trailing(initial, hs.End)
 	if len(rest) == 0 {
 		conn.SetReadDeadline(time.Now().Add(statusTimeout))
@@ -112,7 +111,15 @@ func (h *Handler) handleStatus(ctx context.Context, conn net.Conn, initial []byt
 		}
 	}
 
-	response, err := makeStatusResponse(motd, h.cfg.MOTD.MaxPlayers, 0, h.assets.Icon())
+	// Cached version if available, else echo client protocol so signal bars stay green.
+	versionName := ""
+	versionProtocol := int(hs.ProtocolVersion)
+	if sv := h.waker.CachedVersion(); sv != nil {
+		versionName = sv.Name
+		versionProtocol = sv.Protocol
+	}
+
+	response, err := makeStatusResponse(motd, h.cfg.MOTD.MaxPlayers, 0, h.assets.Icon(), versionName, versionProtocol)
 	if err != nil {
 		log.Errorf("Cannot build status response: %v", err)
 		return
@@ -166,8 +173,7 @@ func (h *Handler) handleLogin(ctx context.Context, conn net.Conn, initial []byte
 	h.proxy(ctx, conn, initial)
 }
 
-// The client is accepted into the login state and then handed a transfer
-// packet, so the traffic never flows through the watcher.
+// Client receives a transfer packet, traffic skips the watcher.
 func (h *Handler) handleTransfer(ctx context.Context, conn net.Conn, initial []byte, hs *Handshake, addr net.Addr) {
 	loginData := trailing(initial, hs.End)
 	if len(loginData) == 0 {
@@ -188,13 +194,12 @@ func (h *Handler) handleTransfer(ctx context.Context, conn net.Conn, initial []b
 	}
 
 	conn.SetWriteDeadline(time.Now().Add(statusTimeout))
-	if _, err := conn.Write(makeLoginSuccess(uuid, name)); err != nil {
+	if _, err := conn.Write(makeLoginSuccess(uuid, name, hs.ProtocolVersion)); err != nil {
 		log.Errorf("Transfer failed for %s: %v", addr, err)
 		return
 	}
 
-	// Wait for the login acknowledged packet that moves the client into the
-	// configuration state, where the transfer packet is valid.
+	// Wait for login acknowledged packet: client moves to configuration state, where transfer is valid.
 	conn.SetReadDeadline(time.Now().Add(statusTimeout))
 	ack := make([]byte, readBufferSize)
 	if _, err := conn.Read(ack); err != nil {
