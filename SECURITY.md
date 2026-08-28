@@ -168,6 +168,40 @@ The key must not be readable by other users and must not have a passphrase. The
 watcher refuses to start otherwise, the first because it is the rule OpenSSH
 applies and the second because an unattended service cannot type one.
 
+### The one password login
+
+`init` offers to log in to the server once with a password and set everything up
+from there, and `setup-ssh` does the same for the key alone. That login is the
+only time this project handles your server password, and it is handled like
+this:
+
+- It is read without echoing to the screen, kept in memory for the life of that
+  one connection, and never written anywhere.
+- It goes to the SSH client and, for the commands that need root, to `sudo` over
+  stdin. It never appears on a command line, because command lines show up in
+  the server's own process list where any other user on that machine can read
+  them.
+- It is never put into a log line or an error message.
+
+The host key is confirmed before the password is sent. On first contact the
+fingerprint is printed and you have to answer yes, whatever
+`server.ssh_strict_host_key` says, because a password handed to an unverified
+host is a password handed to whoever is in the middle. A key that changed after
+being trusted is a hard failure with no way to click through it.
+
+What that session changes on your server, all of it announced first:
+
+| Change | Needs root |
+|--------|-----------|
+| the public key in `authorized_keys` | no |
+| `ethtool -s <iface> wol g` and a systemd unit that re-arms it on boot | yes |
+| `/usr/local/bin/mc-wol-remote`, only when you asked for auto-sleep | yes |
+| `/etc/sudoers.d/mc-wol-proxy`, same | yes |
+
+Everything it reads is read only: the MAC address, the interface, the container
+list, the published port, whether RCON is on, what the kernel can do about
+sleeping.
+
 ### Which SSH implementation
 
 SSH is `golang.org/x/crypto/ssh`, the Go team's implementation, compiled into
