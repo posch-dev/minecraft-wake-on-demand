@@ -19,6 +19,9 @@ import (
 
 type prompter struct {
 	in *bufio.Reader
+	// Input runs out when the wizard is piped something or has no terminal.
+	// Asking again would then spin, so every loop below gives up on it.
+	exhausted bool
 }
 
 func newPrompter() *prompter {
@@ -39,8 +42,11 @@ func (p *prompter) line(question, fallback string) string {
 	beginInputColor()
 	text, err := p.in.ReadString('\n')
 	endInputColor()
-	if err != nil && text == "" {
-		return fallback
+	if err != nil {
+		p.exhausted = true
+		if text == "" {
+			return fallback
+		}
 	}
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -55,6 +61,9 @@ func (p *prompter) validated(question, fallback string, check func(string) error
 		answer := p.line(question, fallback)
 		if err := check(answer); err != nil {
 			printError("  " + err.Error())
+			if p.exhausted {
+				return answer
+			}
 			continue
 		}
 		return answer
@@ -69,8 +78,11 @@ func (p *prompter) yesNo(question string, fallback bool) bool {
 	for {
 		fmt.Printf("%s %s: ", question, hint("["+choices+"]"))
 		beginInputColor()
-		text, _ := p.in.ReadString('\n')
+		text, err := p.in.ReadString('\n')
 		endInputColor()
+		if err != nil {
+			p.exhausted = true
+		}
 		switch strings.ToLower(strings.TrimSpace(text)) {
 		case "":
 			return fallback
@@ -78,6 +90,9 @@ func (p *prompter) yesNo(question string, fallback bool) bool {
 			return true
 		case "n", "no", "nein":
 			return false
+		}
+		if p.exhausted {
+			return fallback
 		}
 	}
 }
@@ -178,7 +193,7 @@ func runInit() int {
 		cfg.DuckDNS.Domain = normalizeDuckDNSDomain(cfg.DuckDNS.Domain)
 		printHint("It stays visible here so you can check it, and it goes into",
 			"config.yml, which only your user can read.")
-		for cfg.DuckDNS.Token == "" {
+		for cfg.DuckDNS.Token == "" && !p.exhausted {
 			cfg.DuckDNS.Token = strings.TrimSpace(p.line("Your DuckDNS token", ""))
 		}
 	}
