@@ -35,11 +35,13 @@ func main() {
 		os.Exit(runHome())
 	case "run":
 		os.Exit(runProxy())
-	case "check", "init", "setup-ssh", "config", "edit", "settings", "update", "get-server-icon", "learn-server-icon", "restore-compose", "players", "whitelist", "worlds", "world":
+	case "install", "check", "init", "setup-ssh", "config", "edit", "settings", "update", "get-server-icon", "learn-server-icon", "restore-compose", "players", "whitelist", "worlds", "world":
 		// These print a laid out report, so log lines go to stderr instead of
 		// interleaving with it.
 		log.out = os.Stderr
 		switch command {
+		case "install":
+			os.Exit(runInstall())
 		case "check":
 			os.Exit(runCheck())
 		case "init":
@@ -80,6 +82,7 @@ func printUsage(w *os.File) {
 Usage:
   mcwod                    a menu, or the watcher when run as a service
   mcwod run                start the watcher
+  mcwod install            install this binary and start it with the machine
   mcwod init               answer a few questions and write config.yml
   mcwod config             change the configuration, guided
   mcwod setup-ssh          create the SSH key and install it on the server
@@ -94,8 +97,9 @@ Usage:
 
 "edit" and "settings" do the same as "config".
 
-Setting up from scratch is init, then setup-ssh, then check. When init sets
-the server up over SSH, setup-ssh is already done.
+Setting up from scratch is install, which asks the same questions as init and
+then starts the watcher. Doing it by hand is init, then setup-ssh, then check.
+When init sets the server up over SSH, setup-ssh is already done.
 
 The config is read from MCWOD_CONFIG, then config.yml next to the binary
 or one directory above it.
