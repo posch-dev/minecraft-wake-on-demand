@@ -574,17 +574,11 @@ func (c *Config) ResolvedSSHKeyPath() string {
 	if err != nil {
 		return watcherKeyName
 	}
-	own := filepath.Join(home, ".ssh", watcherKeyName)
-	if _, err := os.Stat(own); err == nil {
-		return own
-	}
-	if shared := filepath.Join(home, ".ssh", sharedKeyName); fileExists(shared) {
-		return shared
-	}
-	return own
+	return filepath.Join(home, ".ssh", watcherKeyName)
 }
 
-// True only for a key the watcher would rather not be using.
+// Only reachable by writing the path into the config by hand. Nothing picks a
+// shared key on its own, and check says so when someone did.
 func (c *Config) UsesSharedSSHKey() bool {
 	return filepath.Base(c.ResolvedSSHKeyPath()) == sharedKeyName
 }

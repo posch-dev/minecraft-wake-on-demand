@@ -170,12 +170,11 @@ The password you type during `setup-ssh` is used for that one login, handed to
 `sudo` over stdin so it never appears in the server's process list, and is not
 written anywhere.
 
-The watcher generates its own key at `~/.ssh/mcwod` rather than using
-`~/.ssh/id_ed25519`. That matters: an install that found a key already sitting
-at the default path would have adopted it, so the key its owner logs in with
-everywhere else would have ended up inside a service that faces the internet.
-An older install that is already using the shared key keeps working, and `check`
-says so and tells you how to move off it.
+The watcher generates its own key at `~/.ssh/mcwod` and uses no other unless
+`server.ssh_key_path` names one. It never reaches for `~/.ssh/id_ed25519`,
+because a key found at the default path is the one its owner logs in with
+everywhere else, and that does not belong inside a service facing the internet.
+Point the setting at such a key by hand and `check` warns about it.
 
 The key must not be readable by other users and must not have a passphrase. The
 watcher refuses to start otherwise, the first because it is the rule OpenSSH
