@@ -241,6 +241,8 @@ Everything below is optional and goes in `watcher/assets/`. Ready to copy exampl
 | `server-icon-starting.png` | same for the booting icon |
 | `server-icon-live.png` | replaces the running server's own icon |
 
+If you keep several worlds, each can have its own files in `watcher/assets/worlds/<name>/`, and anything a world does not have of its own comes from `watcher/assets/`.
+
 A file beats the matching `motd.*` entry in `config.yml`, which beats the built-in default. The `-live` files are the ones that let you set the MOTD and the icon in one place instead of configuring them on the Minecraft server, and leaving them out keeps the server's own, which is the default.
 
 `mcwod get-server-icon` copies the icon your running Minecraft server already serves into `assets/server-icon.png`, so you do not have to find the file yourself. `learn-server-icon` is the same command. The server has to be awake for it, and anything that was there is kept as `.bak`.

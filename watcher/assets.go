@@ -61,6 +61,18 @@ func NewAssets(cfg *Config) *Assets {
 	return &Assets{dir: cfg.AssetsDir(), cfg: cfg, iconCache: map[string]cachedIcon{}}
 }
 
+// A world can look different without repeating what it shares, so its own
+// folder is looked at first and the shared one after.
+func (a *Assets) search(name string) []string {
+	if world := a.cfg.ActiveWorldName(); world != "" {
+		return []string{
+			filepath.Join(a.dir, "worlds", world, name),
+			filepath.Join(a.dir, name),
+		}
+	}
+	return []string{filepath.Join(a.dir, name)}
+}
+
 func (a *Assets) MOTDSleeping() string {
 	return a.motd(stateSleeping, a.cfg.MOTD.Sleeping)
 }
@@ -74,25 +86,34 @@ func (a *Assets) MOTDLive() string {
 	return a.motd(stateLive, a.cfg.MOTD.Live)
 }
 
-// File beats config, config beats the built-in default.
+// World file beats shared file beats config beats the built-in default.
 func (a *Assets) motd(state, fallback string) string {
-	path := filepath.Join(a.dir, "motd-"+state+".json")
+	for _, path := range a.search("motd-" + state + ".json") {
+		if found := a.motdAt(path); found != "" {
+			return found
+		}
+	}
+	return fallback
+}
+
+// Empty when nothing usable is there, so the caller keeps looking.
+func (a *Assets) motdAt(path string) string {
 	info, err := os.Stat(path)
 	if err != nil {
-		return fallback
+		return ""
 	}
 	if info.Size() > maxMOTDBytes {
 		log.Warnf("Ignoring %s: %d bytes is over the %d byte limit", path, info.Size(), maxMOTDBytes)
-		return fallback
+		return ""
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fallback
+		return ""
 	}
 	content := strings.TrimSpace(string(data))
 	if !json.Valid([]byte(content)) {
 		log.Warnf("Failed to load %s: not valid JSON, using fallback", path)
-		return fallback
+		return ""
 	}
 	return content
 }
@@ -108,26 +129,35 @@ func (a *Assets) IconStarting() string {
 // Only its own file, never the shared icon, so a running server keeps the icon
 // it was configured with unless someone deliberately overrides it.
 func (a *Assets) IconLive() string {
-	return a.iconFile(filepath.Join(a.dir, "server-icon-live.png"))
+	return a.firstIconFile("server-icon-live.png")
+}
+
+func (a *Assets) firstIconFile(name string) string {
+	for _, path := range a.search(name) {
+		if found := a.iconFile(path); found != "" {
+			return found
+		}
+	}
+	return ""
 }
 
 // A dedicated file is taken as it is, otherwise the overlay is drawn over a
 // dimmed copy of the shared icon so the Z read on any artwork.
 func (a *Assets) stateIcon(state string, overlay []byte) string {
-	if dedicated := a.iconFile(filepath.Join(a.dir, "server-icon-"+state+".png")); dedicated != "" {
+	if dedicated := a.firstIconFile("server-icon-" + state + ".png"); dedicated != "" {
 		return dedicated
 	}
 	return a.composedIcon(state, overlay)
 }
 
 func (a *Assets) composedIcon(state string, overlay []byte) string {
-	base := filepath.Join(a.dir, "server-icon.png")
+	base := a.firstExisting("server-icon.png")
 	info, err := os.Stat(base)
 
 	a.iconMu.Lock()
 	defer a.iconMu.Unlock()
 
-	key := "composed:" + state
+	key := "composed:" + state + ":" + base
 	if cached, ok := a.iconCache[key]; ok && cached.matches(info, err) {
 		return cached.dataURI
 	}
@@ -186,6 +216,18 @@ func (a *Assets) iconFile(path string) string {
 
 	a.iconCache[path] = newCachedIcon(info, nil, dataURI)
 	return dataURI
+}
+
+// The last candidate when none of them exist, so the stat below fails the same
+// way it used to and the caller still gets a plain overlay.
+func (a *Assets) firstExisting(name string) string {
+	paths := a.search(name)
+	for _, path := range paths {
+		if fileExists(path) {
+			return path
+		}
+	}
+	return paths[len(paths)-1]
 }
 
 func newCachedIcon(info os.FileInfo, statErr error, dataURI string) cachedIcon {
