@@ -141,19 +141,25 @@ func writeComposeFiles(p *prompter, s *ServerSession, target ComposeTarget,
 		fmt.Printf("The file that was there is now %s\n", backup)
 	}
 
+	// Before either file, the directory may not exist yet.
+	if out, err := s.Run(makeDirCommand(s, target.Dir)); err != nil {
+		fmt.Printf("\nCannot create %s: %v: %s\n", target.Dir, err, sanitizeForLog(out, 200))
+		return false
+	}
+
 	if password != "" {
 		env := appendRCONPassword(target.ExistingEnv, password)
 		if err := writeRemoteEnvFile(s, target.EnvFile, env); err != nil {
 			fmt.Printf("\n%v\n", err)
 			return false
 		}
-		fmt.Printf("RCON password written to %s\n", target.EnvFile)
+		if target.ExistingEnv == "" {
+			fmt.Printf("Created %s with the RCON password\n", target.EnvFile)
+		} else {
+			fmt.Printf("RCON password appended to %s\n", target.EnvFile)
+		}
 	}
 
-	if out, err := s.Run(makeDirCommand(s, target.Dir)); err != nil {
-		fmt.Printf("\nCannot create %s: %v: %s\n", target.Dir, err, sanitizeForLog(out, 200))
-		return false
-	}
 	if err := writeRemoteFile(s, target.File, content); err != nil {
 		fmt.Printf("\n%v\n", err)
 		return false
