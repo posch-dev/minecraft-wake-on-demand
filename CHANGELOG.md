@@ -33,6 +33,15 @@ notes, so a version has to be listed here before it is tagged.
 
 ### Added
 
+- `mcwod worlds` keeps several Minecraft worlds side by side and switches
+  between them. Each one gets its own folder and its own compose file, so a
+  broken world is one broken world, and only the active one is ever started.
+  Switching says how many players it is about to disconnect and counts down for
+  ten seconds first. Removing a world takes it off the list and leaves the
+  files where they are.
+- The `worlds` block in `config.yml`. A config written before it existed
+  describes exactly one world and is read as that, so nothing has to be edited.
+
 - `mcwod players`, also reachable from the menu and as `mcwod whitelist`. It
   turns the whitelist on and off, adds and removes names, and toggles who is an
   admin from the same list. Taking away the last admin asks first, since a

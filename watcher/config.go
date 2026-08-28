@@ -23,8 +23,11 @@ type Config struct {
 	Timeouts TimeoutsConfig `yaml:"timeouts"`
 	Limits   LimitsConfig   `yaml:"limits"`
 	Sleep    SleepConfig    `yaml:"sleep"`
-	Update   UpdateConfig   `yaml:"update"`
-	MOTD     MOTDConfig     `yaml:"motd"`
+	Worlds   WorldsConfig   `yaml:"worlds"`
+	// Asked once, so a second world does not ask for the licence again.
+	EULAAccepted bool         `yaml:"eula_accepted"`
+	Update       UpdateConfig `yaml:"update"`
+	MOTD         MOTDConfig   `yaml:"motd"`
 
 	// Path this was read from, assets are resolved next to it.
 	Path string `yaml:"-"`
@@ -354,6 +357,8 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("wol.mode is %q, it has to be 'broadcast' or 'unicast'", c.WoL.Mode)
 	}
+
+	c.applyActiveWorld()
 
 	if err := c.validateSleep(); err != nil {
 		return err

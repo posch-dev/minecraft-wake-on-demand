@@ -45,6 +45,13 @@ sleep:
   action: "suspend"                   # "suspend" | "hibernate" | "shutdown" | "custom"
   command: ""                         # only used with action: custom
 
+# Every Minecraft world MCWOD knows about. Written by 'mcwod worlds', and only
+# the active one is ever started. Leave it out and the server block above
+# describes the single world.
+worlds:
+  active: ""
+  list: []
+
 timeouts:
   boot_timeout: 60                    # seconds to wait for the PC to boot
   mc_ready_timeout: 30                # seconds to wait for MC port after container start
