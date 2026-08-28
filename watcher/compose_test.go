@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -276,20 +277,28 @@ func TestGeneratorAgreesWithTheShippedCompose(t *testing.T) {
 	}
 }
 
-// LATEST is what the audit flagged, a generated file must not default to it.
+// LATEST is what the audit flagged. A Java suffix is just as wrong, it ties
+// the runtime to one Minecraft generation and breaks on the next.
+var datedImagePin = regexp.MustCompile(`^itzg/[a-z-]+:[0-9]{4}[.][0-9]+[.][0-9]+$`)
+
 func TestGeneratedComposePinsItsImages(t *testing.T) {
 	body, err := newComposeFile(testSpec())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for _, floating := range []string{"minecraft-server:latest", "minecraft-server:java21", "mc-backup\n", "mc-backup\""} {
+	for _, floating := range []string{"minecraft-server:latest", "mc-backup\n", "mc-backup\""} {
 		if strings.Contains(body, floating) {
 			t.Errorf("the generated file carries the floating tag %q:\n%s", floating, body)
 		}
 	}
-	if !strings.Contains(body, minecraftImage) || !strings.Contains(body, backupImage) {
-		t.Errorf("the pinned images are missing:\n%s", body)
+	for _, image := range []string{minecraftImage, backupImage} {
+		if !datedImagePin.MatchString(image) {
+			t.Errorf("%q is not a dated pin without a java suffix", image)
+		}
+		if !strings.Contains(body, image) {
+			t.Errorf("the generated file is missing %q:\n%s", image, body)
+		}
 	}
 }
 

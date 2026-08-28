@@ -19,7 +19,9 @@ const composeBackupPrefix = "docker-compose.yml.mcwod-bak-"
 // Pinned, so the same compose file keeps producing the same server. Bump these
 // together with server/docker-compose.yml, a test holds them to it.
 const (
-	minecraftImage = "itzg/minecraft-server:2026.8.0-java21"
+	// No Java suffix: the image picks the runtime the configured Minecraft
+	// version needs, and 26.2 already needs a newer one than 21.
+	minecraftImage = "itzg/minecraft-server:2026.8.0"
 	backupImage    = "itzg/mc-backup:2026.8.0"
 )
 
