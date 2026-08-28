@@ -7,10 +7,18 @@ notes, so a version has to be listed here before it is tagged.
 
 ### Added
 
-- Server version is now learned from a status probe on first boot and cached
-  in `.server-version.json` next to the config. The server list ping while the
-  server is asleep reports the real version instead of protocol -1, so clients
-  no longer show "Incompatible Version".
+- Server version and player slots are now learned from a status probe on first
+  boot and cached in `.server-info.json` next to the config. The server list
+  ping while the server is asleep reports the real version instead of protocol
+  -1, so clients no longer show "Incompatible Version", and it shows the real
+  number of slots instead of `motd.max_players`.
+- Concurrent connections are capped. Logins are limited to the server's own
+  player slots, or to `limits.max_logins` when that is set, and status pings get
+  a separate pool of five times that with a floor of 64. `limits.max_per_ip`
+  (default 8) applies to each pool on its own, so a household behind one NAT is
+  not locked out. A rejected login gets `motd.server_full`.
+- `motd.server_full`, shown to a player who arrives when the login pool is
+  full.
 - Optional `watcher.allowed_hostnames` list. When non-empty, the watcher drops
   connections from non-local IPs whose handshake ServerAddress is not in the
   list, keeping port scanners and internet crawlers from getting any response.
@@ -18,6 +26,15 @@ notes, so a version has to be listed here before it is tagged.
 
 ### Fixed
 
+- The status response from the real server is now read by its length prefix
+  instead of from a single 4096 byte read. A response carrying a server icon is
+  around 10 kB and never arrives in one segment, so version learning silently
+  did nothing on every server that had an icon configured.
+- A server icon over 64 kB or with dimensions other than 64x64 is skipped with a
+  warning instead of being sent. An unauthenticated status ping is answered to
+  anyone, so an oversized icon turned a 30 byte request into a multi megabyte
+  reply. MOTD files are capped at 8 kB for the same reason, and the icon is
+  base64 encoded once per change instead of once per ping.
 - `watcher.allowed_hostnames` no longer rejects Forge players and players
   behind a forwarding proxy. Both append their own fields after a NUL byte to
   the address in the handshake, so `mc.example.org` arrived as

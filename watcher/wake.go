@@ -19,10 +19,13 @@ const mcReachableTTL = 2 * time.Second
 // The discard protocol port, where wake capable hardware listens.
 const wolPort = 9
 
-type ServerVersion struct {
-	Name     string    `json:"name"`
-	Protocol int       `json:"protocol"`
-	Updated  time.Time `json:"updated"`
+// What a status probe told us about the running server, kept across restarts so
+// the watcher can answer for it while it sleeps.
+type ServerInfo struct {
+	Name       string    `json:"name"`
+	Protocol   int       `json:"protocol"`
+	MaxPlayers int       `json:"max_players"`
+	Updated    time.Time `json:"updated"`
 }
 
 type Waker struct {
@@ -45,8 +48,8 @@ type Waker struct {
 	reachValue   bool
 	reachChecked time.Time
 
-	versionMu sync.Mutex
-	version   *ServerVersion
+	infoMu sync.Mutex
+	info   *ServerInfo
 }
 
 func NewWaker(cfg *Config) *Waker {
@@ -56,47 +59,50 @@ func NewWaker(cfg *Config) *Waker {
 		pinger:  &Pinger{},
 		ssh:     NewSSHRunner(cfg),
 	}
-	w.loadVersionCache()
+	w.loadServerInfo()
 	return w
 }
 
-func (w *Waker) loadVersionCache() {
-	path := w.cfg.VersionCachePath()
+func (w *Waker) loadServerInfo() {
+	path := w.cfg.ServerInfoPath()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return
 	}
-	var sv ServerVersion
-	if err := json.Unmarshal(data, &sv); err != nil {
-		log.Warnf("Ignoring corrupt version cache %s: %v", path, err)
+	var info ServerInfo
+	if err := json.Unmarshal(data, &info); err != nil {
+		log.Warnf("Ignoring corrupt server info cache %s: %v", path, err)
 		return
 	}
-	w.version = &sv
-	log.Infof("Loaded cached server version: %s (protocol %d)", sv.Name, sv.Protocol)
+	w.info = &info
+	log.Infof("Loaded cached server info: %s (protocol %d, max players %d)",
+		info.Name, info.Protocol, info.MaxPlayers)
 }
 
-func (w *Waker) saveVersionCache(sv *ServerVersion) {
-	path := w.cfg.VersionCachePath()
-	data, err := json.MarshalIndent(sv, "", "  ")
+// The cache holds nothing secret, 0600 only keeps other accounts on the watcher
+// from feeding the proxy a version it never probed.
+func (w *Waker) saveServerInfo(info *ServerInfo) {
+	path := w.cfg.ServerInfoPath()
+	data, err := json.MarshalIndent(info, "", "  ")
 	if err != nil {
-		log.Warnf("Cannot encode version cache: %v", err)
+		log.Warnf("Cannot encode server info cache: %v", err)
 		return
 	}
 	tmpPath := fmt.Sprintf("%s.tmp.%d", path, time.Now().UnixNano())
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
-		log.Warnf("Cannot write version cache %s: %v", tmpPath, err)
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+		log.Warnf("Cannot write server info cache %s: %v", tmpPath, err)
 		return
 	}
 	if err := os.Rename(tmpPath, path); err != nil {
-		log.Warnf("Cannot update version cache %s: %v", path, err)
+		log.Warnf("Cannot update server info cache %s: %v", path, err)
 		os.Remove(tmpPath)
 	}
 }
 
-func (w *Waker) CachedVersion() *ServerVersion {
-	w.versionMu.Lock()
-	defer w.versionMu.Unlock()
-	return w.version
+func (w *Waker) CachedInfo() *ServerInfo {
+	w.infoMu.Lock()
+	defer w.infoMu.Unlock()
+	return w.info
 }
 
 func (w *Waker) mcAddress() string {
@@ -211,53 +217,43 @@ func (w *Waker) mcAcceptsStatus(ctx context.Context) bool {
 	if _, err := conn.Write(request); err != nil {
 		return false
 	}
-	buf := make([]byte, 4096)
-	n, err := conn.Read(buf)
-	if err != nil || n == 0 {
+	body, err := readFramedPacket(conn, maxStatusResponseBytes)
+	if err != nil {
 		return false
 	}
-	w.learnVersion(buf[:n])
+	w.learnServerInfo(body)
 	return true
 }
 
-// Extracts version from a status response and caches it when it changed.
-func (w *Waker) learnVersion(data []byte) {
-	// Frame: VarInt length, VarInt packet ID, VarInt string length, JSON.
-	_, off, err := readVarInt(data, 0)
+// Takes version and player slots from the body of a status response and caches
+// them when anything changed.
+func (w *Waker) learnServerInfo(body []byte) {
+	payload, err := parseStatusPayload(body)
 	if err != nil {
-		return
-	}
-	_, off, err = readVarInt(data, off)
-	if err != nil {
-		return
-	}
-	strLen, off, err := readVarInt(data, off)
-	if err != nil || int(strLen) <= 0 || off+int(strLen) > len(data) {
-		return
-	}
-	var payload statusPayload
-	if err := json.Unmarshal(data[off:off+int(strLen)], &payload); err != nil {
 		return
 	}
 	if payload.Version.Name == "" || payload.Version.Protocol == 0 {
 		return
 	}
 
-	w.versionMu.Lock()
-	defer w.versionMu.Unlock()
+	w.infoMu.Lock()
+	defer w.infoMu.Unlock()
 
-	if w.version != nil && w.version.Name == payload.Version.Name && w.version.Protocol == payload.Version.Protocol {
+	learned := &ServerInfo{
+		Name:       payload.Version.Name,
+		Protocol:   payload.Version.Protocol,
+		MaxPlayers: payload.Players.Max,
+		Updated:    time.Now(),
+	}
+	if w.info != nil && w.info.Name == learned.Name &&
+		w.info.Protocol == learned.Protocol && w.info.MaxPlayers == learned.MaxPlayers {
 		return
 	}
 
-	sv := &ServerVersion{
-		Name:     payload.Version.Name,
-		Protocol: payload.Version.Protocol,
-		Updated:  time.Now(),
-	}
-	w.version = sv
-	log.Infof("Learned server version: %s (protocol %d)", sv.Name, sv.Protocol)
-	go w.saveVersionCache(sv)
+	w.info = learned
+	log.Infof("Learned server info: %s (protocol %d, max players %d)",
+		learned.Name, learned.Protocol, learned.MaxPlayers)
+	go w.saveServerInfo(learned)
 }
 
 func (w *Waker) cooldownRemaining() time.Duration {

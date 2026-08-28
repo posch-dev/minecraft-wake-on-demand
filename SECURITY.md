@@ -41,6 +41,26 @@ attempt that does not end with a reachable server, the gap grows from
 every connection. The counter resets on the first success. Clients that arrive
 during a cooldown get a proper disconnect message, not a dropped socket.
 
+**Concurrent connections are capped, in two separate pools.** Logins are
+limited to the player slots the server itself reports, since more players
+cannot join anyway, and `limits.max_logins` overrides that with a fixed number.
+Status pings get their own pool of five times that with a floor of 64. Sharing
+one pool would let a handful of server list entries take every slot a player
+could have used, and a full server would blank the entry in everyone else's
+list. `limits.max_per_ip` (default 8) applies to each pool on its own, which is
+why they count separately: a household behind one NAT has to be able to play and
+keep the list open at the same time. Without any of this, the accept loop
+started a goroutine per connection with no limit, so a plain connection flood
+could exhaust memory and file descriptors on a Pi.
+
+**What the status response can contain is bounded.** A status ping is
+unauthenticated and answered to anyone who asks, so an oversized icon would turn
+a 30 byte request into a multi megabyte reply, which is a usable amplifier
+against the watcher's own uplink. Icons are capped at 64 kB and must be the
+64x64 that Minecraft requires, MOTD files at 8 kB, and anything larger is
+skipped with a line in the log. The response from the real server is read by its
+length prefix and capped at 256 kB rather than trusted to fit one read.
+
 **The packet parser is defensive.** VarInts are rejected past 35 bits,
 incomplete reads return an error instead of indexing out of bounds, and the
 initial client exchange has timeouts so a half open connection cannot be held

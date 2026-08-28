@@ -17,6 +17,9 @@ const (
 	handshakeTimeout = 10 * time.Second
 	statusTimeout    = 5 * time.Second
 	loginReadTimeout = 10 * time.Second
+	// A status response with a 64x64 icon is around 10 kB, the rest is headroom
+	// for large player samples.
+	maxStatusResponseBytes = 256 * 1024
 )
 
 type Handler struct {
@@ -24,20 +27,58 @@ type Handler struct {
 	waker     *Waker
 	assets    *Assets
 	localNets []*net.IPNet
+
+	statusConnections *ConnectionLimiter
+	loginConnections  *ConnectionLimiter
 }
 
 func NewHandler(cfg *Config, waker *Waker) *Handler {
-	return &Handler{
-		cfg:       cfg,
-		waker:     waker,
-		assets:    NewAssets(cfg),
-		localNets: cfg.ParsedLocalNetworks(),
+	h := &Handler{
+		cfg:               cfg,
+		waker:             waker,
+		assets:            NewAssets(cfg),
+		localNets:         cfg.ParsedLocalNetworks(),
+		statusConnections: NewConnectionLimiter("status", minStatusConnections, cfg.Limits.MaxPerIP),
+		loginConnections:  NewConnectionLimiter("login", cfg.MOTD.MaxPlayers, cfg.Limits.MaxPerIP),
 	}
+	h.refreshConnectionLimits()
+	return h
+}
+
+// limits.max_logins wins when it is set, otherwise the player slots the server
+// reported are the natural cap, since more players cannot join anyway. Before
+// the server has ever been reached, motd.max_players stands in.
+func (h *Handler) refreshConnectionLimits() {
+	logins := h.cfg.Limits.MaxLogins
+	if logins <= 0 {
+		logins = h.cfg.MOTD.MaxPlayers
+		if info := h.waker.CachedInfo(); info != nil && info.MaxPlayers > 0 {
+			logins = info.MaxPlayers
+		}
+	}
+	if logins < 1 {
+		logins = 1
+	}
+	h.loginConnections.SetMax(logins)
+	h.statusConnections.SetMax(max(logins*statusPerLogin, minStatusConnections))
 }
 
 func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
 	addr := conn.RemoteAddr()
+
+	h.refreshConnectionLimits()
+	if !h.statusConnections.Acquire(addr) {
+		return
+	}
+	statusSlotHeld := true
+	releaseStatusSlot := func() {
+		if statusSlotHeld {
+			statusSlotHeld = false
+			h.statusConnections.Release(addr)
+		}
+	}
+	defer releaseStatusSlot()
 
 	initial, handshake := h.readHandshake(conn)
 	if handshake == nil {
@@ -52,13 +93,12 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 	case 1:
 		h.handleStatus(ctx, conn, initial, handshake)
 	case 2:
-		h.handleLogin(ctx, conn, initial, handshake, addr)
+		h.handleLogin(ctx, conn, initial, handshake, addr, releaseStatusSlot)
 	}
 }
 
-// TCP may split the handshake across reads, so it is accumulated until it
-// parses. Returns everything read, which usually carries the packet after the
-// handshake as well, and a nil handshake when the client sent nothing usable.
+// TCP may split the handshake, so it is accumulated until it parses.
+// Returns a nil handshake when nothing usable arrived.
 func (h *Handler) readHandshake(conn net.Conn) ([]byte, *Handshake) {
 	conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
 
@@ -119,12 +159,17 @@ func (h *Handler) handleStatus(ctx context.Context, conn net.Conn, initial []byt
 	// Cached version if available, else echo client protocol so signal bars stay green.
 	versionName := ""
 	versionProtocol := int(hs.ProtocolVersion)
-	if sv := h.waker.CachedVersion(); sv != nil {
-		versionName = sv.Name
-		versionProtocol = sv.Protocol
+	if info := h.waker.CachedInfo(); info != nil {
+		versionName = info.Name
+		versionProtocol = info.Protocol
 	}
 
-	response, err := makeStatusResponse(motd, h.cfg.MOTD.MaxPlayers, 0, h.assets.Icon(), versionName, versionProtocol)
+	maxPlayers := h.cfg.MOTD.MaxPlayers
+	if info := h.waker.CachedInfo(); info != nil && info.MaxPlayers > 0 {
+		maxPlayers = info.MaxPlayers
+	}
+
+	response, err := makeStatusResponse(motd, maxPlayers, 0, h.assets.Icon(), versionName, versionProtocol)
 	if err != nil {
 		log.Errorf("Cannot build status response: %v", err)
 		return
@@ -159,8 +204,18 @@ func (h *Handler) handleStatus(ctx context.Context, conn net.Conn, initial []byt
 	conn.Write(makePingResponse(payload))
 }
 
-func (h *Handler) handleLogin(ctx context.Context, conn net.Conn, initial []byte, hs *Handshake, addr net.Addr) {
+func (h *Handler) handleLogin(ctx context.Context, conn net.Conn, initial []byte, hs *Handshake, addr net.Addr, releaseStatusSlot func()) {
 	log.Infof("Login attempt from %s", addr)
+
+	// A login holds its slot for the whole session, so it moves out of the short
+	// lived status pool into the one sized after the player slots.
+	if !h.loginConnections.Acquire(addr) {
+		conn.SetWriteDeadline(time.Now().Add(statusTimeout))
+		conn.Write(makeLoginDisconnect(h.cfg.MOTD.ServerFull))
+		return
+	}
+	defer h.loginConnections.Release(addr)
+	releaseStatusSlot()
 
 	if !h.waker.MCPortReachable(ctx, false) {
 		if !h.waker.FullBoot(ctx) {

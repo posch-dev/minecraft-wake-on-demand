@@ -5,10 +5,12 @@
 config.yml
 watcher/config.yml
 watcher/known_hosts
+.server-info.json
 watcher/state/
 server/data/
 
 # compiled watcher binaries
 watcher/mc-wol-proxy
 watcher/mc-wol-proxy.exe
+watcher/watcher.exe
 dist/

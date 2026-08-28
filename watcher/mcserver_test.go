@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net"
@@ -231,17 +232,17 @@ func readFull(conn net.Conn, buf []byte) (int, error) {
 	return total, nil
 }
 
-func TestSaveAndLoadVersionCacheRoundTrip(t *testing.T) {
+func TestSaveAndLoadServerInfoRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	cfg := defaultConfig()
 	cfg.Path = filepath.Join(dir, "config.yml")
 
 	waker := NewWaker(&cfg)
-	sv := &ServerVersion{Name: "1.21.4", Protocol: 769, Updated: time.Now()}
-	waker.saveVersionCache(sv)
+	sv := &ServerInfo{Name: "1.21.4", Protocol: 769, Updated: time.Now()}
+	waker.saveServerInfo(sv)
 
 	waker2 := NewWaker(&cfg)
-	cached := waker2.CachedVersion()
+	cached := waker2.CachedInfo()
 	if cached == nil {
 		t.Fatal("cached version was not loaded")
 	}
@@ -250,20 +251,20 @@ func TestSaveAndLoadVersionCacheRoundTrip(t *testing.T) {
 	}
 }
 
-func TestLoadVersionCacheNoFile(t *testing.T) {
+func TestLoadServerInfoNoFile(t *testing.T) {
 	dir := t.TempDir()
 	cfg := defaultConfig()
 	cfg.Path = filepath.Join(dir, "config.yml")
 
 	waker := NewWaker(&cfg)
-	if waker.CachedVersion() != nil {
+	if waker.CachedInfo() != nil {
 		t.Error("expected nil version when no cache file exists")
 	}
 }
 
-func TestLoadVersionCacheCorruptFile(t *testing.T) {
+func TestLoadServerInfoCorruptFile(t *testing.T) {
 	dir := t.TempDir()
-	cachePath := filepath.Join(dir, ".server-version.json")
+	cachePath := filepath.Join(dir, ".server-info.json")
 	if err := os.WriteFile(cachePath, []byte("not valid json"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -272,12 +273,12 @@ func TestLoadVersionCacheCorruptFile(t *testing.T) {
 	cfg.Path = filepath.Join(dir, "config.yml")
 
 	waker := NewWaker(&cfg)
-	if waker.CachedVersion() != nil {
+	if waker.CachedInfo() != nil {
 		t.Error("expected nil version when cache file is corrupt")
 	}
 }
 
-func TestLearnVersionCachesInMemory(t *testing.T) {
+func TestLearnServerInfoCachesInMemory(t *testing.T) {
 	server := startFakeMCServer(t, true, nil)
 	_, waker := wakerFor(server)
 
@@ -288,7 +289,7 @@ func TestLearnVersionCachesInMemory(t *testing.T) {
 		t.Fatal("server should be reachable")
 	}
 
-	cached := waker.CachedVersion()
+	cached := waker.CachedInfo()
 	if cached == nil {
 		t.Fatal("version was not learned from the status response")
 	}
@@ -297,7 +298,7 @@ func TestLearnVersionCachesInMemory(t *testing.T) {
 	}
 }
 
-func TestLearnVersionIgnoresEmptyVersion(t *testing.T) {
+func TestLearnServerInfoIgnoresEmptyVersion(t *testing.T) {
 	server := startFakeMCServer(t, true, nil)
 	_, waker := wakerFor(server)
 
@@ -308,19 +309,19 @@ func TestLearnVersionIgnoresEmptyVersion(t *testing.T) {
 		t.Fatal("server should be reachable")
 	}
 
-	waker.versionMu.Lock()
-	waker.version = nil
-	waker.versionMu.Unlock()
+	waker.infoMu.Lock()
+	waker.info = nil
+	waker.infoMu.Unlock()
 
 	response, _ := makeStatusResponse("{\"text\":\"x\"}", 10, 0, "", "", 0)
-	waker.learnVersion(response)
+	waker.learnServerInfo(statusBody(t, response))
 
-	if waker.CachedVersion() != nil {
+	if waker.CachedInfo() != nil {
 		t.Error("empty version should not be cached")
 	}
 }
 
-func TestLearnVersionDoesNotUpdateWhenSame(t *testing.T) {
+func TestLearnServerInfoDoesNotUpdateWhenSame(t *testing.T) {
 	server := startFakeMCServer(t, true, nil)
 	_, waker := wakerFor(server)
 
@@ -331,21 +332,44 @@ func TestLearnVersionDoesNotUpdateWhenSame(t *testing.T) {
 		t.Fatal("server should be reachable")
 	}
 
-	first := waker.CachedVersion()
+	first := waker.CachedInfo()
 	if first == nil {
 		t.Fatal("version should have been learned")
 	}
 
-	response, _ := makeStatusResponse("{\"text\":\"x\"}", 10, 0, "", "1.21.4", 769)
-	waker.learnVersion(response)
+	// Same version and same player slots as the fake server reported.
+	response, _ := makeStatusResponse("{\"text\":\"x\"}", 42, 0, "", "1.21.4", 769)
+	waker.learnServerInfo(statusBody(t, response))
 
-	cached := waker.CachedVersion()
+	cached := waker.CachedInfo()
 	if !cached.Updated.Equal(first.Updated) {
-		t.Error("learning the same version should not bump Updated")
+		t.Error("learning the same info should not bump Updated")
 	}
 }
 
-func TestVersionCachesToFileViaLearnVersion(t *testing.T) {
+func TestLearnServerInfoPicksUpChangedPlayerSlots(t *testing.T) {
+	server := startFakeMCServer(t, true, nil)
+	_, waker := wakerFor(server)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if !waker.mcAcceptsStatus(ctx) {
+		t.Fatal("server should be reachable")
+	}
+	if got := waker.CachedInfo().MaxPlayers; got != 42 {
+		t.Fatalf("max players = %d, want 42", got)
+	}
+
+	response, _ := makeStatusResponse("{\"text\":\"x\"}", 60, 0, "", "1.21.4", 769)
+	waker.learnServerInfo(statusBody(t, response))
+
+	if got := waker.CachedInfo().MaxPlayers; got != 60 {
+		t.Errorf("max players = %d, want 60 after the server raised the slots", got)
+	}
+}
+
+func TestServerInfoCachesToFile(t *testing.T) {
 	dir := t.TempDir()
 	server := startFakeMCServer(t, true, nil)
 	cfg := defaultConfig()
@@ -367,11 +391,21 @@ func TestVersionCachesToFileViaLearnVersion(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	waker2 := NewWaker(&cfg)
-	cached := waker2.CachedVersion()
+	cached := waker2.CachedInfo()
 	if cached == nil {
 		t.Fatal("version was not persisted to disk")
 	}
 	if cached.Name != "1.21.4" || cached.Protocol != 769 {
 		t.Errorf("cached = %+v, want name=1.21.4 protocol=769", cached)
 	}
+}
+
+// learnServerInfo works on the packet body, the test helpers build whole frames.
+func statusBody(t *testing.T, frame []byte) []byte {
+	t.Helper()
+	body, err := readFramedPacket(bytes.NewReader(frame), maxStatusResponseBytes)
+	if err != nil {
+		t.Fatalf("readFramedPacket: %v", err)
+	}
+	return body
 }
