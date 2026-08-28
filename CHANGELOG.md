@@ -53,6 +53,22 @@ notes, so a version has to be listed here before it is tagged.
   common reason this project appears to do nothing at all.
 - `server.ip` accepts a hostname as well as an IP now. It has to resolve, since
   the MAC lookup and unicast WoL need an address.
+- `init` and `config` can set the Minecraft container up on the server, so the
+  server PC no longer has to be touched for that either. They write a compose
+  file with `itzg/minecraft-server` and `itzg/mc-backup`, RCON on, AUTOPAUSE on
+  and only the game port published, generate an RCON password into a `.env`
+  with mode 600, and bring the stack up. Accepting the Minecraft EULA is its own
+  question that says what it means.
+- A compose file that is already there gets the two services added to it
+  instead. Other services, the top level keys and every comment stay exactly as
+  they were, a copy is kept as `docker-compose.yml.mcwol-bak-<time>` first,
+  `docker compose config` has to accept the result before it counts, and a
+  service name that already exists is refused rather than overwritten. An
+  existing `.env` gets three appended lines and nothing else, under
+  `MC_WOL_RCON_PASSWORD` so a foreign `RCON_PASSWORD` cannot be shadowed.
+- The Docker warning now says what is actually different per platform. On
+  Windows it points out that Docker Desktop only runs while a user is logged in,
+  so a resumed PC can come back without its container.
 - `mc-wol-proxy get-server-icon`, also spelled `learn-server-icon`, copies the
   icon a running server already serves into `assets/server-icon.png`. It is a
   command and not something the proxy picks up on its own, because answering an

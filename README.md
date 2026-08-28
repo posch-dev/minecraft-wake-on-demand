@@ -241,6 +241,14 @@ Icons have to be exactly 64x64 and under 64 kB. Anything else is skipped with a 
 
 Assets are read fresh when they change, so editing one takes effect without restarting the watcher.
 
+### Setting the container up from the watcher
+
+`init` offers it, and `config` has it as a menu entry. The watcher writes a `docker-compose.yml` on the server with the Minecraft container and an automatic backup container next to it, puts a generated RCON password in a `.env` with mode 600, and starts them. You never open a terminal on the server PC for this.
+
+If there is already a compose file in that directory, the two services are added to it. Everything else in the file, other services, the top level keys, your comments, stays exactly as it was. Before anything is written a copy is kept as `docker-compose.yml.mcwol-bak-<time>`, the result has to pass `docker compose config`, and a service name that is already taken is refused rather than overwritten.
+
+Accepting the Minecraft EULA is a separate question. Saying yes writes `EULA=TRUE` into the compose file, which is the same as accepting it yourself.
+
 ### Auto-sleep
 
 The watcher can send the server PC back to sleep once nobody is playing. It is off by default. Turn it on in `mc-wol-proxy config`, or set `sleep.enabled: true` after `setup-ssh` has installed the helper script on the server.

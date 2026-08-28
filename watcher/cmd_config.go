@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Menu driven editing of an existing config.yml, reached as config, edit or
@@ -54,6 +56,8 @@ func runConfigEdit() int {
 			}
 		case "8":
 			editor.checkForUpdate()
+		case "9":
+			editor.setUpContainer()
 		case "q", "quit", "exit", "":
 			return editor.save()
 		default:
@@ -74,6 +78,7 @@ func (e *configEditor) printMenu() {
 	fmt.Println("  6) MOTD and icons   " + assetsSummary(c))
 	fmt.Println("  7) Run check")
 	fmt.Println("  8) Look for a newer version")
+	fmt.Println("  9) Set up the Minecraft container on the server")
 	fmt.Println("  q) Save and quit")
 }
 
@@ -293,6 +298,35 @@ func (e *configEditor) showAssets() {
 	fmt.Println("  server-icon-sleeping.png    server-icon-starting.png    server-icon-live.png")
 	fmt.Println("\nThe -live files override what the running server itself serves. Leave")
 	fmt.Println("them out and the server's own MOTD and icon are passed through.")
+}
+
+// Needs the password login, the restricted key cannot write files.
+func (e *configEditor) setUpContainer() {
+	fmt.Printf("\nLogging in as %s@%s.\n", e.cfg.Server.SSHUser, e.cfg.Server.IP)
+	fmt.Println("The password is used for this one login and is not stored anywhere.")
+	password := e.p.secret(fmt.Sprintf("Password for %s@%s", e.cfg.Server.SSHUser, e.cfg.Server.IP))
+	if password == "" {
+		fmt.Println("No password given, nothing was changed.")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	session, err := DialServerSession(ctx, NewSSHRunner(e.cfg), password, e.p)
+	if err != nil {
+		fmt.Printf("\n%v\n", err)
+		return
+	}
+	defer session.Close()
+
+	facts := ServerFacts{Platform: session.Detect()}
+	discoverContainers(session, &facts)
+	if !offerContainerSetup(e.p, session, e.cfg, facts) {
+		return
+	}
+	e.set(e.cfg.Server.ContainerName, "server", "container_name")
+	e.set(e.cfg.Server.MCPort, "server", "mc_port")
 }
 
 // Only ever reports, installing is what the update command is for.
