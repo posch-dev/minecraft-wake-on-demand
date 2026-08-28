@@ -167,6 +167,12 @@ func checkSSHKey(c *checker, cfg *Config) bool {
 		return false
 	}
 	c.ok("%s, type %s", path, signer.PublicKey().Type())
+	if cfg.UsesSharedSSHKey() {
+		c.warn("this is the account's own SSH key, not one made for the watcher")
+		c.hint("a service on the internet should not hold the key you log in with")
+		c.hint("run setup-ssh to give it its own, then remove the old line from")
+		c.hint("authorized_keys on the server")
+	}
 	c.ok("fingerprint %s", ssh.FingerprintSHA256(signer.PublicKey()))
 
 	if cfg.Server.SSHStrictHostKey == "no" {
