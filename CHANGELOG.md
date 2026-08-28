@@ -7,6 +7,10 @@ notes, so a version has to be listed here before it is tagged.
 
 ### Changed
 
+- Running `mcwod` on its own now shows a menu instead of the help. The first
+  run goes straight into the setup, later ones show what the server is doing
+  and offer check, settings, the server picture and the update, with the new
+  version line in there too. Started as a service it still runs the watcher.
 - Every question in the wizard is written for somebody who has not used a
   terminal before. Choices that used to need a typed word are numbered, the
   reason for a question sits under it in grey instead of in front of it, and
