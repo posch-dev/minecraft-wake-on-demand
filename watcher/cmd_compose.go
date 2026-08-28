@@ -88,7 +88,8 @@ func askComposeSpec(p *prompter, cfg *Config, target ComposeTarget) ComposeSpec 
 
 	spec.ServiceName = p.validated("Name for the container", spec.ServiceName, validateContainerName)
 	spec.BackupName = spec.ServiceName + "-backup"
-	spec.MCVersion = p.line("Minecraft version, LATEST for the newest", spec.MCVersion)
+	spec.ServerType = askServerType(p, spec.ServerType)
+	spec.MCVersion = askMCVersion(p, spec.MCVersion)
 	spec.Memory = p.line("Memory for the server, for example 4G", spec.Memory)
 	spec.MCPort = p.validatedPort("Port to publish on the server PC", spec.MCPort)
 	spec.DataDir = p.line("Where the world lives, relative to the compose file", spec.DataDir)
@@ -99,6 +100,29 @@ func askComposeSpec(p *prompter, cfg *Config, target ComposeTarget) ComposeSpec 
 		spec.KeepBackupDays = p.validatedInt("Days to keep old backups", spec.KeepBackupDays, 1)
 	}
 	return spec
+}
+
+func askServerType(p *prompter, fallback string) string {
+	fmt.Println("\nVANILLA is the unmodified server. PAPER and PURPUR are faster and take")
+	fmt.Println("plugins. FABRIC, FORGE, NEOFORGE and QUILT run mods, and every player")
+	fmt.Println("then needs the same mods installed.")
+
+	answer := p.validated("Server type ("+strings.Join(serverTypes, ", ")+")", fallback,
+		func(v string) error {
+			if contains(serverTypes, strings.ToUpper(strings.TrimSpace(v))) {
+				return nil
+			}
+			return fmt.Errorf("pick one of %s", strings.Join(serverTypes, ", "))
+		})
+	return strings.ToUpper(strings.TrimSpace(answer))
+}
+
+// A concrete version by default. LATEST moves the server under the world
+// whenever the image is pulled again.
+func askMCVersion(p *prompter, fallback string) string {
+	fmt.Println("\nA fixed version keeps the server the same every time it starts.")
+	fmt.Println("LATEST works too, but then an update can arrive on its own.")
+	return strings.TrimSpace(p.line("Minecraft version", fallback))
 }
 
 // An existing password is left alone, replacing it would break whatever else

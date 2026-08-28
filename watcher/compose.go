@@ -16,10 +16,22 @@ const rconPasswordVar = "MC_WOL_RCON_PASSWORD"
 
 const composeBackupPrefix = "docker-compose.yml.mcwol-bak-"
 
+// Pinned, so the same compose file keeps producing the same server. Bump these
+// together with server/docker-compose.yml, a test holds them to it.
+const (
+	minecraftImage = "itzg/minecraft-server:2026.8.0-java21"
+	backupImage    = "itzg/mc-backup:2026.8.0"
+)
+
+// What itzg/minecraft-server understands as TYPE. Vanilla first, it is what
+// somebody who does not know the difference wants.
+var serverTypes = []string{"VANILLA", "PAPER", "PURPUR", "FABRIC", "FORGE", "NEOFORGE", "QUILT", "SPIGOT"}
+
 // What the two services are built from, asked once and then just data.
 type ComposeSpec struct {
 	ServiceName    string
 	BackupName     string
+	ServerType     string
 	MCVersion      string
 	Memory         string
 	MCPort         int
@@ -33,7 +45,8 @@ func defaultComposeSpec(containerName string, mcPort int) ComposeSpec {
 	return ComposeSpec{
 		ServiceName:    containerName,
 		BackupName:     containerName + "-backup",
-		MCVersion:      "LATEST",
+		ServerType:     "VANILLA",
+		MCVersion:      "1.21.4",
 		Memory:         "4G",
 		MCPort:         mcPort,
 		DataDir:        "./data",
@@ -49,7 +62,7 @@ func minecraftService(spec ComposeSpec) *yaml.Node {
 		"EULA", "TRUE",
 		"ENABLE_RCON", "TRUE",
 		"RCON_PASSWORD", "${" + rconPasswordVar + ":?set " + rconPasswordVar + " in .env}",
-		"TYPE", "PAPER",
+		"TYPE", spec.ServerType,
 		"VERSION", spec.MCVersion,
 		"MEMORY", spec.Memory,
 		"AUTOPAUSE", "TRUE",
@@ -59,7 +72,7 @@ func minecraftService(spec ComposeSpec) *yaml.Node {
 	}
 
 	service := mapping()
-	addScalar(service, "image", "itzg/minecraft-server:java21")
+	addScalar(service, "image", minecraftImage)
 	addScalar(service, "container_name", spec.ServiceName)
 	// The watcher starts it, so docker must not race it on boot.
 	addScalar(service, "restart", "no")
@@ -81,7 +94,7 @@ func backupService(spec ComposeSpec) *yaml.Node {
 	}
 
 	service := mapping()
-	addScalar(service, "image", "itzg/mc-backup")
+	addScalar(service, "image", backupImage)
 	addScalar(service, "container_name", spec.BackupName)
 	addScalar(service, "restart", "no")
 	addSequence(service, "depends_on", []string{spec.ServiceName})
