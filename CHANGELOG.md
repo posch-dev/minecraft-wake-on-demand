@@ -61,6 +61,10 @@ notes, so a version has to be listed here before it is tagged.
   Minecraft version are asked for, both with a concrete default rather than
   `LATEST`, so a pull cannot move the server under the world. Accepting the
   Minecraft EULA is its own question that says what it means.
+- The wizard asks for a whitelist. Naming players switches
+  `ENFORCE_WHITELIST` on and makes the first one the operator, leaving it empty
+  keeps the server open, which is what a fresh server is anyway. An enforced but
+  empty whitelist would lock out the owner too, so it is never written.
 - A compose file that is already there gets the two services added to it
   instead. Other services, the top level keys and every comment stay exactly as
   they were, a copy is kept as `docker-compose.yml.mcwol-bak-<time>` first,

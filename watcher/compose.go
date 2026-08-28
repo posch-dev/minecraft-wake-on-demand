@@ -36,6 +36,7 @@ type ComposeSpec struct {
 	Memory         string
 	MCPort         int
 	DataDir        string
+	Whitelist      []string
 	BackupInterval string
 	KeepBackupDays int
 	Backups        bool
@@ -69,6 +70,13 @@ func minecraftService(spec ComposeSpec) *yaml.Node {
 		"AUTOPAUSE_TIMEOUT_EST", "3600",
 		"AUTOPAUSE_TIMEOUT_INIT", "600",
 		"ONLINE_MODE", "TRUE",
+	}
+	// An enforced but empty whitelist locks everyone out, the owner included.
+	if len(spec.Whitelist) > 0 {
+		env = append(env,
+			"WHITELIST", strings.Join(spec.Whitelist, ","),
+			"ENFORCE_WHITELIST", "TRUE",
+			"OPS", spec.Whitelist[0])
 	}
 
 	service := mapping()

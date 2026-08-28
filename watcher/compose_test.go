@@ -316,3 +316,33 @@ func TestDefaultSpecPinsAConcreteVersion(t *testing.T) {
 		t.Errorf("default server type %q is not one of the known types", spec.ServerType)
 	}
 }
+
+// An enforced but empty whitelist produces a server nobody can join.
+func TestEmptyWhitelistIsNotEnforced(t *testing.T) {
+	body, err := newComposeFile(testSpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(body, "ENFORCE_WHITELIST") {
+		t.Errorf("no names given, the whitelist must not be switched on:\n%s", body)
+	}
+}
+
+func TestWhitelistNamesAreWrittenAndFirstBecomesOperator(t *testing.T) {
+	spec := testSpec()
+	spec.Whitelist = []string{"eliah", "someone", "third"}
+
+	body, err := newComposeFile(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`WHITELIST: "eliah,someone,third"`,
+		`ENFORCE_WHITELIST: "TRUE"`,
+		`OPS: "eliah"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the file is missing %s:\n%s", want, body)
+		}
+	}
+}

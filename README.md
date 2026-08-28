@@ -251,6 +251,8 @@ If there is already a compose file in that directory, the two services are added
 
 `mc-wol-proxy restore-compose` puts one of those backups back, and keeps the current file as a backup on the way, so the restore itself is undoable.
 
+It also asks for a whitelist. Name the players who may join and only they can, with the first name becoming the server operator. Leave it empty and anyone who knows the address can connect, which is how a fresh Minecraft server behaves. Worth setting if the address is reachable from the internet.
+
 Accepting the Minecraft EULA is a separate question. Saying yes writes `EULA=TRUE` into the compose file, which is the same as accepting it yourself.
 
 ### Auto-sleep

@@ -93,6 +93,7 @@ func askComposeSpec(p *prompter, cfg *Config, target ComposeTarget) ComposeSpec 
 	spec.Memory = p.line("Memory for the server, for example 4G", spec.Memory)
 	spec.MCPort = p.validatedPort("Port to publish on the server PC", spec.MCPort)
 	spec.DataDir = p.line("Where the world lives, relative to the compose file", spec.DataDir)
+	spec.Whitelist = askWhitelist(p)
 
 	spec.Backups = p.yesNo("Add the automatic backup container as well", true)
 	if spec.Backups {
@@ -115,6 +116,26 @@ func askServerType(p *prompter, fallback string) string {
 			return fmt.Errorf("pick one of %s", strings.Join(serverTypes, ", "))
 		})
 	return strings.ToUpper(strings.TrimSpace(answer))
+}
+
+// Empty means anyone with the address can join, which is the default a fresh
+// server has. The first name given also becomes the operator.
+func askWhitelist(p *prompter) []string {
+	fmt.Println("\nA whitelist means only the players you name can join, which is worth it")
+	fmt.Println("for a server whose address is on the internet. Leave it empty and anyone")
+	fmt.Println("who knows the address can connect.")
+
+	answer := p.line("Minecraft names allowed to join, comma separated", "")
+	names := []string{}
+	for _, name := range splitList(answer) {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			names = append(names, trimmed)
+		}
+	}
+	if len(names) > 0 {
+		fmt.Printf("  %s also becomes the server operator.\n", names[0])
+	}
+	return names
 }
 
 // A concrete version by default. LATEST moves the server under the world
