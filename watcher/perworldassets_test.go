@@ -4,6 +4,7 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -102,5 +103,37 @@ func TestSingleWorldSetupLooksOnlyAtTheSharedFiles(t *testing.T) {
 	paths := assets.search("motd-sleeping.json")
 	if len(paths) != 1 {
 		t.Errorf("search looked at %v, want only the shared file", paths)
+	}
+}
+
+// The message that greets whoever woke the server is overridable like the rest,
+// and per world like the rest.
+func TestLoginWaitMessageCanBeOverridden(t *testing.T) {
+	assets, dir := assetsIn(t)
+
+	if !strings.Contains(assets.MOTDLoginWait(), "waking up") {
+		t.Errorf("without a file the config text is used, got %s", assets.MOTDLoginWait())
+	}
+
+	shared := `{"text":"shared wait"}`
+	if err := os.WriteFile(filepath.Join(dir, "motd-login-wait.json"), []byte(shared), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if assets.MOTDLoginWait() != shared {
+		t.Errorf("login wait = %s, want the shared file", assets.MOTDLoginWait())
+	}
+
+	assets.cfg.Worlds.List = []World{{Name: "creative"}}
+	assets.cfg.Worlds.Active = "creative"
+	world := filepath.Join(dir, "worlds", "creative")
+	if err := os.MkdirAll(world, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	own := `{"text":"creative wait"}`
+	if err := os.WriteFile(filepath.Join(world, "motd-login-wait.json"), []byte(own), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if assets.MOTDLoginWait() != own {
+		t.Errorf("login wait = %s, want the world's own file", assets.MOTDLoginWait())
 	}
 }

@@ -35,11 +35,13 @@ var overlaySleepingPNG []byte
 //go:embed assets/embed/overlay-starting.png
 var overlayStartingPNG []byte
 
-// Named after the three things the server list can be showing.
+// The three things the server list can be showing, and the message a player
+// gets when their own attempt to join is what starts the server.
 const (
-	stateSleeping = "sleeping"
-	stateStarting = "starting"
-	stateLive     = "live"
+	stateSleeping  = "sleeping"
+	stateStarting  = "starting"
+	stateLive      = "live"
+	stateLoginWait = "login-wait"
 )
 
 var errNotAPNG = errors.New("not a PNG image")
@@ -85,6 +87,7 @@ func (a *Assets) warm() {
 	a.MOTDSleeping()
 	a.MOTDStarting()
 	a.MOTDLive()
+	a.MOTDLoginWait()
 	a.IconSleeping()
 	a.IconStarting()
 	a.IconLive()
@@ -113,6 +116,11 @@ func (a *Assets) MOTDStarting() string {
 // Empty means the real server's own MOTD is passed through untouched.
 func (a *Assets) MOTDLive() string {
 	return a.motd(stateLive, a.cfg.MOTD.Live)
+}
+
+// Shown to whoever's attempt to join woke the server, on the disconnect screen.
+func (a *Assets) MOTDLoginWait() string {
+	return a.motd(stateLoginWait, a.cfg.MOTD.LoginWait)
 }
 
 // World file beats shared file beats config beats the built-in default.
