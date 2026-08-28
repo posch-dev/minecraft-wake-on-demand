@@ -25,3 +25,4 @@ ENV HOME=/
 EXPOSE 25565
 
 ENTRYPOINT ["/mc-wol-proxy"]
+CMD ["run"]

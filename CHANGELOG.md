@@ -141,6 +141,11 @@ notes, so a version has to be listed here before it is tagged.
 
 ### Fixed
 
+- Running `mc-wol-proxy` with no argument at a terminal prints the help instead
+  of silently starting the proxy. Started as a service, where nothing is
+  attached, it still runs the proxy, so existing installations are unaffected.
+  The systemd unit, the Docker image and both Windows starters now say `run`
+  outright rather than relying on that.
 - The broadcast address is worked out from the watcher's own network interface
   instead of assuming a `/24`. On a `/16` or `/22` the guess was simply wrong,
   and the only symptom was that waking never worked. `init` no longer asks for
