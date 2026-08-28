@@ -63,11 +63,16 @@ func provisionServer(ctx context.Context, p *prompter, cfg *Config, publicKey st
 		return true
 	}
 
-	if err := appendAuthorizedKey(session, entry); err != nil {
+	status, err := appendAuthorizedKey(session, entry)
+	if err != nil {
 		fmt.Printf("\nThe key could not be installed: %v\n", err)
 		return true
 	}
-	fmt.Println("SSH key installed in authorized_keys.")
+	if status == "replaced" {
+		fmt.Println("SSH key entry in authorized_keys replaced, the old one was out of date.")
+	} else {
+		fmt.Println("SSH key installed in authorized_keys.")
+	}
 	return true
 }
 
