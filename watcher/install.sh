@@ -74,6 +74,9 @@ esac
 echo "Architecture: $(uname -m) -> $GOARCH"
 
 mkdir -p "$INSTALL_DIR"
+# The watcher caches the learned Minecraft version next to its binary, so the
+# directory has to belong to the service user, not to root.
+chown "$RUN_USER:$RUN_USER" "$INSTALL_DIR"
 BINARY="$INSTALL_DIR/mcwod"
 
 if [ "$1" = "--build" ]; then

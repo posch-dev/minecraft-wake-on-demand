@@ -324,7 +324,27 @@ func writeConfig(path string, cfg *Config) error {
 	}
 	header := "# Written by 'mcwod init'.\n" +
 		"# See config.example.yml in the repository for what every setting does.\n"
-	return os.WriteFile(path, append([]byte(header), data...), 0o600)
+	if err := os.WriteFile(path, append([]byte(header), data...), 0o600); err != nil {
+		return err
+	}
+	giveToInvokingUser(path)
+	return nil
+}
+
+// Under sudo the file would belong to root and the service, which runs as the
+// user who called sudo, could not read it.
+func giveToInvokingUser(path string) {
+	uid, err := strconv.Atoi(os.Getenv("SUDO_UID"))
+	if err != nil {
+		return
+	}
+	gid, err := strconv.Atoi(os.Getenv("SUDO_GID"))
+	if err != nil {
+		return
+	}
+	if err := os.Chown(path, uid, gid); err != nil {
+		log.Warnf("Cannot hand %s to the user who ran sudo: %v", path, err)
+	}
 }
 
 // A hostname is accepted, but WoL and the MAC lookup need the address, so it is

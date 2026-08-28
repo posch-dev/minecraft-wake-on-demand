@@ -175,7 +175,7 @@ func TestStatusPingWhileSleepingShowsCachedInfo(t *testing.T) {
 
 	cachePath := filepath.Join(dir, ".server-info.json")
 	sv := &ServerInfo{Name: "1.21.4", Protocol: 769, Updated: time.Now()}
-	data, _ := json.Marshal(sv)
+	data, _ := json.Marshal(map[string]*ServerInfo{"default": sv})
 	if err := os.WriteFile(cachePath, data, 0644); err != nil {
 		t.Fatal(err)
 	}

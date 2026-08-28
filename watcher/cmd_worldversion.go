@@ -207,6 +207,7 @@ func recordWorldChange(doc *yamlDocument, cfg *Config, name, serverType, version
 	if err := doc.Set([]string{"worlds", "list"}, worlds); err != nil {
 		return err
 	}
+	forgetServerInfo(cfg, name)
 	if cfg.Worlds.Active == "" {
 		if err := doc.Set([]string{"worlds", "active"}, worlds[0].Name); err != nil {
 			return err
