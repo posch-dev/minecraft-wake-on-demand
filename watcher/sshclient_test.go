@@ -396,7 +396,7 @@ func TestMissingKeyExplainsHowToCreateOne(t *testing.T) {
 func TestAuthorizedKeyEntry(t *testing.T) {
 	pub := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample"
 
-	restricted := authorizedKeyEntry(pub, "minecraft", true)
+	restricted := authorizedKeyEntry(pub, "minecraft", "", true)
 	for _, want := range []string{
 		"command=\"docker start minecraft\"",
 		"no-port-forwarding",
@@ -409,7 +409,7 @@ func TestAuthorizedKeyEntry(t *testing.T) {
 		}
 	}
 
-	plain := authorizedKeyEntry(pub, "minecraft", false)
+	plain := authorizedKeyEntry(pub, "minecraft", "", false)
 	if strings.Contains(plain, "command=") {
 		t.Errorf("unrestricted entry should carry no command: %s", plain)
 	}
@@ -444,7 +444,7 @@ func TestInstallAuthorizedKeyIsIdempotent(t *testing.T) {
 	runner := NewSSHRunner(&cfg)
 	runner.port = server.port()
 
-	entry := authorizedKeyEntry("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample", "minecraft", true)
+	entry := authorizedKeyEntry("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample", "minecraft", "", true)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 

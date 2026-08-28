@@ -133,7 +133,7 @@ It also changes a world's Minecraft version or server kind. That always makes a 
 
 **`config`** changes an existing setup through a menu, so nothing has to be edited by hand. `edit` and `settings` are the same command. Your own comments in `config.yml` are kept.
 
-**`setup-ssh`** creates the key, shows you the server's host key fingerprint so you can confirm it is the right machine, asks for your server password once, and installs the key. By default it restricts the key so it can only run `docker start`, which means a leaked key cannot do anything else. The password is used for that one login and is not stored.
+**`setup-ssh`** creates the key, shows you the server's host key fingerprint so you can confirm it is the right machine, asks for your server password once, and installs the key. By default it restricts the key so it can only start your server, which means a leaked key cannot do anything else. The password is used for that one login and is not stored.
 
 **`check`** goes through the whole setup and tells you which step is wrong in plain words. Run it any time something misbehaves.
 

@@ -55,8 +55,8 @@ func TestParseWakeOnLANSetting(t *testing.T) {
 }
 
 func TestWoLStatusVerbIsInBothHelperScripts(t *testing.T) {
-	unix := remoteHelperScriptUnix("minecraft", "")
-	windows := remoteHelperScriptWindows("minecraft", "")
+	unix := remoteHelperScriptUnix("minecraft", "", "")
+	windows := remoteHelperScriptWindows("minecraft", "", "")
 
 	if !containsAll(unix, remoteVerbWoLStatus, "ethtool") {
 		t.Errorf("the sh helper cannot report the Wake-on-LAN setting:\n%s", unix)

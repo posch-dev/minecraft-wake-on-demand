@@ -114,10 +114,11 @@ The watcher holds a private key that can reach your server PC. Restrict what
 that key is allowed to do, on the server, in `~/.ssh/authorized_keys`:
 
 ```
-command="docker start minecraft",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... watcher@host
+command="docker compose --project-directory '/srv/minecraft' up -d",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... watcher@host
 ```
 
-Even if the key leaks, it can then only start that one container.
+Even if the key leaks, it can then only bring that one project up. Without a
+known compose directory the command is `docker start <container>` instead.
 `mcwod setup-ssh` installs the key in exactly this form by default, so
 this is what you get unless you decline it.
 
@@ -136,8 +137,8 @@ The script accepts exactly six words and refuses everything else:
 | Word | Runs |
 |------|------|
 | `hello` | prints a marker so `check` can tell the script is really installed |
-| `start` | `docker start <container>` |
-| `stop` | `docker stop <container>` |
+| `start` | `docker compose up -d`, or `docker start <container>` |
+| `stop` | `docker compose stop`, or `docker stop <container>` |
 | `status` | `docker inspect -f '{{.State.Status}}' <container>` |
 | `players` | `docker exec <container> rcon-cli list` |
 | `sleep` | the one power command you picked |
@@ -164,7 +165,7 @@ What you are accepting: a watcher that is compromised can now switch the server
 PC off as well as on. The blast radius is annoyance rather than data loss, since
 the same watcher can wake it again, and `docker stop` runs before a hibernate or
 shutdown so the world is written out. If that trade is not worth it to you,
-decline the question and the key stays limited to `docker start`.
+decline the question and the key stays limited to starting the server.
 
 The password you type during `setup-ssh` is used for that one login, handed to
 `sudo` over stdin so it never appears in the server's process list, and is not

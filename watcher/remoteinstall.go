@@ -17,7 +17,7 @@ func installRemoteHelperUnix(s *ServerSession, cfg *Config) error {
 		sleepCommand = command
 	}
 
-	script := remoteHelperScriptUnix(cfg.Server.ContainerName, sleepCommand)
+	script := remoteHelperScriptUnix(cfg.Server.ContainerName, cfg.Server.ComposeDir, sleepCommand)
 	staged, err := stageFile(s, "mcwod-remote", script)
 	if err != nil {
 		return err
@@ -84,7 +84,7 @@ func windowsHelperInstructions(cfg *Config, publicKey string) string {
 	if err != nil {
 		sleepCommand = ""
 	}
-	script := remoteHelperScriptWindows(cfg.Server.ContainerName, sleepCommand)
+	script := remoteHelperScriptWindows(cfg.Server.ContainerName, cfg.Server.ComposeDir, sleepCommand)
 
 	var b strings.Builder
 	b.WriteString("\nOn a Windows server PC, do these three steps in an administrator PowerShell.\n")
