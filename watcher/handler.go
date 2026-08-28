@@ -45,9 +45,7 @@ func NewHandler(cfg *Config, waker *Waker) *Handler {
 	return h
 }
 
-// limits.max_logins wins when it is set, otherwise the player slots the server
-// reported are the natural cap, since more players cannot join anyway. Before
-// the server has ever been reached, motd.max_players stands in.
+// The server's own player slots are the natural cap, more cannot join anyway.
 func (h *Handler) refreshConnectionLimits() {
 	logins := h.cfg.Limits.MaxLogins
 	if logins <= 0 {
@@ -360,10 +358,8 @@ func (h *Handler) isAllowedHostname(hs *Handshake, addr net.Addr) bool {
 	return false
 }
 
-// Forge appends a NUL and "FML3" to the address, proxies that forward the
-// player IP append a NUL and their own fields, so only the part before the
-// first NUL is the hostname the player typed. A trailing dot is the DNS root
-// and names the same host, some clients keep it.
+// Forge and forwarding proxies append their own fields after a NUL byte.
+// A trailing dot is the DNS root and names the same host.
 func normalizeServerAddress(address string) string {
 	if end := strings.IndexByte(address, 0); end >= 0 {
 		address = address[:end]

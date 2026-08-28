@@ -10,10 +10,8 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// One password login to the server PC, used by setup-ssh and init to look
-// around and install things. The password lives in this struct for the life of
-// the session and never reaches a command line, a log line or an error string,
-// because the server puts command lines in its own process list.
+// One password login, used to look around and install things.
+// The password never reaches a command line, a log line or an error.
 type ServerSession struct {
 	client   *ssh.Client
 	password string

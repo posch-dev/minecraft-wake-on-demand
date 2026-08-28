@@ -405,9 +405,8 @@ func TestStatusResponseEchoesClientProtocol(t *testing.T) {
 	}
 }
 
-// The bug this replaces: a status response with an icon is around 10 kB and
-// never arrives in one Read, so the old single Read parser learned nothing from
-// any server that had an icon configured.
+// The bug this replaces: the old single Read parser learned nothing from any
+// server that had an icon, because the response spans segments.
 func TestReadFramedPacketReassemblesASplitResponse(t *testing.T) {
 	icon := "data:image/png;base64," + strings.Repeat("A", 12000)
 	frame, err := makeStatusResponse(defaultMOTDSleeping, 20, 3, icon, "1.21.4", 769)
