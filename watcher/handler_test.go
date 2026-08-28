@@ -366,3 +366,56 @@ func TestAllowedHostnamesAutoPopulatedFromDuckDNS(t *testing.T) {
 		t.Error("auto-populated DuckDNS domain should be accepted")
 	}
 }
+
+func TestAllowedHostnamesIgnoreForgeMarker(t *testing.T) {
+	cfg := sleepingConfig()
+	cfg.Watcher.AllowedHostnames = StringList{"mc.example.org"}
+	h := NewHandler(cfg, NewWaker(cfg))
+
+	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
+	for _, address := range []string{
+		"mc.example.org\x00FML3\x00",
+		"mc.example.org\x00FML\x00",
+		"mc.example.org\x00203.0.113.7\x0069e8e2ee\x00[]",
+		"mc.example.org.",
+	} {
+		hs := &Handshake{ServerAddress: address, NextState: 1}
+		if !h.isAllowedHostname(hs, remote) {
+			t.Errorf("address %q should be accepted", address)
+		}
+	}
+}
+
+func TestAllowedHostnamesStillBlockOtherNames(t *testing.T) {
+	cfg := sleepingConfig()
+	cfg.Watcher.AllowedHostnames = StringList{"mc.example.org"}
+	h := NewHandler(cfg, NewWaker(cfg))
+
+	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
+	for _, address := range []string{
+		"evil.example.org\x00FML3\x00",
+		"\x00mc.example.org",
+		"mc.example.org.evil.net",
+		"",
+	} {
+		hs := &Handshake{ServerAddress: address, NextState: 1}
+		if h.isAllowedHostname(hs, remote) {
+			t.Errorf("address %q should be blocked", address)
+		}
+	}
+}
+
+func TestNormalizeServerAddress(t *testing.T) {
+	cases := map[string]string{
+		"mc.example.org":             "mc.example.org",
+		"mc.example.org.":            "mc.example.org",
+		"mc.example.org\x00FML3\x00": "mc.example.org",
+		"  mc.example.org  ":         "mc.example.org",
+		"\x00":                       "",
+	}
+	for in, want := range cases {
+		if got := normalizeServerAddress(in); got != want {
+			t.Errorf("normalizeServerAddress(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

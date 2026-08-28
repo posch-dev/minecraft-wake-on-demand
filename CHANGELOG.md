@@ -18,6 +18,11 @@ notes, so a version has to be listed here before it is tagged.
 
 ### Fixed
 
+- `watcher.allowed_hostnames` no longer rejects Forge players and players
+  behind a forwarding proxy. Both append their own fields after a NUL byte to
+  the address in the handshake, so `mc.example.org` arrived as
+  `mc.example.org\0FML3\0` and never matched. Only the part before the first
+  NUL is compared now, and a trailing dot is ignored.
 - The Login Success packet no longer carries a stale `0x01` strict error
   handling byte for clients whose protocol is outside 766-767, which crashed
   1.21.2+ and other versions with `DecoderException: 1 extra byte`.
