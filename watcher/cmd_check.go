@@ -80,16 +80,18 @@ func runCheck() int {
 	checkDuckDNS(c, cfg, ctx)
 
 	fmt.Println()
+	code := 0
 	switch {
 	case c.failures > 0:
 		fmt.Printf("%d problem(s) found, %d warning(s).\n", c.failures, c.warnings)
-		return 1
+		code = 1
 	case c.warnings > 0:
 		fmt.Printf("No problems found, %d warning(s).\n", c.warnings)
 	default:
 		fmt.Println("Everything looks good.")
 	}
-	return 0
+	printUpdateHint(cfg)
+	return code
 }
 
 func checkAssets(c *checker, cfg *Config) {

@@ -18,6 +18,9 @@ wol:
   mode: "broadcast"                   # "broadcast" (recommended) or "unicast"
   broadcast_address: "192.168.1.255"  # only used in broadcast mode
 
+update:
+  check: true                         # look for a newer release after init, config and check, never installs
+
 duckdns:
   enabled: true
   domain: "your-domain"               # without .duckdns.org

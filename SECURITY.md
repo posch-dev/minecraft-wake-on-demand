@@ -297,10 +297,33 @@ This is not a code signature. Windows will still warn about an unsigned
 executable downloaded from the internet, because signing needs a certificate
 from a certificate authority and this project does not have one.
 
-`install.sh` reads `MC_WOL_INSTALL_DIR`, `MC_WOL_REPO`, `MC_WOL_API_BASE` and
-`MC_WOL_DOWNLOAD_BASE` from the environment if they are set, which is there for
-mirrors and for testing the installer. Anything you point those at is trusted to
-serve the binary, so only use them with a source you control.
+`mc-wol-proxy update` applies the same rule. It downloads `checksums.txt`
+alongside the asset and refuses to install on a mismatch, or when the asset is
+not listed at all, because that check is the only thing between a release URL
+and running whatever came back. It also refuses to follow a redirect off the
+release host, so a hijacked redirect cannot point the download somewhere else.
+The new binary is written next to the old one and renamed over it, so a failed
+download cannot leave a half written file where the service expects a program.
+
+**The watcher never updates itself.** `update` asks before it does anything, and
+nothing in the running proxy will ever replace its own binary.
+
+`install.sh` and `update` both read `MC_WOL_REPO`, `MC_WOL_API_BASE` and
+`MC_WOL_DOWNLOAD_BASE` from the environment if they are set, and `install.sh`
+also reads `MC_WOL_INSTALL_DIR`. These are there for mirrors and for testing.
+Anything you point them at is trusted to serve the binary, so only use them with
+a source you control.
+
+### The update check and your IP
+
+`init`, `config` and `check` ask GitHub once a day whether a newer release
+exists and print one line if so. That request tells GitHub the IP the watcher is
+behind, which for most people is their home connection. The answer is cached for
+24 hours in `.update-check.json` next to the config, the request has a two
+second timeout and failing is silent, so nothing depends on it.
+
+Set `update.check: false` in `config.yml` to switch it off entirely. `update`
+itself still works when you run it by hand.
 
 ## Things you can tighten
 

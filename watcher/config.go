@@ -23,6 +23,7 @@ type Config struct {
 	Timeouts TimeoutsConfig `yaml:"timeouts"`
 	Limits   LimitsConfig   `yaml:"limits"`
 	Sleep    SleepConfig    `yaml:"sleep"`
+	Update   UpdateConfig   `yaml:"update"`
 	MOTD     MOTDConfig     `yaml:"motd"`
 
 	// Path this was read from, assets are resolved next to it.
@@ -47,6 +48,12 @@ type ServerConfig struct {
 	// True once setup-ssh installed the helper script. The watcher then sends
 	// verbs instead of whole commands, see remotehelper.go.
 	RemoteHelper bool `yaml:"remote_helper"`
+}
+
+// Only ever asks GitHub whether something newer exists, which also tells GitHub
+// this machine's IP. Nothing is ever installed without being asked.
+type UpdateConfig struct {
+	Check bool `yaml:"check"`
 }
 
 // Putting the server PC back to sleep once nobody is playing. Off by default,
@@ -162,6 +169,7 @@ func defaultConfig() Config {
 		DuckDNS:  DuckDNSConfig{UpdateIntervalHours: 6},
 		Transfer: TransferConfig{Port: 25566},
 		Timeouts: TimeoutsConfig{BootTimeout: 60, MCReadyTimeout: 30},
+		Update:   UpdateConfig{Check: true},
 		Sleep: SleepConfig{
 			Enabled: false, IdleAfter: 900, ConfirmDelay: 60,
 			GracePeriod: 900, PollInterval: 300, Action: "suspend",
@@ -268,6 +276,7 @@ func applyEnvOverrides(cfg *Config) {
 	setString("WOL_MODE", &cfg.WoL.Mode)
 	setString("WOL_BROADCAST_ADDRESS", &cfg.WoL.BroadcastAddress)
 	setBool("DUCKDNS_ENABLED", &cfg.DuckDNS.Enabled)
+	setBool("UPDATE_CHECK", &cfg.Update.Check)
 	setString("DUCKDNS_DOMAIN", &cfg.DuckDNS.Domain)
 	setString("DUCKDNS_TOKEN", &cfg.DuckDNS.Token)
 	setInt("DUCKDNS_UPDATE_INTERVAL_HOURS", &cfg.DuckDNS.UpdateIntervalHours)
