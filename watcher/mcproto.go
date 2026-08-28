@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -25,6 +26,14 @@ const (
 	// Transfer lives in the configuration state, not the login state.
 	packetIDTransfer     = 0x0B
 	packetIDLoginSuccess = 0x02
+)
+
+// Login Success grew and lost fields over time: 1.20.5 to 1.21.1 end it with a
+// strict error handling byte, 26.2 appends a session id instead.
+const (
+	strictErrorFirstProtocol = 766
+	strictErrorLastProtocol  = 767
+	sessionIDFirstProtocol   = 776
 )
 
 func readVarInt(data []byte, offset int) (int32, int, error) {
@@ -274,16 +283,32 @@ func parseLoginStart(data []byte) (string, []byte, error) {
 	return name, uuid, nil
 }
 
-// Strict error handling byte exists only in protocols 766-767 (1.20.5-1.21.1); other versions crash with "1 extra byte".
+// A field too many or too few and the client drops the connection with a
+// decoder error, so both trailing fields are tied to the exact protocol range.
 func makeLoginSuccess(uuid []byte, username string, protocolVersion int32) []byte {
 	body := writeVarInt(packetIDLoginSuccess)
 	body = append(body, uuid...)
 	body = append(body, writeString(username)...)
 	body = append(body, writeVarInt(0)...) // no properties
-	if protocolVersion >= 766 && protocolVersion <= 767 {
+	if protocolVersion >= strictErrorFirstProtocol && protocolVersion <= strictErrorLastProtocol {
 		body = append(body, 0x01) // strict error handling
 	}
+	if protocolVersion >= sessionIDFirstProtocol {
+		body = append(body, randomUUID()...)
+	}
 	return framePacket(body)
+}
+
+// The client is transferred away before it ever uses the session, so any well
+// formed version 4 UUID does.
+func randomUUID() []byte {
+	id := make([]byte, 16)
+	if _, err := rand.Read(id); err != nil {
+		return id
+	}
+	id[6] = id[6]&0x0F | 0x40
+	id[8] = id[8]&0x3F | 0x80
+	return id
 }
 
 // Login state disconnect, so the client shows the message instead of an error.
