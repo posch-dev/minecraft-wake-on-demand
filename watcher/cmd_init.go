@@ -183,6 +183,8 @@ func runInit() int {
 		}
 	}
 
+	askTransferMode(p, &cfg)
+
 	if err := cfg.Validate(); err != nil {
 		fmt.Printf("\nThe answers do not add up: %v\n", err)
 		return 1
@@ -346,6 +348,29 @@ func giveToInvokingUser(path string) {
 	if err := os.Chown(path, uid, gid); err != nil {
 		log.Warnf("Cannot hand %s to the user who ran sudo: %v", path, err)
 	}
+}
+
+// Only worth offering to someone whose friends come in from outside, everyone
+// else has nothing to forward and nothing to gain.
+func askTransferMode(p *prompter, cfg *Config) {
+	if !cfg.DuckDNS.Enabled {
+		return
+	}
+
+	fmt.Println("\nOnce the server is awake, players can either keep going through this PC")
+	fmt.Println("or be sent straight to it. Straight to it is faster and takes the load")
+	fmt.Println("off this machine.")
+	printHint("It needs a second port forwarded to the server PC, and the watcher",
+		"then no longer sees who is playing, which auto-sleep relies on.")
+	if !p.yesNo("Send players straight to the server?", false) {
+		return
+	}
+
+	cfg.Transfer.Enabled = true
+	cfg.Transfer.Host = cfg.DuckDNSHost()
+	fmt.Println("")
+	printHint("Forward this port on your router to " + cfg.Server.IP + ".")
+	cfg.Transfer.Port = p.validatedPort("Which port goes straight to the server PC?", cfg.Server.MCPort)
 }
 
 // A hostname is accepted, but WoL and the MAC lookup need the address, so it is
