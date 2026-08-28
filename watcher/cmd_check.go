@@ -76,6 +76,7 @@ func runCheck() int {
 	if hostUp && sshOK {
 		checkSSHLogin(c, cfg, ctx)
 	}
+	checkSleepAction(c, cfg)
 	checkDuckDNS(c, cfg, ctx)
 
 	fmt.Println()
@@ -181,31 +182,157 @@ func checkSSHLogin(c *checker, cfg *Config, ctx context.Context) {
 	c.section("SSH login and container")
 	runner := NewSSHRunner(cfg)
 
-	out, err := runner.Run(ctx, "docker inspect -f {{.State.Status}} "+cfg.Server.ContainerName)
+	if cfg.Server.RemoteHelper {
+		checkRemoteHelper(c, cfg, runner, ctx)
+		return
+	}
+
+	out, err := runner.RunVerb(ctx, remoteVerbStatus)
 	if err != nil {
-		if strings.Contains(err.Error(), "handshake") || strings.Contains(err.Error(), "unable to authenticate") {
+		if isAuthFailure(err) {
 			c.fail("SSH login as %s failed: %v", cfg.Server.SSHUser, err)
 			c.hint("the public key is missing from authorized_keys on the server")
 			c.hint("run: mc-wol-proxy setup-ssh")
 			return
 		}
-		// A restricted key refuses everything except docker start, which is
-		// the recommended setup and not something to warn about loudly.
+		// A restricted key refuses everything except its forced command, which
+		// is the recommended setup and not something to warn about loudly.
 		c.ok("SSH login as %s works", cfg.Server.SSHUser)
 		c.info("the key did not run the inspect command: %v", err)
 		c.hint("expected when the key is restricted to 'docker start', as recommended")
+		c.hint("run setup-ssh again to install the helper, which check can question properly")
 		return
 	}
 
 	c.ok("SSH login as %s works", cfg.Server.SSHUser)
-	switch out {
+	reportContainerState(c, cfg, out)
+}
+
+// With the helper installed, check can ask real questions instead of guessing
+// from a refused command.
+func checkRemoteHelper(c *checker, cfg *Config, runner *SSHRunner, ctx context.Context) {
+	out, err := runner.Run(ctx, remoteVerbHello)
+	if err != nil {
+		if isAuthFailure(err) {
+			c.fail("SSH login as %s failed: %v", cfg.Server.SSHUser, err)
+			c.hint("the public key is missing from authorized_keys on the server")
+			c.hint("run: mc-wol-proxy setup-ssh")
+			return
+		}
+		c.fail("the helper did not answer: %v", err)
+		c.hint("server.remote_helper is true but %s is missing or not bound to the key", remoteHelperPathUnix)
+		c.hint("run: mc-wol-proxy setup-ssh")
+		return
+	}
+	c.ok("SSH login as %s works", cfg.Server.SSHUser)
+
+	if strings.TrimSpace(out) != remoteHelperMarker {
+		// An older forced command runs docker start for every word it is sent,
+		// so a wrong answer here means sleep would start the container instead.
+		c.fail("the helper answered %q instead of %q", sanitizeForLog(out, 60), remoteHelperMarker)
+		c.hint("an older mc-wol-proxy line in authorized_keys is still bound to the key")
+		c.hint("remove it on the server, then run: mc-wol-proxy setup-ssh")
+		return
+	}
+	c.ok("helper answered, the key is bound to %s", remoteHelperPathUnix)
+
+	state, err := runner.RunVerb(ctx, remoteVerbStatus)
+	if err != nil {
+		c.warn("the helper could not inspect the container: %v", err)
+	} else {
+		reportContainerState(c, cfg, state)
+	}
+
+	checkWakeOnLANDriver(c, runner, ctx)
+	checkPlayerQuery(c, cfg, runner, ctx)
+}
+
+// A NIC with Wake-on-LAN switched off in the driver is the most common reason
+// this whole project does nothing, and nothing else in the setup reveals it.
+func checkWakeOnLANDriver(c *checker, runner *SSHRunner, ctx context.Context) {
+	out, err := runner.RunVerb(ctx, remoteVerbWoLStatus)
+	if err != nil {
+		c.info("could not read the Wake-on-LAN setting from the network driver")
+		c.hint("check it yourself with: ethtool <interface> | grep Wake-on")
+		return
+	}
+	switch parseWakeOnLANSetting(out) {
+	case wolEnabled:
+		c.ok("Wake-on-LAN is armed in the network driver")
+	case wolDisabled:
+		c.fail("Wake-on-LAN is switched off in the network driver")
+		c.hint("the magic packet arrives but the card ignores it, so the PC never wakes")
+		c.hint("turn it on with: sudo ethtool -s <interface> wol g")
+		c.hint("most distributions reset this on reboot, so make it permanent too")
+	default:
+		c.info("the network driver did not report a Wake-on-LAN setting")
+	}
+}
+
+// The sleep monitor counts players through this, so a container without RCON
+// would leave it unable to tell an empty server from a busy one.
+func checkPlayerQuery(c *checker, cfg *Config, runner *SSHRunner, ctx context.Context) {
+	out, err := runner.RunVerb(ctx, remoteVerbPlayers)
+	if err != nil {
+		if !cfg.Sleep.Enabled {
+			c.info("the player count is not available: %v", err)
+			return
+		}
+		c.fail("the player count is not available: %v", err)
+		c.hint("sleep.enabled needs it to tell whether anyone is still playing")
+		c.hint("enable RCON in the container, itzg/minecraft-server does by default")
+		return
+	}
+	online, ok := parsePlayerCount(out)
+	if !ok {
+		c.warn("could not read a player count from %q", sanitizeForLog(out, 60))
+		c.hint("the sleep monitor treats an unreadable answer as 'someone is playing'")
+		return
+	}
+	c.ok("player count works, %d online right now", online)
+}
+
+func checkSleepAction(c *checker, cfg *Config) {
+	c.section("Sleep")
+	if !cfg.Sleep.Enabled {
+		c.info("disabled in config.yml, the server PC is never sent to sleep")
+		return
+	}
+	c.ok("enabled, action '%s' after %ds idle", cfg.Sleep.Action, cfg.Sleep.IdleAfter)
+
+	if cfg.Transfer.Enabled {
+		c.warn("transfer mode hides player sessions from the watcher")
+		c.hint("sessions skip the watcher after the handoff, so it polls over SSH")
+		c.hint("every %ds instead of counting the connections it forwards", cfg.Sleep.PollInterval)
+		c.hint("if the container runs with AUTOPAUSE, keep poll_interval above its timeout")
+	} else {
+		c.ok("proxy mode, player sessions are counted as they pass through")
+	}
+	if cfg.Sleep.GracePeriod < cfg.Timeouts.BootTimeout+cfg.Timeouts.MCReadyTimeout {
+		c.warn("sleep.grace_period is shorter than a full boot takes")
+		c.hint("the PC could be sent back to sleep before the first player is in")
+	}
+	if !cfg.Server.RemoteHelper {
+		c.fail("server.remote_helper is false, the watcher cannot send the sleep command")
+		c.hint("run: mc-wol-proxy setup-ssh")
+	}
+
+	c.info("the sleep command itself is not run here, that would switch the PC off")
+}
+
+func reportContainerState(c *checker, cfg *Config, state string) {
+	switch strings.TrimSpace(state) {
 	case "":
 		c.warn("container '%s' did not report a state", cfg.Server.ContainerName)
 	case "running":
 		c.ok("container '%s' is running", cfg.Server.ContainerName)
 	default:
-		c.ok("container '%s' exists, state '%s'", cfg.Server.ContainerName, sanitizeForLog(out, 32))
+		c.ok("container '%s' exists, state '%s'", cfg.Server.ContainerName, sanitizeForLog(state, 32))
 	}
+}
+
+func isAuthFailure(err error) bool {
+	return strings.Contains(err.Error(), "handshake") || strings.Contains(err.Error(), "unable to authenticate")
 }
 
 func checkDuckDNS(c *checker, cfg *Config, ctx context.Context) {

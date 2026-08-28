@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -15,11 +17,33 @@ const (
 	remoteVerbStatus  = "status"
 	remoteVerbPlayers = "players"
 	remoteVerbSleep   = "sleep"
+	// Reports whether the network card is armed for the magic packet, which is
+	// the one setting nothing else in the setup would reveal.
+	remoteVerbWoLStatus = "wolstatus"
+)
+
+type wakeOnLANSetting int
+
+const (
+	wolUnknown wakeOnLANSetting = iota
+	wolEnabled
+	wolDisabled
 )
 
 // Answer to the hello verb, so check can tell the helper apart from an older
 // key whose forced command silently runs docker start no matter what we send.
 const remoteHelperMarker = "mc-wol-remote 1"
+
+// The interface carrying the default route is the one the magic packet arrives
+// on, so that is the one worth reporting.
+const wolStatusCommandUnix = "iface=$(ip route show default | awk '{print $5; exit}'); " +
+	"ethtool \"$iface\" 2>/dev/null | grep -i '^\t*Wake-on:'"
+
+// PowerShell reports the same thing as ethtool, phrased differently. The output
+// is normalised to a Wake-on: line so one parser covers both.
+const wolStatusCommandWindows = `(Get-NetAdapter -Physical | Where-Object Status -eq 'Up' | ` +
+	`Get-NetAdapterPowerManagement | ForEach-Object { if ($_.WakeOnMagicPacket -eq 'Enabled') ` +
+	`{ 'Wake-on: g' } else { 'Wake-on: d' } }) | Select-Object -First 1`
 
 const (
 	remoteHelperPathUnix    = "/usr/local/bin/mc-wol-remote"
@@ -41,6 +65,8 @@ func directCommand(cfg *Config, verb string) (string, error) {
 		return "docker inspect -f {{.State.Status}} " + container, nil
 	case remoteVerbPlayers:
 		return "docker exec " + container + " rcon-cli list", nil
+	case remoteVerbWoLStatus:
+		return wolStatusCommandUnix, nil
 	case remoteVerbSleep:
 		return "", fmt.Errorf("sending the server PC to sleep needs the helper script, " +
 			"run 'mc-wol-proxy setup-ssh' to install it")
@@ -106,6 +132,7 @@ func remoteHelperScriptUnix(containerName, sleepCommand string) string {
 	b.WriteString(remoteVerbStop + ")    exec docker stop \"$CONTAINER\" ;;\n")
 	b.WriteString(remoteVerbStatus + ")  exec docker inspect -f '{{.State.Status}}' \"$CONTAINER\" ;;\n")
 	b.WriteString(remoteVerbPlayers + ") exec docker exec \"$CONTAINER\" rcon-cli list ;;\n")
+	b.WriteString(remoteVerbWoLStatus + ") " + wolStatusCommandUnix + " ;;\n")
 	if sleepCommand != "" {
 		// Unquoted on purpose, the command is several words and has to split.
 		b.WriteString(remoteVerbSleep + ")   exec " + sleepCommand + " ;;\n")
@@ -126,6 +153,7 @@ func remoteHelperScriptWindows(containerName, sleepCommand string) string {
 	b.WriteString("  '" + remoteVerbStart + "'   { docker start $container }\n")
 	b.WriteString("  '" + remoteVerbStop + "'    { docker stop $container }\n")
 	b.WriteString("  '" + remoteVerbStatus + "'  { docker inspect -f '{{.State.Status}}' $container }\n")
+	b.WriteString("  '" + remoteVerbWoLStatus + "' { " + wolStatusCommandWindows + " }\n")
 	b.WriteString("  '" + remoteVerbPlayers + "' { docker exec $container rcon-cli list }\n")
 	if sleepCommand != "" {
 		b.WriteString("  '" + remoteVerbSleep + "'   { " + sleepCommand + " }\n")
@@ -166,4 +194,51 @@ func shellQuote(value string) string {
 
 func powerShellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+// The two shapes vanilla has used, "There are 3 of a max of 20 players online"
+// and the older "There are 0/20 players online". Matching on the numbers rather
+// than the sentence keeps it working on a server that is not running in
+// English, where only the surrounding words change.
+// The two shapes vanilla has used, "There are 3 of a max of 20 players online"
+// and the older "There are 0/20 players online". The last pattern takes the
+// first number in the line, which is what keeps a server running in another
+// language readable, since only the words around the numbers change.
+var playerCountPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(\d+)\s*(?:of a max of|/)\s*\d+`),
+	regexp.MustCompile(`(?i)there are\s+(\d+)`),
+	regexp.MustCompile(`^\D*?(\d+)\D`),
+}
+
+// Reports the number of players online. Not ok means the answer could not be
+// read, which callers have to treat as "someone might be playing" rather than
+// as zero.
+func parsePlayerCount(output string) (int, bool) {
+	for _, pattern := range playerCountPatterns {
+		if match := pattern.FindStringSubmatch(output); match != nil {
+			if count, err := strconv.Atoi(match[1]); err == nil {
+				return count, true
+			}
+		}
+	}
+	return 0, false
+}
+
+// ethtool prints "Wake-on: g" when the card is armed for the magic packet and
+// "Wake-on: d" when it is disabled entirely.
+func parseWakeOnLANSetting(ethtoolOutput string) wakeOnLANSetting {
+	_, value, found := strings.Cut(ethtoolOutput, "Wake-on:")
+	if !found {
+		return wolUnknown
+	}
+	value = strings.TrimSpace(firstLine(value))
+	switch {
+	case value == "":
+		return wolUnknown
+	case strings.ContainsAny(value, "gG"):
+		return wolEnabled
+	case value == "d" || value == "D":
+		return wolDisabled
+	}
+	return wolUnknown
 }
