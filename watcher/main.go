@@ -78,21 +78,19 @@ func printUsage(w *os.File) {
 	fmt.Fprint(w, `mcwod, Minecraft Wake-on-Demand watcher
 
 Usage:
-  mcwod                     a menu, or the watcher when run as a service
-  mcwod run          start the watcher
-  mcwod init         answer a few questions and write config.yml
-  mcwod config       change the configuration, guided
-  mcwod setup-ssh    create the SSH key and install it on the server
-  mcwod check        test the setup and say what is missing
-  mcwod update       install a newer release, after asking
-  mcwod get-server-icon
-                            copy the running server's icon into assets/
-  mcwod worlds              switch between worlds, make a new one
-  mcwod players             who may join and who is an admin
-  mcwod restore-compose
-                            put back a docker-compose.yml this tool replaced
-  mcwod version      print the version
-  mcwod help         print this text
+  mcwod                    a menu, or the watcher when run as a service
+  mcwod run                start the watcher
+  mcwod init               answer a few questions and write config.yml
+  mcwod config             change the configuration, guided
+  mcwod setup-ssh          create the SSH key and install it on the server
+  mcwod check              test the setup and say what is missing
+  mcwod update             install a newer release, after asking
+  mcwod get-server-icon    copy the running server's icon into assets/
+  mcwod worlds             switch between worlds, make a new one
+  mcwod players            who may join and who is an admin
+  mcwod restore-compose    put back a docker-compose.yml this tool replaced
+  mcwod version            print the version
+  mcwod help               print this text
 
 "edit" and "settings" do the same as "config".
 
