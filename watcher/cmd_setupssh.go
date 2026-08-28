@@ -38,15 +38,27 @@ func runSetupSSH() int {
 
 	p := newPrompter()
 
-	// Windows servers run a different shell and need the full docker path, so
-	// they get the line to paste rather than a half working automation.
-	if !p.yesNo("\nIs the server PC running Linux", true) {
-		printManualInstructions(cfg, publicKey)
-		return 0
-	}
+	fmt.Println("\nThe watcher can also put the server PC back to sleep once nobody is")
+	fmt.Println("playing. That needs a small helper script on the server and, on Linux,")
+	fmt.Println("one sudoers line. Without it the key can only start the container.")
+	wantSleep := p.yesNo("Allow the watcher to send the server PC to sleep", false)
 
-	restrict := p.yesNo("Restrict the key so it can only start the container (recommended)", true)
-	entry := authorizedKeyEntry(publicKey, cfg.Server.ContainerName, restrict)
+	sleepAction := ""
+	if wantSleep {
+		sleepAction = strings.ToLower(strings.TrimSpace(p.validated(
+			"Which action, suspend, hibernate or shutdown", "suspend",
+			func(v string) error {
+				if !contains(installableSleepActions, strings.ToLower(strings.TrimSpace(v))) {
+					return fmt.Errorf("pick suspend, hibernate or shutdown")
+				}
+				return nil
+			})))
+		if sleepAction == "shutdown" {
+			fmt.Println("\n  Note: waking from a full shutdown needs Wake-on-LAN enabled in the")
+			fmt.Println("  BIOS for the powered-off state, which not every board supports.")
+		}
+		cfg.Sleep.Action = sleepAction
+	}
 
 	fmt.Printf("\nLogging in as %s@%s to install the key.\n", cfg.Server.SSHUser, cfg.Server.IP)
 	fmt.Println("This password is used once and is not stored anywhere.")
@@ -56,10 +68,59 @@ func runSetupSSH() int {
 		return 1
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	if err := installAuthorizedKey(ctx, cfg, password, entry, p); err != nil {
+	session, err := DialServerSession(ctx, NewSSHRunner(cfg), password, p)
+	if err != nil {
+		fmt.Printf("\n%v\n", err)
+		return 1
+	}
+	defer session.Close()
+
+	platform := session.Detect()
+	fmt.Printf("\nServer PC runs %s.\n", platform.Name())
+	if !platform.HasDocker {
+		fmt.Println("  Warning: no docker found on the server, so the watcher will not be")
+		fmt.Println("  able to start the container. Install Docker there before running check.")
+	}
+
+	if platform.Windows {
+		fmt.Println(windowsHelperInstructions(cfg, publicKey))
+		if wantSleep {
+			fmt.Println("Set server.remote_helper: true and the sleep block in config.yml once the")
+			fmt.Println("script is in place, then run: mc-wol-proxy check")
+		} else {
+			fmt.Println("Then run: mc-wol-proxy check")
+		}
+		return 0
+	}
+
+	entry := ""
+	helperInstalled := false
+	if wantSleep {
+		if platform.SystemctlPath == "" {
+			fmt.Println("\nNo systemctl on the server, so there is no standard way to suspend it.")
+			fmt.Println("Set sleep.action: custom and sleep.command in config.yml, then run")
+			fmt.Println("setup-ssh again.")
+			return 1
+		}
+		if err := installRemoteHelperUnix(session, cfg); err != nil {
+			fmt.Printf("\n%v\n", err)
+			fmt.Println("\nNothing was installed. The password may have been wrong, or the")
+			fmt.Println("account may not be allowed to use sudo.")
+			return 1
+		}
+		fmt.Printf("Helper installed at %s, owned by root.\n", remoteHelperPathUnix)
+		fmt.Printf("Sudoers rule written to %s, checked with visudo first.\n", sudoersPath)
+		entry = remoteHelperKeyEntryUnix(publicKey)
+		helperInstalled = true
+	} else {
+		restrict := p.yesNo("Restrict the key so it can only start the container (recommended)", true)
+		entry = authorizedKeyEntry(publicKey, cfg.Server.ContainerName, restrict)
+	}
+
+	if err := appendAuthorizedKey(session, entry); err != nil {
 		fmt.Printf("\n%v\n", err)
 		return 1
 	}
@@ -67,34 +128,47 @@ func runSetupSSH() int {
 
 	fmt.Println("\nVerifying the key works...")
 	runner := NewSSHRunner(cfg)
-	if _, err := runner.Run(ctx, "true"); err != nil {
-		if restrict {
-			// A restricted key runs docker start and refuses anything else,
-			// so a rejected command still proves the login succeeded.
+
+	if !helperInstalled {
+		if _, err := runner.Run(ctx, "true"); err != nil {
+			// A restricted key runs its forced command and refuses everything
+			// else, so a rejected command still proves the login succeeded.
 			if strings.Contains(err.Error(), "unable to authenticate") {
 				fmt.Printf("The key was refused: %v\n", err)
 				return 1
 			}
 			fmt.Println("Login works, the key is restricted to starting the container as intended.")
-			return 0
+		} else {
+			fmt.Println("Login works.")
 		}
+		fmt.Println("\nNext step: mc-wol-proxy check")
+		return 0
+	}
+
+	out, err := runner.Run(ctx, remoteVerbHello)
+	if err != nil {
 		fmt.Printf("The key was refused: %v\n", err)
 		return 1
 	}
-	fmt.Println("Login works.")
+	if strings.TrimSpace(out) != remoteHelperMarker {
+		fmt.Printf("The helper answered %q instead of %q.\n", sanitizeForLog(out, 80), remoteHelperMarker)
+		fmt.Println("An older mc-wol-proxy line in authorized_keys is still bound to the key.")
+		fmt.Println("Remove it and run setup-ssh again.")
+		return 1
+	}
+	fmt.Println("Helper answered, the key can start, stop and sleep the server.")
+
+	fmt.Println("\nPut these lines in config.yml, the watcher needs them to use the helper:")
+	fmt.Println("  server:")
+	fmt.Println("    remote_helper: true")
+	fmt.Println("  sleep:")
+	fmt.Println("    enabled: true")
+	fmt.Printf("    action: %s\n", sleepAction)
 	fmt.Println("\nNext step: mc-wol-proxy check")
 	return 0
 }
 
-// The restricted form is what SECURITY.md recommends: even a leaked key can
-// then only start the one container.
-func authorizedKeyEntry(publicKey, containerName string, restrict bool) string {
-	if !restrict {
-		return publicKey + " mc-wol-proxy"
-	}
-	return fmt.Sprintf("command=\"docker start %s\",no-port-forwarding,no-X11-forwarding,"+
-		"no-agent-forwarding,no-pty %s mc-wol-proxy", containerName, publicKey)
-}
+var installableSleepActions = []string{"suspend", "hibernate", "shutdown"}
 
 // Generates a key without a passphrase, because the watcher runs unattended and
 // has no way to type one.
@@ -138,66 +212,24 @@ func ensureKeyPair(path string) (ssh.Signer, error) {
 	return ssh.NewSignerFromKey(private)
 }
 
-func installAuthorizedKey(ctx context.Context, cfg *Config, password, entry string, p *prompter) error {
-	return installAuthorizedKeyVia(ctx, NewSSHRunner(cfg), password, entry, p)
-}
-
-// Split out so the tests can point the runner at a local server.
-func installAuthorizedKeyVia(ctx context.Context, runner *SSHRunner, password, entry string, p *prompter) error {
-	cfg := runner.cfg
-	callback, err := interactiveHostKeyCallback(runner, p)
-	if err != nil {
-		return err
+// The key is only appended when it is not already there, so running setup-ssh
+// twice does not pile up duplicate lines. An older mc-wol-proxy line is left
+// alone, which is why the helper is verified with hello afterwards.
+func appendAuthorizedKey(s *ServerSession, entry string) error {
+	fields := strings.Fields(entry)
+	if len(fields) < 2 {
+		return fmt.Errorf("malformed authorized_keys entry")
 	}
+	keyBody := fields[len(fields)-2]
 
-	clientCfg := &ssh.ClientConfig{
-		User: cfg.Server.SSHUser,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(password),
-			ssh.KeyboardInteractive(func(_, _ string, questions []string, _ []bool) ([]string, error) {
-				answers := make([]string, len(questions))
-				for i := range answers {
-					answers[i] = password
-				}
-				return answers, nil
-			}),
-		},
-		HostKeyCallback: callback,
-		Timeout:         15 * time.Second,
-	}
-
-	dialer := net.Dialer{Timeout: clientCfg.Timeout}
-	conn, err := dialer.DialContext(ctx, "tcp", runner.Address())
-	if err != nil {
-		return fmt.Errorf("cannot reach %s: %w", runner.Address(), err)
-	}
-	conn.SetDeadline(time.Now().Add(45 * time.Second))
-
-	sshConn, chans, reqs, err := ssh.NewClientConn(conn, runner.Address(), clientCfg)
-	if err != nil {
-		conn.Close()
-		return fmt.Errorf("login as %s failed: %w", cfg.Server.SSHUser, err)
-	}
-	client := ssh.NewClient(sshConn, chans, reqs)
-	defer client.Close()
-	conn.SetDeadline(time.Time{})
-
-	session, err := client.NewSession()
-	if err != nil {
-		return err
-	}
-	defer session.Close()
-
-	// The key is only appended when it is not already there, so running this
-	// twice does not pile up duplicate lines.
 	command := fmt.Sprintf(
 		"set -e; mkdir -p ~/.ssh; chmod 700 ~/.ssh; touch ~/.ssh/authorized_keys; "+
 			"chmod 600 ~/.ssh/authorized_keys; "+
-			"grep -qF '%s' ~/.ssh/authorized_keys || printf '%%s\\n' '%s' >> ~/.ssh/authorized_keys",
-		shellSafe(strings.Fields(entry)[len(strings.Fields(entry))-2]), shellSafe(entry))
+			"grep -qF %s ~/.ssh/authorized_keys || printf '%%s\\n' %s >> ~/.ssh/authorized_keys",
+		shellQuote(keyBody), shellQuote(entry))
 
-	if out, err := session.CombinedOutput(command); err != nil {
-		return fmt.Errorf("cannot write authorized_keys: %w: %s", err, sanitizeForLog(string(out), 200))
+	if out, err := s.Run(command); err != nil {
+		return fmt.Errorf("cannot write authorized_keys: %w: %s", err, sanitizeForLog(out, 200))
 	}
 	return nil
 }

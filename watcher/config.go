@@ -22,6 +22,7 @@ type Config struct {
 	Transfer TransferConfig `yaml:"transfer"`
 	Timeouts TimeoutsConfig `yaml:"timeouts"`
 	Limits   LimitsConfig   `yaml:"limits"`
+	Sleep    SleepConfig    `yaml:"sleep"`
 	MOTD     MOTDConfig     `yaml:"motd"`
 
 	// Path this was read from, assets are resolved next to it.
@@ -43,6 +44,21 @@ type ServerConfig struct {
 	SSHStrictHostKey string `yaml:"ssh_strict_host_key"`
 	SSHKnownHosts    string `yaml:"ssh_known_hosts"`
 	ContainerName    string `yaml:"container_name"`
+	// True once setup-ssh installed the helper script. The watcher then sends
+	// verbs instead of whole commands, see remotehelper.go.
+	RemoteHelper bool `yaml:"remote_helper"`
+}
+
+// Putting the server PC back to sleep once nobody is playing. Off by default,
+// it needs the helper script and a sudoers line that setup-ssh installs.
+type SleepConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	IdleAfter    int    `yaml:"idle_after"`
+	ConfirmDelay int    `yaml:"confirm_delay"`
+	GracePeriod  int    `yaml:"grace_period"`
+	PollInterval int    `yaml:"poll_interval"`
+	Action       string `yaml:"action"`
+	Command      string `yaml:"command"`
 }
 
 type WoLConfig struct {
@@ -128,6 +144,8 @@ const (
 
 var strictHostKeyModes = []string{"accept-new", "yes", "no"}
 
+var sleepActions = []string{"suspend", "hibernate", "shutdown", "custom"}
+
 var containerNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
 func defaultConfig() Config {
@@ -142,6 +160,10 @@ func defaultConfig() Config {
 		DuckDNS:  DuckDNSConfig{UpdateIntervalHours: 6},
 		Transfer: TransferConfig{Port: 25566},
 		Timeouts: TimeoutsConfig{BootTimeout: 60, MCReadyTimeout: 30},
+		Sleep: SleepConfig{
+			Enabled: false, IdleAfter: 900, ConfirmDelay: 60,
+			GracePeriod: 900, PollInterval: 300, Action: "suspend",
+		},
 		Limits: LimitsConfig{
 			BootCooldown: 10, BootFailureBackoff: 60, BootMaxBackoff: 900,
 			MaxLogins: 0, MaxPerIP: 8,
@@ -314,6 +336,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("wol.mode is %q, it has to be 'broadcast' or 'unicast'", c.WoL.Mode)
 	}
 
+	if err := c.validateSleep(); err != nil {
+		return err
+	}
+
 	if c.Limits.MaxLogins < 0 {
 		return fmt.Errorf("limits.max_logins is %d, use 0 to take the limit from the server", c.Limits.MaxLogins)
 	}
@@ -377,6 +403,39 @@ func (c *Config) Validate() error {
 	} {
 		if !json.Valid([]byte(m.value)) {
 			return fmt.Errorf("%s is not valid JSON, it has to look like %s", m.name, defaultMOTDSleeping)
+		}
+	}
+	return nil
+}
+
+func (c *Config) validateSleep() error {
+	if !c.Sleep.Enabled {
+		return nil
+	}
+	if !c.Server.RemoteHelper {
+		return fmt.Errorf("sleep.enabled is true but server.remote_helper is false, " +
+			"run 'mc-wol-proxy setup-ssh' to install the helper the watcher needs to send the PC to sleep")
+	}
+	c.Sleep.Action = strings.ToLower(strings.TrimSpace(c.Sleep.Action))
+	if !contains(sleepActions, c.Sleep.Action) {
+		return fmt.Errorf("sleep.action is %q, it has to be one of %s",
+			c.Sleep.Action, strings.Join(sleepActions, ", "))
+	}
+	if c.Sleep.Action == "custom" && strings.TrimSpace(c.Sleep.Command) == "" {
+		return fmt.Errorf("sleep.action is 'custom' but sleep.command is empty, put the command to run there")
+	}
+	for _, f := range []struct {
+		name  string
+		value *int
+		min   int
+	}{
+		{"sleep.idle_after", &c.Sleep.IdleAfter, 60},
+		{"sleep.confirm_delay", &c.Sleep.ConfirmDelay, 10},
+		{"sleep.grace_period", &c.Sleep.GracePeriod, 60},
+		{"sleep.poll_interval", &c.Sleep.PollInterval, 30},
+	} {
+		if *f.value < f.min {
+			return fmt.Errorf("%s is %d, it has to be at least %d", f.name, *f.value, f.min)
 		}
 	}
 	return nil

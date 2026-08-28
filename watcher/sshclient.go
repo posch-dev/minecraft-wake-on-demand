@@ -233,13 +233,26 @@ func (r *SSHRunner) Run(ctx context.Context, command string) (string, error) {
 	}
 }
 
+// With the helper installed the watcher sends a bare verb and the script on the
+// server decides what it means. Without it the whole command goes over the wire,
+// which is what a plain key and the older forced command expect.
+func (r *SSHRunner) RunVerb(ctx context.Context, verb string) (string, error) {
+	if r.cfg.Server.RemoteHelper {
+		return r.Run(ctx, verb)
+	}
+	command, err := directCommand(r.cfg, verb)
+	if err != nil {
+		return "", err
+	}
+	return r.Run(ctx, command)
+}
+
 // A restricted key may ignore the command entirely, which is the recommended
 // setup, so an empty response is success as long as the exit status is zero.
 func (r *SSHRunner) StartContainer(ctx context.Context) error {
-	command := "docker start " + r.cfg.Server.ContainerName
-	log.Infof("Starting container via SSH: %s", command)
+	log.Infof("Starting container %s via SSH", r.cfg.Server.ContainerName)
 
-	out, err := r.Run(ctx, command)
+	out, err := r.RunVerb(ctx, remoteVerbStart)
 	if err != nil {
 		if out != "" {
 			return fmt.Errorf("%w: %s", err, sanitizeForLog(out, 200))
@@ -247,5 +260,20 @@ func (r *SSHRunner) StartContainer(ctx context.Context) error {
 		return err
 	}
 	log.Infof("Container started successfully")
+	return nil
+}
+
+// Used before a hibernate or shutdown so the world is written out. Suspend does
+// not need it, the process simply resumes.
+func (r *SSHRunner) StopContainer(ctx context.Context) error {
+	log.Infof("Stopping container %s via SSH", r.cfg.Server.ContainerName)
+
+	out, err := r.RunVerb(ctx, remoteVerbStop)
+	if err != nil {
+		if out != "" {
+			return fmt.Errorf("%w: %s", err, sanitizeForLog(out, 200))
+		}
+		return err
+	}
 	return nil
 }
