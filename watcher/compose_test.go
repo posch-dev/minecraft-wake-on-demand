@@ -393,3 +393,19 @@ func TestGeneratedComposeAcceptsTransfers(t *testing.T) {
 		t.Errorf("the generated file does not accept transfers:\n%s", body)
 	}
 }
+
+// Signed chat lets the client hold messages back and offer them for reporting,
+// which is not what a server among friends is for.
+func TestGeneratedComposeLeavesChatUnsigned(t *testing.T) {
+	body, err := newComposeFile(testSpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, `ENFORCE_SECURE_PROFILE: "FALSE"`) {
+		t.Errorf("chat is still signed:\n%s", body)
+	}
+	// Accounts still have to be real, the two are unrelated.
+	if !strings.Contains(body, `ONLINE_MODE: "TRUE"`) {
+		t.Errorf("online mode was turned off with it:\n%s", body)
+	}
+}
