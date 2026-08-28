@@ -235,6 +235,8 @@ Everything below is optional and goes in `watcher/assets/`. Ready to copy exampl
 
 A file beats the matching `motd.*` entry in `config.yml`, which beats the built-in default. The `-live` files are the ones that let you set the MOTD and the icon in one place instead of configuring them on the Minecraft server, and leaving them out keeps the server's own, which is the default.
 
+`mc-wol-proxy get-server-icon` copies the icon your running Minecraft server already serves into `assets/server-icon.png`, so you do not have to find the file yourself. `learn-server-icon` is the same command. The server has to be awake for it, and anything that was there is kept as `.bak`.
+
 Icons have to be exactly 64x64 and under 64 kB. Anything else is skipped with a line in the log, because clients drop the whole server list entry over a wrongly sized icon.
 
 Assets are read fresh when they change, so editing one takes effect without restarting the watcher.

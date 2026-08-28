@@ -25,7 +25,7 @@ func main() {
 	switch command {
 	case "", "run":
 		os.Exit(runProxy())
-	case "check", "init", "setup-ssh", "config", "edit", "settings", "update":
+	case "check", "init", "setup-ssh", "config", "edit", "settings", "update", "get-server-icon", "learn-server-icon":
 		// These print a laid out report, so log lines go to stderr instead of
 		// interleaving with it.
 		log.out = os.Stderr
@@ -38,6 +38,8 @@ func main() {
 			os.Exit(runSetupSSH())
 		case "update":
 			os.Exit(runUpdate())
+		case "get-server-icon", "learn-server-icon":
+			os.Exit(runGetServerIcon())
 		default:
 			os.Exit(runConfigEdit())
 		}
@@ -62,6 +64,8 @@ Usage:
   mc-wol-proxy setup-ssh    create the SSH key and install it on the server
   mc-wol-proxy check        test the setup and say what is missing
   mc-wol-proxy update       install a newer release, after asking
+  mc-wol-proxy get-server-icon
+                            copy the running server's icon into assets/
   mc-wol-proxy version      print the version
   mc-wol-proxy help         print this text
 

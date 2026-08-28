@@ -414,3 +414,38 @@ func statusBody(t *testing.T, frame []byte) []byte {
 	}
 	return body
 }
+
+// Same fake, but the status response carries a favicon.
+func startFakeMCServerWithIcon(t *testing.T, favicon string) *fakeMCServer {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { listener.Close() })
+
+	_, portString, _ := net.SplitHostPort(listener.Addr().String())
+	port, _ := strconv.Atoi(portString)
+	server := &fakeMCServer{port: port}
+
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				conn.SetDeadline(time.Now().Add(10 * time.Second))
+				buf := make([]byte, 4096)
+				if _, err := conn.Read(buf); err != nil {
+					return
+				}
+				response, _ := makeStatusResponse(defaultMOTDSleeping, 20, 0, favicon, "1.21.4", 769)
+				conn.Write(response)
+				conn.Read(buf)
+			}()
+		}
+	}()
+	return server
+}

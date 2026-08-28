@@ -53,6 +53,11 @@ notes, so a version has to be listed here before it is tagged.
   common reason this project appears to do nothing at all.
 - `server.ip` accepts a hostname as well as an IP now. It has to resolve, since
   the MAC lookup and unicast WoL need an address.
+- `mc-wol-proxy get-server-icon`, also spelled `learn-server-icon`, copies the
+  icon a running server already serves into `assets/server-icon.png`. It is a
+  command and not something the proxy picks up on its own, because answering an
+  unauthenticated status ping must never write to disk. An icon that was already
+  there is kept as `.bak`.
 - The watcher brings its own server list icon. Three blue Z that grow, with the
   largest turning into a red exclamation mark while the PC boots. They ship
   inside the binary, so a fresh install shows them without any files being put
