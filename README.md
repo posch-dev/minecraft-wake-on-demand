@@ -46,7 +46,7 @@ Show MOTD     Send WoL packet
 
 - Write down the **local IP** and **MAC address** of the PC.
 
-**Nothing in this project ever sends the server PC to sleep. The watcher only wakes it up.** Putting it back to sleep is your job, either through the operating system's power settings or with a small script on a timer, and the Minecraft container pauses itself once the last player leaves so the machine really does go idle.
+The watcher can also put the PC back to sleep once nobody is playing, see [Auto-sleep](#auto-sleep) below. It is off until you turn it on, and the Minecraft container pauses itself once the last player leaves either way, so the machine really does go idle.
 
 ### 2. Get a DuckDNS subdomain (recommended)
 
@@ -224,6 +224,29 @@ You can customize what players see in their server list when the server is sleep
 | `server-icon.png` | 64x64 PNG for the server list |
 
 These are read fresh on every request, so a change takes effect without restarting the watcher.
+
+### Auto-sleep
+
+The watcher can send the server PC back to sleep once nobody is playing. It is off by default. Turn it on in `mc-wol-proxy config`, or set `sleep.enabled: true` after `setup-ssh` has installed the helper script on the server.
+
+The operating system cannot do this for you, which is why it lives here. Windows counts user input and power requests when it decides to sleep, and a running Java process issues neither, so it would suspend in the middle of a game. Linux `logind` counts login sessions, which on a headless box means either always idle or never. Whether anyone is playing is the one fact only the watcher knows.
+
+How it decides:
+
+1. In proxy mode every session runs through the watcher, so counting them is free and shows a join the moment it happens. In transfer mode the client reconnects past the watcher, so there is nothing to count and it polls over SSH instead.
+2. The counter only decides whether the server is worth asking. Before anything happens the watcher asks the server itself how many players are online.
+3. Nobody online means it waits `sleep.confirm_delay` seconds and asks once more. Someone joining in that window cancels it.
+4. An answer it cannot read counts as busy, never as empty. Leaving the machine running an hour longer is better than suspending it under someone.
+
+| Setting | Default | What it does |
+|---------|---------|--------------|
+| `sleep.action` | `suspend` | `suspend`, `hibernate`, `shutdown` or `custom` |
+| `sleep.idle_after` | 900 | seconds without players before sleeping is considered |
+| `sleep.confirm_delay` | 60 | seconds to wait before the confirming check |
+| `sleep.grace_period` | 900 | seconds after a wake in which sleeping is never allowed |
+| `sleep.poll_interval` | 300 | seconds between checks, transfer mode only |
+
+`hibernate` and `shutdown` stop the container first so the world is written out. `suspend` does not need to, the process simply resumes. Waking from a full shutdown needs Wake-on-LAN enabled in the BIOS for the powered-off state, which not every board supports.
 
 ### WoL modes
 

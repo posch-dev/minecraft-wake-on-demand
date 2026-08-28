@@ -99,6 +99,14 @@ func runProxy() int {
 		}()
 	}
 
+	if cfg.Sleep.Enabled {
+		tasks.Add(1)
+		go func() {
+			defer tasks.Done()
+			runSleepMonitor(ctx, cfg, waker)
+		}()
+	}
+
 	// Unblocks the Accept call below when a signal arrives.
 	go func() {
 		<-ctx.Done()
@@ -135,6 +143,9 @@ func logStartup(cfg *Config) {
 	log.Infof("Server: %s (%s) port %d, container '%s'",
 		cfg.Server.IP, cfg.Server.MAC, cfg.Server.MCPort, cfg.Server.ContainerName)
 	log.Infof("WoL mode: %s", cfg.WoL.Mode)
+	if cfg.Sleep.Enabled {
+		log.Infof("Auto-sleep: %s after %ds without players", cfg.Sleep.Action, cfg.Sleep.IdleAfter)
+	}
 
 	if !cfg.Transfer.Enabled {
 		log.Infof("Proxy mode: full connection forwarding")

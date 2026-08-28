@@ -217,6 +217,11 @@ func (h *Handler) handleLogin(ctx context.Context, conn net.Conn, initial []byte
 	defer h.loginConnections.Release(addr)
 	releaseStatusSlot()
 
+	// The sleep monitor reads this instead of polling the server, which is what
+	// keeps it from fighting the container's own autopause.
+	h.waker.SessionStarted()
+	defer h.waker.SessionEnded()
+
 	if !h.waker.MCPortReachable(ctx, false) {
 		if !h.waker.FullBoot(ctx) {
 			log.Infof("Server not ready for %s, sending wait message", addr)

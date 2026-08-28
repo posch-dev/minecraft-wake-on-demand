@@ -19,6 +19,14 @@ notes, so a version has to be listed here before it is tagged.
   not locked out. A rejected login gets `motd.server_full`.
 - `motd.server_full`, shown to a player who arrives when the login pool is
   full.
+- The watcher can put the server PC back to sleep once nobody is playing,
+  closing issue #6. Set `sleep.enabled: true` after `setup-ssh` installed the
+  helper. In proxy mode it counts the sessions it forwards, which costs nothing
+  and does not touch the Minecraft port, so it never fights the container's own
+  autopause. In transfer mode, where sessions skip the watcher entirely, it
+  polls over SSH instead. The counter only decides whether the server is worth
+  asking, the answer from the server always decides whether it sleeps, and an
+  answer that cannot be read counts as busy rather than as empty.
 - `setup-ssh` can now install `mc-wol-remote` on the server, a helper script
   owned by root that accepts only the fixed words `hello`, `start`, `stop`,
   `status`, `players` and `sleep` and refuses everything else. The key in
