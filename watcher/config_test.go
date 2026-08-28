@@ -191,9 +191,8 @@ func motdLines(t *testing.T, raw string) []string {
 	return strings.Split(text, "\n")
 }
 
-// config.example.yml is the file people copy, so it has to agree with the
-// built in defaults. Otherwise the example quietly documents something the
-// watcher does not do.
+// The example is what people copy, so it has to agree with the defaults.
+// Otherwise it documents something the watcher does not do.
 func TestExampleConfigMatchesTheDefaults(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "config.example.yml"))
 	if err != nil {

@@ -28,9 +28,8 @@ func setupSSHConfig(t *testing.T, server *testSSHServer, keyPath string) (*SSHRu
 	return runner, knownHosts
 }
 
-// The watcher learns an unknown key silently under accept-new. setup-ssh must
-// not, because a person is sitting in front of it and the docs promise a
-// fingerprint to confirm.
+// accept-new lets the watcher learn a key silently. setup-ssh must not,
+// somebody is sitting in front of it and was promised a fingerprint.
 func TestSetupSSHAsksBeforeTrustingAnUnknownHost(t *testing.T) {
 	hostKey := newHostKey(t)
 	dir := t.TempDir()

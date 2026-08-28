@@ -1,8 +1,7 @@
 name: dependabot auto-merge
 
-# pull_request_target runs with a writable token, which pull_request does not
-# for Dependabot. In exchange this workflow must never check out or execute the
-# code from the pull request, so it does neither.
+# pull_request_target has a writable token, which pull_request lacks here.
+# In exchange it must never check out or run the pull request's code.
 on: pull_request_target
 
 permissions:
@@ -18,9 +17,8 @@ jobs:
         id: meta
         uses: dependabot/fetch-metadata@v2
 
-      # Patch only. A minor or major bump can change behaviour, and the two
-      # libraries that matter here, x/crypto and x/net, are compiled into the
-      # binary, so those get looked at by hand.
+      # Patch only. x/crypto and x/net are compiled in, so anything
+      # bigger gets looked at by hand.
       - name: Enable auto-merge for patch updates
         if: steps.meta.outputs.update-type == 'version-update:semver-patch'
         run: gh pr merge --auto --squash "$PR_URL"

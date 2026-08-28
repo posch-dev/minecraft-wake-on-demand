@@ -55,8 +55,7 @@ jobs:
       - uses: actions/checkout@v7
 
       # install.sh runs as root on other people's machines, so it gets linted.
-      # The version is pinned because the checks differ between releases and a
-      # distribution upgrade should not turn this red on its own.
+      # Pinned, a distribution upgrade should not turn this red on its own.
       - name: ShellCheck
         env:
           SHELLCHECK_VERSION: v0.11.0

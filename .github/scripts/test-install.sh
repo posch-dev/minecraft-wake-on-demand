@@ -1,7 +1,6 @@
 #!/bin/bash
-# Runs watcher/install.sh against a fake release served over local HTTP and
-# checks what it produced, then the refusal paths, then the uninstall.
-# Needs root and systemd. Set TEST_BINARY to the linux binary to publish.
+# Runs install.sh against a fake release over local HTTP, then the refusal
+# paths, then the uninstall. Needs root and systemd, TEST_BINARY to publish.
 set -u
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

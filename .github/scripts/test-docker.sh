@@ -1,6 +1,6 @@
 #!/bin/bash
-# Builds the watcher image and checks that it starts, loads a config and
-# answers a real Minecraft status ping. Needs docker.
+# Builds the image and checks it starts, loads a config and answers a real
+# status ping. Needs docker.
 set -u
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
