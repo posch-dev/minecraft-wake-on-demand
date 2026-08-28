@@ -153,22 +153,20 @@ fi
 
 chmod 755 "$BINARY"
 
-# never overwrite existing config
-if [ ! -f "$INSTALL_DIR/config.yml" ]; then
-    if [ -f "$REPO_DIR/config.yml" ]; then
-        SOURCE_CONFIG="$REPO_DIR/config.yml"
-    else
-        SOURCE_CONFIG="$REPO_DIR/config.example.yml"
-    fi
-    cp "$SOURCE_CONFIG" "$INSTALL_DIR/config.yml"
+# never overwrite existing config. The example is not one: putting it here
+# would make 'init' refuse to write the real thing.
+if [ -f "$INSTALL_DIR/config.yml" ]; then
+    echo "Config already exists at $INSTALL_DIR/config.yml (not overwritten)"
+    NEEDS_CONFIG=0
+elif [ -f "$REPO_DIR/config.yml" ]; then
+    cp "$REPO_DIR/config.yml" "$INSTALL_DIR/config.yml"
     # The config holds the DuckDNS token, so only the service user may read it.
     chown "$RUN_USER:$RUN_USER" "$INSTALL_DIR/config.yml"
     chmod 600 "$INSTALL_DIR/config.yml"
-    echo "Copied $(basename "$SOURCE_CONFIG") to $INSTALL_DIR/config.yml"
-    NEEDS_CONFIG=1
-else
-    echo "Config already exists at $INSTALL_DIR/config.yml (not overwritten)"
+    echo "Copied config.yml from the repository to $INSTALL_DIR/config.yml"
     NEEDS_CONFIG=0
+else
+    NEEDS_CONFIG=1
 fi
 
 # assets/ starts empty, the icons and MOTD live in the binary until someone
@@ -215,11 +213,12 @@ echo "Installed systemd service (running as $RUN_USER)"
 if [ "$NEEDS_CONFIG" = "1" ]; then
     echo ""
     echo "=== Almost done ==="
-    echo "There is no config yet. Run these three, in this order:"
+    echo "There is no config yet. Run these three as $RUN_USER, in this order,"
+    echo "without sudo, so the SSH key lands in that account and not root's:"
     echo ""
-    echo "  sudo MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY init"
-    echo "  sudo MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY setup-ssh"
-    echo "  sudo MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY check"
+    echo "  MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY init"
+    echo "  MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY setup-ssh"
+    echo "  MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY check"
     echo ""
     echo "Then start it with: sudo systemctl enable --now mcwod"
     exit 0
@@ -232,5 +231,5 @@ echo ""
 echo "=== Installation complete ==="
 systemctl status mcwod --no-pager || true
 echo ""
-echo "Check the setup: sudo MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY check"
+echo "Check the setup: MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY check"
 echo "View logs:       journalctl -u mcwod -f"
