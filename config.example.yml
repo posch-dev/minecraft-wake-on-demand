@@ -8,11 +8,11 @@ server:
   ip: "192.168.1.100"                 # local IP (static or DHCP reserved)
   mc_port: 25565
   ssh_user: "your-username"
-  ssh_key_path: ""                    # empty = ~/.ssh/mc-wol-proxy, its own key
+  ssh_key_path: ""                    # empty = ~/.ssh/mcwod, its own key
   ssh_strict_host_key: "accept-new"   # "accept-new" | "yes" | "no", see SECURITY.md
   ssh_known_hosts: ""                 # empty = ssh default (~/.ssh/known_hosts)
   container_name: "minecraft"
-  remote_helper: false                # true once setup-ssh installed mc-wol-remote on the server
+  remote_helper: false                # true once setup-ssh installed mcwod-remote on the server
 
 wol:
   mode: "broadcast"                   # "broadcast" (recommended) or "unicast"

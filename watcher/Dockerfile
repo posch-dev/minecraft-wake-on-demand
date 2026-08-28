@@ -11,18 +11,18 @@ ARG VERSION=docker
 RUN CGO_ENABLED=0 go build \
     -trimpath \
     -ldflags="-s -w -X main.version=${VERSION}" \
-    -o /out/mc-wol-proxy .
+    -o /out/mcwod .
 
 FROM scratch
 
 # DuckDNS is reached over HTTPS, which needs a trust store.
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build /out/mc-wol-proxy /mc-wol-proxy
+COPY --from=build /out/mcwod /mcwod
 
-ENV MC_WOL_CONFIG=/config.yml
+ENV MCWOD_CONFIG=/config.yml
 ENV HOME=/
 
 EXPOSE 25565
 
-ENTRYPOINT ["/mc-wol-proxy"]
+ENTRYPOINT ["/mcwod"]
 CMD ["run"]

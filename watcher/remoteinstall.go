@@ -18,7 +18,7 @@ func installRemoteHelperUnix(s *ServerSession, cfg *Config) error {
 	}
 
 	script := remoteHelperScriptUnix(cfg.Server.ContainerName, sleepCommand)
-	staged, err := stageFile(s, "mc-wol-remote", script)
+	staged, err := stageFile(s, "mcwod-remote", script)
 	if err != nil {
 		return err
 	}
@@ -31,7 +31,7 @@ func installRemoteHelperUnix(s *ServerSession, cfg *Config) error {
 	needsSudoers := cfg.Sleep.Action != "" && cfg.Sleep.Action != "custom"
 	if needsSudoers {
 		line := sudoersLine(cfg.Server.SSHUser, s.platform.SystemctlPath, cfg.Sleep.Action)
-		stagedSudoers, err := stageFile(s, "mc-wol-sudoers", line)
+		stagedSudoers, err := stageFile(s, "mcwod-sudoers", line)
 		if err != nil {
 			return err
 		}

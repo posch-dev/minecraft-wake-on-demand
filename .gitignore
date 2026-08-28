@@ -11,7 +11,7 @@ watcher/state/
 server/data/
 
 # compiled watcher binaries
-watcher/mc-wol-proxy
-watcher/mc-wol-proxy.exe
+watcher/mcwod
+watcher/mcwod.exe
 watcher/watcher.exe
 dist/

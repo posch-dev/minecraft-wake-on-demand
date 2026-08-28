@@ -50,7 +50,7 @@ func TestWakeOnLANUnitArmsTheCardOnEveryBoot(t *testing.T) {
 			t.Errorf("the unit is missing %q:\n%s", want, unit)
 		}
 	}
-	if got := wakeOnLANUnitPath("enp3s0"); got != "/etc/systemd/system/mc-wol-arm@enp3s0.service" {
+	if got := wakeOnLANUnitPath("enp3s0"); got != "/etc/systemd/system/mcwod-arm@enp3s0.service" {
 		t.Errorf("unit path = %q", got)
 	}
 }

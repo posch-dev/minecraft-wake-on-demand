@@ -66,24 +66,24 @@ jobs:
               -o "../dist/$4" .
             echo "built $4"
           }
-          build linux   amd64 ""  mc-wol-proxy_linux_amd64
-          build linux   arm64 ""  mc-wol-proxy_linux_arm64
-          build linux   arm   7   mc-wol-proxy_linux_armv7
-          build linux   arm   6   mc-wol-proxy_linux_armv6
-          build windows amd64 ""  mc-wol-proxy_windows_amd64.exe
+          build linux   amd64 ""  mcwod_linux_amd64
+          build linux   arm64 ""  mcwod_linux_arm64
+          build linux   arm   7   mcwod_linux_armv7
+          build linux   arm   6   mcwod_linux_armv6
+          build windows amd64 ""  mcwod_windows_amd64.exe
 
       - name: Check the binaries are what they claim
         run: |
           set -eu
-          chmod +x dist/mc-wol-proxy_linux_amd64
-          got="$(./dist/mc-wol-proxy_linux_amd64 version)"
-          want="mc-wol-proxy ${{ steps.version.outputs.tag }}"
+          chmod +x dist/mcwod_linux_amd64
+          got="$(./dist/mcwod_linux_amd64 version)"
+          want="mcwod ${{ steps.version.outputs.tag }}"
           echo "  $got"
           [ "$got" = "$want" ] || { echo "expected '$want'"; exit 1; }
-          for f in dist/mc-wol-proxy_linux_arm64 dist/mc-wol-proxy_linux_armv7 dist/mc-wol-proxy_linux_armv6; do
+          for f in dist/mcwod_linux_arm64 dist/mcwod_linux_armv7 dist/mcwod_linux_armv6; do
             file "$f" | grep -qi arm || { echo "$f is not an arm binary"; exit 1; }
           done
-          file dist/mc-wol-proxy_windows_amd64.exe | grep -qi "PE32" \
+          file dist/mcwod_windows_amd64.exe | grep -qi "PE32" \
             || { echo "the windows build is not a PE executable"; exit 1; }
           echo "all five binaries look right"
 
@@ -123,7 +123,7 @@ jobs:
         if: steps.version.outputs.dry_run == 'false'
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: dist/mc-wol-proxy_*
+          subject-path: dist/mcwod_*
 
       - name: Publish
         if: steps.version.outputs.dry_run == 'false'

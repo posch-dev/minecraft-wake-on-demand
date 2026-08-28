@@ -91,7 +91,7 @@ func TestSetupSSHDoesNotAskForAKnownHost(t *testing.T) {
 	}
 	defer session.Close()
 
-	if err := appendAuthorizedKey(session, "ssh-ed25519 AAAAtest mc-wol-proxy"); err != nil {
+	if err := appendAuthorizedKey(session, "ssh-ed25519 AAAAtest mcwod"); err != nil {
 		t.Errorf("appending the key should work over an open session: %v", err)
 	}
 }

@@ -19,7 +19,7 @@ notes, so a version has to be listed here before it is tagged.
   not locked out. A rejected login gets `motd.server_full`.
 - `motd.server_full`, shown to a player who arrives when the login pool is
   full.
-- `mc-wol-proxy update` installs a newer release. It shows what changed, asks
+- `mcwod update` installs a newer release. It shows what changed, asks
   before doing anything, verifies the download against the published
   `checksums.txt` and refuses to install on a mismatch or a missing entry, and
   will not follow a redirect off the release host. The new binary is staged
@@ -31,7 +31,7 @@ notes, so a version has to be listed here before it is tagged.
   two second timeout, so an offline machine barely notices. `update.check:
   false` turns it off, and the README says why you might want to: it is a
   request to GitHub, which tells GitHub the machine's IP.
-- `mc-wol-proxy config`, a menu for changing an existing setup, also reachable
+- `mcwod config`, a menu for changing an existing setup, also reachable
   as `edit` and `settings`. Until now `init` refused to run once `config.yml`
   existed, so every later change meant editing YAML by hand. It writes through
   the parsed document rather than re-marshalling the config, so the comments
@@ -67,19 +67,19 @@ notes, so a version has to be listed here before it is tagged.
   empty whitelist would lock out the owner too, so it is never written.
 - A compose file that is already there gets the two services added to it
   instead. Other services, the top level keys and every comment stay exactly as
-  they were, a copy is kept as `docker-compose.yml.mcwol-bak-<time>` first,
+  they were, a copy is kept as `docker-compose.yml.mcwod-bak-<time>` first,
   `docker compose config` has to accept the result before it counts, and a
   service name that already exists is refused rather than overwritten. An
   existing `.env` gets three appended lines and nothing else, under
-  `MC_WOL_RCON_PASSWORD` so a foreign `RCON_PASSWORD` cannot be shadowed.
-- `mc-wol-proxy restore-compose` puts back a compose file the watcher replaced.
+  `MCWOD_RCON_PASSWORD` so a foreign `RCON_PASSWORD` cannot be shadowed.
+- `mcwod restore-compose` puts back a compose file the watcher replaced.
   The version it replaces is kept as a backup on the way, so the restore is
   itself undoable. It uses the password login, not the restricted key, which
   keeps that key at its six verbs.
 - The Docker warning now says what is actually different per platform. On
   Windows it points out that Docker Desktop only runs while a user is logged in,
   so a resumed PC can come back without its container.
-- `mc-wol-proxy get-server-icon`, also spelled `learn-server-icon`, copies the
+- `mcwod get-server-icon`, also spelled `learn-server-icon`, copies the
   icon a running server already serves into `assets/server-icon.png`. It is a
   command and not something the proxy picks up on its own, because answering an
   unauthenticated status ping must never write to disk. An icon that was already
@@ -107,7 +107,7 @@ notes, so a version has to be listed here before it is tagged.
   polls over SSH instead. The counter only decides whether the server is worth
   asking, the answer from the server always decides whether it sleeps, and an
   answer that cannot be read counts as busy rather than as empty.
-- `setup-ssh` can now install `mc-wol-remote` on the server, a helper script
+- `setup-ssh` can now install `mcwod-remote` on the server, a helper script
   owned by root that accepts only the fixed words `hello`, `start`, `stop`,
   `status`, `players` and `sleep` and refuses everything else. The key in
   `authorized_keys` is bound to that script, so the watcher can stop the
@@ -139,13 +139,25 @@ notes, so a version has to be listed here before it is tagged.
   list, keeping port scanners and internet crawlers from getting any response.
   Auto-populated from the DuckDNS domain when DuckDNS is enabled.
 
+### Changed
+
+- **The tool is called `mcwod` now.** The binary, the release assets, the
+  install directory `/opt/mcwod`, the systemd unit, the helper on the server,
+  its sudoers file, the Wake-on-LAN unit, the SSH key and the environment
+  variables all follow. `MC_WOL_*` still works and warns once, so a mirror or a
+  script that sets them keeps running. The repository and the Go module path
+  are unchanged.
+- `install.sh` stops and disables an `mc-wol-proxy` service if it finds one and
+  says where the old config is. Two watchers on port 25565 would have produced
+  failures that look random rather than one clear message.
+
 ### Fixed
 
 - `duckdns.domain` takes the address either way round. `eliahmc` and
   `eliahmc.duckdns.org` both work, and the suffix is trimmed on load. It used to
   be a hard startup error, which is an odd thing to refuse given that the long
   form is what the DuckDNS page shows you.
-- Running `mc-wol-proxy` with no argument at a terminal prints the help instead
+- Running `mcwod` with no argument at a terminal prints the help instead
   of silently starting the proxy. Started as a service, where nothing is
   attached, it still runs the proxy, so existing installations are unaffected.
   The systemd unit, the Docker image and both Windows starters now say `run`
@@ -155,7 +167,7 @@ notes, so a version has to be listed here before it is tagged.
   and the only symptom was that waking never worked. `init` no longer asks for
   it at all, except when the server turns out to be in a different network,
   where there is nothing local to work it out from.
-- The watcher generates its own SSH key at `~/.ssh/mc-wol-proxy` instead of
+- The watcher generates its own SSH key at `~/.ssh/mcwod` instead of
   reusing `~/.ssh/id_ed25519`. Finding a key already at the default path meant
   adopting it, so an internet facing service ended up holding the key its owner
   logs in with everywhere else. Existing installs keep using the key they have
@@ -204,13 +216,13 @@ keeps working unchanged.
 
 ### Added
 
-- `mc-wol-proxy init` asks for your settings and writes `config.yml`. It finds
+- `mcwod init` asks for your settings and writes `config.yml`. It finds
   the server's MAC address itself by pinging the IP and reading the ARP cache,
   and derives the broadcast address from the same IP.
-- `mc-wol-proxy setup-ssh` creates the key and installs it in `authorized_keys`
+- `mcwod setup-ssh` creates the key and installs it in `authorized_keys`
   over a one time password login, restricted to `docker start` by default. It
   shows the host key fingerprint and asks before trusting it.
-- `mc-wol-proxy check` tests the whole setup and names the step that is broken.
+- `mcwod check` tests the whole setup and names the step that is broken.
 - Release binaries for linux amd64, arm64, armv7 and armv6 and for windows
   amd64, published with a `checksums.txt` and build provenance attestation.
   `install.sh` downloads the right one and refuses to install it unverified.

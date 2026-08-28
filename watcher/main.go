@@ -56,7 +56,7 @@ func main() {
 			os.Exit(runConfigEdit())
 		}
 	case "version", "--version", "-v":
-		fmt.Printf("mc-wol-proxy %s\n", version)
+		fmt.Printf("mcwod %s\n", version)
 	case "help", "--help", "-h":
 		printUsage(os.Stdout)
 	default:
@@ -71,29 +71,29 @@ func attachedToTerminal() bool {
 }
 
 func printUsage(w *os.File) {
-	fmt.Fprint(w, `mc-wol-proxy, Minecraft Wake-on-Demand watcher
+	fmt.Fprint(w, `mcwod, Minecraft Wake-on-Demand watcher
 
 Usage:
-  mc-wol-proxy              a menu, or the watcher itself when run as a service
-  mc-wol-proxy run          start the watcher
-  mc-wol-proxy init         answer a few questions and write config.yml
-  mc-wol-proxy config       change the configuration, guided
-  mc-wol-proxy setup-ssh    create the SSH key and install it on the server
-  mc-wol-proxy check        test the setup and say what is missing
-  mc-wol-proxy update       install a newer release, after asking
-  mc-wol-proxy get-server-icon
+  mcwod              a menu, or the watcher itself when run as a service
+  mcwod run          start the watcher
+  mcwod init         answer a few questions and write config.yml
+  mcwod config       change the configuration, guided
+  mcwod setup-ssh    create the SSH key and install it on the server
+  mcwod check        test the setup and say what is missing
+  mcwod update       install a newer release, after asking
+  mcwod get-server-icon
                             copy the running server's icon into assets/
-  mc-wol-proxy restore-compose
+  mcwod restore-compose
                             put back a docker-compose.yml this tool replaced
-  mc-wol-proxy version      print the version
-  mc-wol-proxy help         print this text
+  mcwod version      print the version
+  mcwod help         print this text
 
 "edit" and "settings" do the same as "config".
 
 Setting up from scratch is init, then setup-ssh, then check. When init sets
 the server up over SSH, setup-ssh is already done.
 
-The config is read from MC_WOL_CONFIG, then config.yml next to the binary
+The config is read from MCWOD_CONFIG, then config.yml next to the binary
 or one directory above it.
 `)
 }

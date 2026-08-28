@@ -152,7 +152,7 @@ const (
 )
 
 const (
-	watcherKeyName = "mc-wol-proxy"
+	watcherKeyName = "mcwod"
 	sharedKeyName  = "id_ed25519"
 )
 
@@ -196,7 +196,7 @@ func defaultConfig() Config {
 // Env var, then repo root, then next to the binary.
 func configSearchPaths() []string {
 	paths := []string{}
-	if env := os.Getenv("MC_WOL_CONFIG"); env != "" {
+	if env := renamedEnv("MCWOD_CONFIG"); env != "" {
 		paths = append(paths, env)
 	}
 	if exe, err := os.Executable(); err == nil {
@@ -432,7 +432,7 @@ func (c *Config) validateSleep() error {
 	}
 	if !c.Server.RemoteHelper {
 		return fmt.Errorf("sleep.enabled is true but server.remote_helper is false, " +
-			"run 'mc-wol-proxy setup-ssh' to install the helper the watcher needs to send the PC to sleep")
+			"run 'mcwod setup-ssh' to install the helper the watcher needs to send the PC to sleep")
 	}
 	c.Sleep.Action = strings.ToLower(strings.TrimSpace(c.Sleep.Action))
 	if !contains(sleepActions, c.Sleep.Action) {
@@ -457,6 +457,20 @@ func (c *Config) validateSleep() error {
 		}
 	}
 	return nil
+}
+
+// The tool was called mc-wol-proxy until 2.1, so its old variables still work.
+// Warned about once, because carrying them forever is how names never die.
+func renamedEnv(key string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	old := strings.Replace(key, "MCWOD_", "MC_WOL_", 1)
+	value := os.Getenv(old)
+	if value != "" {
+		log.Warnf("%s is the old name for %s, it still works but rename it", old, key)
+	}
+	return value
 }
 
 // Both spellings people actually type, so the suffix is neither demanded nor

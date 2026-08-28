@@ -31,7 +31,7 @@ const (
 
 // Answer to the hello verb, so check can tell the helper apart from an older
 // key whose forced command silently runs docker start no matter what we send.
-const remoteHelperMarker = "mc-wol-remote 1"
+const remoteHelperMarker = "mcwod-remote 1"
 
 // The interface carrying the default route is the one the magic packet arrives
 // on, so that is the one worth reporting.
@@ -44,10 +44,14 @@ const wolStatusCommandWindows = `(Get-NetAdapter -Physical | Where-Object Status
 	`Get-NetAdapterPowerManagement | ForEach-Object { if ($_.WakeOnMagicPacket -eq 'Enabled') ` +
 	`{ 'Wake-on: g' } else { 'Wake-on: d' } }) | Select-Object -First 1`
 
+// What the helper answered before the rename, so check can name the reason
+// instead of reporting an answer nobody recognises.
+const legacyHelperMarker = "mc-wol-remote 1"
+
 const (
-	remoteHelperPathUnix    = "/usr/local/bin/mc-wol-remote"
-	remoteHelperPathWindows = `C:\ProgramData\mc-wol-proxy\mc-wol-remote.ps1`
-	sudoersPath             = "/etc/sudoers.d/mc-wol-proxy"
+	remoteHelperPathUnix    = "/usr/local/bin/mcwod-remote"
+	remoteHelperPathWindows = `C:\ProgramData\mcwod\mcwod-remote.ps1`
+	sudoersPath             = "/etc/sudoers.d/mcwod"
 )
 
 // Used when no helper is installed. Sleep is absent, it needs the sudoers line.
@@ -66,7 +70,7 @@ func directCommand(cfg *Config, verb string) (string, error) {
 		return wolStatusCommandUnix, nil
 	case remoteVerbSleep:
 		return "", fmt.Errorf("sending the server PC to sleep needs the helper script, " +
-			"run 'mc-wol-proxy setup-ssh' to install it")
+			"run 'mcwod setup-ssh' to install it")
 	}
 	return "", fmt.Errorf("unknown remote verb %q", verb)
 }
@@ -118,7 +122,7 @@ func sudoersLine(user, systemctlPath, action string) string {
 func remoteHelperScriptUnix(containerName, sleepCommand string) string {
 	var b strings.Builder
 	b.WriteString("#!/bin/sh\n")
-	b.WriteString("# Forced command for the mc-wol-proxy key, installed by 'mc-wol-proxy setup-ssh'.\n")
+	b.WriteString("# Forced command for the mcwod key, installed by 'mcwod setup-ssh'.\n")
 	b.WriteString("# The watcher sends one of the words below and nothing else ever runs, so a\n")
 	b.WriteString("# stolen key cannot do more than what is listed here.\n")
 	b.WriteString("set -eu\n\n")
@@ -134,14 +138,14 @@ func remoteHelperScriptUnix(containerName, sleepCommand string) string {
 		// Unquoted on purpose, the command is several words and has to split.
 		b.WriteString(remoteVerbSleep + ")   exec " + sleepCommand + " ;;\n")
 	}
-	b.WriteString("*)       echo 'mc-wol-remote: refused' >&2; exit 1 ;;\n")
+	b.WriteString("*)       echo 'mcwod-remote: refused' >&2; exit 1 ;;\n")
 	b.WriteString("esac\n")
 	return b.String()
 }
 
 func remoteHelperScriptWindows(containerName, sleepCommand string) string {
 	var b strings.Builder
-	b.WriteString("# Forced command for the mc-wol-proxy key.\n")
+	b.WriteString("# Forced command for the mcwod key.\n")
 	b.WriteString("# The watcher sends one of the words below and nothing else ever runs.\n")
 	b.WriteString("$ErrorActionPreference = 'Stop'\n")
 	b.WriteString("$container = " + powerShellQuote(containerName) + "\n\n")
@@ -155,7 +159,7 @@ func remoteHelperScriptWindows(containerName, sleepCommand string) string {
 	if sleepCommand != "" {
 		b.WriteString("  '" + remoteVerbSleep + "'   { " + sleepCommand + " }\n")
 	}
-	b.WriteString("  default { Write-Error 'mc-wol-remote: refused'; exit 1 }\n")
+	b.WriteString("  default { Write-Error 'mcwod-remote: refused'; exit 1 }\n")
 	b.WriteString("}\n")
 	return b.String()
 }
@@ -164,7 +168,7 @@ func remoteHelperScriptWindows(containerName, sleepCommand string) string {
 // then only do what the forced command allows.
 func authorizedKeyEntry(publicKey, containerName string, restrict bool) string {
 	if !restrict {
-		return publicKey + " mc-wol-proxy"
+		return publicKey + " mcwod"
 	}
 	return forcedCommandEntry(publicKey, "docker start "+containerName)
 }
@@ -180,7 +184,7 @@ func remoteHelperKeyEntryWindows(publicKey string) string {
 
 func forcedCommandEntry(publicKey, command string) string {
 	return fmt.Sprintf("command=%q,no-port-forwarding,no-X11-forwarding,"+
-		"no-agent-forwarding,no-pty %s mc-wol-proxy", command, publicKey)
+		"no-agent-forwarding,no-pty %s mcwod", command, publicKey)
 }
 
 // Single quoted with the one escape sh understands, so a container name can

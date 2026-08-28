@@ -169,7 +169,7 @@ func enableWakeOnLAN(s *ServerSession, iface string) error {
 }
 
 func wakeOnLANUnitName(iface string) string {
-	return "mc-wol-arm@" + iface + ".service"
+	return "mcwod-arm@" + iface + ".service"
 }
 
 func wakeOnLANUnitPath(iface string) string {
@@ -179,7 +179,7 @@ func wakeOnLANUnitPath(iface string) string {
 func wakeOnLANUnit(iface string) string {
 	return strings.Join([]string{
 		"[Unit]",
-		"Description=Arm " + iface + " for Wake-on-LAN, installed by mc-wol-proxy",
+		"Description=Arm " + iface + " for Wake-on-LAN, installed by mcwod",
 		"After=network-online.target",
 		"",
 		"[Service]",

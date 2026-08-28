@@ -3,14 +3,15 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
-SERVICE_FILE="/etc/systemd/system/mc-wol-proxy.service"
+SERVICE_FILE="/etc/systemd/system/mcwod.service"
 
 # Overridable so the install can be pointed at a mirror, and so the installer
 # itself can be tested without publishing a release.
-INSTALL_DIR="${MC_WOL_INSTALL_DIR:-/opt/mc-wol-proxy}"
-REPO="${MC_WOL_REPO:-posch-dev/minecraft-wake-on-demand}"
-API_BASE="${MC_WOL_API_BASE:-https://api.github.com}"
-DOWNLOAD_BASE="${MC_WOL_DOWNLOAD_BASE:-https://github.com}"
+# The tool was called mc-wol-proxy until 2.1, its old variables still work.
+INSTALL_DIR="${MCWOD_INSTALL_DIR:-${MC_WOL_INSTALL_DIR:-/opt/mcwod}}"
+REPO="${MCWOD_REPO:-${MC_WOL_REPO:-posch-dev/minecraft-wake-on-demand}}"
+API_BASE="${MCWOD_API_BASE:-${MC_WOL_API_BASE:-https://api.github.com}}"
+DOWNLOAD_BASE="${MCWOD_DOWNLOAD_BASE:-${MC_WOL_DOWNLOAD_BASE:-https://github.com}}"
 
 if [ "$EUID" -ne 0 ]; then
     echo "Please run as root: sudo ./install.sh"
@@ -24,9 +25,9 @@ if [ "$RUN_USER" = "root" ]; then
 fi
 
 if [ "$1" = "--uninstall" ]; then
-    echo "Stopping and disabling mc-wol-proxy..."
-    systemctl stop mc-wol-proxy 2>/dev/null || true
-    systemctl disable mc-wol-proxy 2>/dev/null || true
+    echo "Stopping and disabling mcwod..."
+    systemctl stop mcwod 2>/dev/null || true
+    systemctl disable mcwod 2>/dev/null || true
 
     if [ -f "$SERVICE_FILE" ]; then
         rm "$SERVICE_FILE"
@@ -38,8 +39,8 @@ if [ "$1" = "--uninstall" ]; then
             read -r -p "Delete config at $INSTALL_DIR/config.yml? [y/N] " confirm
             if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
                 echo "Keeping config. Removing everything else..."
-                rm -f "$INSTALL_DIR/mc-wol-proxy" "$INSTALL_DIR/known_hosts"
-                echo "Removed $INSTALL_DIR/mc-wol-proxy"
+                rm -f "$INSTALL_DIR/mcwod" "$INSTALL_DIR/known_hosts"
+                echo "Removed $INSTALL_DIR/mcwod"
                 # Remove dir only if empty
                 rmdir "$INSTALL_DIR" 2>/dev/null || echo "Directory not empty, kept $INSTALL_DIR"
             else
@@ -73,7 +74,7 @@ esac
 echo "Architecture: $(uname -m) -> $GOARCH"
 
 mkdir -p "$INSTALL_DIR"
-BINARY="$INSTALL_DIR/mc-wol-proxy"
+BINARY="$INSTALL_DIR/mcwod"
 
 if [ "$1" = "--build" ]; then
     if ! command -v go &>/dev/null; then
@@ -110,7 +111,7 @@ else
     fi
     echo "Latest release: $VERSION"
 
-    ASSET="mc-wol-proxy_linux_${GOARCH}"
+    ASSET="mcwod_linux_${GOARCH}"
     BASE="$DOWNLOAD_BASE/$REPO/releases/download/$VERSION"
     TMP="$(mktemp -d)"
     trap 'rm -rf "$TMP"' EXIT
@@ -187,9 +188,24 @@ touch "$INSTALL_DIR/known_hosts"
 chown "$RUN_USER:$RUN_USER" "$INSTALL_DIR/known_hosts"
 chmod 600 "$INSTALL_DIR/known_hosts"
 
+# Two watchers would fight over port 25565 and the failures would look random,
+# so the one this replaces is stopped rather than left running.
+OLD_SERVICE="/etc/systemd/system/mc-wol-proxy.service"
+if [ -f "$OLD_SERVICE" ]; then
+    echo "Found the older mc-wol-proxy service. Stopping it, mcwod replaces it."
+    systemctl stop mc-wol-proxy 2>/dev/null || true
+    systemctl disable mc-wol-proxy 2>/dev/null || true
+    mv "$OLD_SERVICE" "$OLD_SERVICE.replaced-by-mcwod"
+    echo "  Its unit file is kept as $OLD_SERVICE.replaced-by-mcwod"
+    if [ -d /opt/mc-wol-proxy ] && [ "$INSTALL_DIR" != "/opt/mc-wol-proxy" ]; then
+        echo "  Your old config is still in /opt/mc-wol-proxy, copy it over with:"
+        echo "    sudo cp /opt/mc-wol-proxy/config.yml $INSTALL_DIR/config.yml"
+    fi
+fi
+
 # The unit ships with the default paths, so they follow INSTALL_DIR.
-sed -e "s/MC_WOL_USER/$RUN_USER/g" -e "s|/opt/mc-wol-proxy|$INSTALL_DIR|g" \
-    "$SCRIPT_DIR/mc-wol-proxy.service" > "$SERVICE_FILE"
+sed -e "s/MCWOD_USER/$RUN_USER/g" -e "s|/opt/mcwod|$INSTALL_DIR|g" \
+    "$SCRIPT_DIR/mcwod.service" > "$SERVICE_FILE"
 systemctl daemon-reload
 echo "Installed systemd service (running as $RUN_USER)"
 
@@ -198,20 +214,20 @@ if [ "$NEEDS_CONFIG" = "1" ]; then
     echo "=== Almost done ==="
     echo "There is no config yet. Run these three, in this order:"
     echo ""
-    echo "  sudo MC_WOL_CONFIG=$INSTALL_DIR/config.yml $BINARY init"
-    echo "  sudo MC_WOL_CONFIG=$INSTALL_DIR/config.yml $BINARY setup-ssh"
-    echo "  sudo MC_WOL_CONFIG=$INSTALL_DIR/config.yml $BINARY check"
+    echo "  sudo MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY init"
+    echo "  sudo MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY setup-ssh"
+    echo "  sudo MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY check"
     echo ""
-    echo "Then start it with: sudo systemctl enable --now mc-wol-proxy"
+    echo "Then start it with: sudo systemctl enable --now mcwod"
     exit 0
 fi
 
-systemctl enable mc-wol-proxy
-systemctl restart mc-wol-proxy
+systemctl enable mcwod
+systemctl restart mcwod
 
 echo ""
 echo "=== Installation complete ==="
-systemctl status mc-wol-proxy --no-pager || true
+systemctl status mcwod --no-pager || true
 echo ""
-echo "Check the setup: sudo MC_WOL_CONFIG=$INSTALL_DIR/config.yml $BINARY check"
-echo "View logs:       journalctl -u mc-wol-proxy -f"
+echo "Check the setup: sudo MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY check"
+echo "View logs:       journalctl -u mcwod -f"

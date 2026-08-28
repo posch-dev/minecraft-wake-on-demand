@@ -22,7 +22,7 @@ func runConfigEdit() int {
 	cfg, err := LoadConfig()
 	if err != nil {
 		fmt.Printf("Config error: %v\n", err)
-		fmt.Println("\nRun 'mc-wol-proxy init' first to create one.")
+		fmt.Println("\nRun 'mcwod init' first to create one.")
 		return 1
 	}
 	doc, err := loadYAMLDocument(cfg.Path)
@@ -237,7 +237,7 @@ func (e *configEditor) editSleep() {
 	c := e.cfg
 	if !c.Server.RemoteHelper {
 		fmt.Println("\nThe helper script is not installed on the server, so the watcher has no")
-		fmt.Println("way to send the PC to sleep. Run 'mc-wol-proxy setup-ssh' first.")
+		fmt.Println("way to send the PC to sleep. Run 'mcwod setup-ssh' first.")
 		return
 	}
 
@@ -337,7 +337,7 @@ func (e *configEditor) checkForUpdate() {
 	}
 	fmt.Printf("Latest release:    %s\n", release.Tag)
 	if isNewerVersion(release.Tag, version) {
-		fmt.Println("\nInstall it with: sudo mc-wol-proxy update")
+		fmt.Println("\nInstall it with: sudo mcwod update")
 		return
 	}
 	fmt.Println("\nAlready up to date.")
@@ -373,7 +373,7 @@ func (e *configEditor) save() int {
 	defer printUpdateHint(e.cfg)
 	if e.cfg.Sleep.Enabled || e.cfg.Watcher.ListenPort != 0 {
 		fmt.Println("Restart the watcher for the changes to take effect:")
-		fmt.Println("  sudo systemctl restart mc-wol-proxy")
+		fmt.Println("  sudo systemctl restart mcwod")
 	}
 	return 0
 }

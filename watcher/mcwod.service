@@ -5,11 +5,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=MC_WOL_USER
-Group=MC_WOL_USER
-ExecStart=/opt/mc-wol-proxy/mc-wol-proxy run
-Environment=MC_WOL_CONFIG=/opt/mc-wol-proxy/config.yml
-Environment=SERVER_SSH_KNOWN_HOSTS=/opt/mc-wol-proxy/known_hosts
+User=MCWOD_USER
+Group=MCWOD_USER
+ExecStart=/opt/mcwod/mcwod run
+Environment=MCWOD_CONFIG=/opt/mcwod/config.yml
+Environment=SERVER_SSH_KNOWN_HOSTS=/opt/mcwod/known_hosts
 Restart=always
 RestartSec=5
 
@@ -22,7 +22,7 @@ PrivateTmp=true
 ProtectSystem=strict
 # The SSH key lives in the user's home, known_hosts is kept next to the binary.
 ProtectHome=read-only
-ReadWritePaths=/opt/mc-wol-proxy
+ReadWritePaths=/opt/mcwod
 ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true

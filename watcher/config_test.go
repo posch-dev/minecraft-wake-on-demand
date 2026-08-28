@@ -27,7 +27,7 @@ func loadFrom(t *testing.T, body string) *Config {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("MC_WOL_CONFIG", path)
+	t.Setenv("MCWOD_CONFIG", path)
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -129,7 +129,7 @@ func TestValidationRejectsBadValues(t *testing.T) {
 			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			t.Setenv("MC_WOL_CONFIG", path)
+			t.Setenv("MCWOD_CONFIG", path)
 			if _, err := LoadConfig(); err == nil {
 				t.Error("expected an error, got none")
 			}

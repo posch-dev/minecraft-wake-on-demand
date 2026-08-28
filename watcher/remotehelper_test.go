@@ -118,7 +118,7 @@ func TestForcedCommandEntryLocksTheKeyDown(t *testing.T) {
 	entry := remoteHelperKeyEntryUnix("ssh-ed25519 AAAAexample")
 
 	for _, want := range []string{
-		`command="/usr/local/bin/mc-wol-remote"`,
+		`command="/usr/local/bin/mcwod-remote"`,
 		"no-port-forwarding", "no-X11-forwarding", "no-agent-forwarding", "no-pty",
 		"ssh-ed25519 AAAAexample",
 	} {

@@ -1,5 +1,5 @@
 services:
-  mc-wol-proxy:
+  mcwod:
     build: .
     restart: unless-stopped
     # Wake-on-LAN has to broadcast on the real LAN, so host networking stays.
@@ -20,6 +20,6 @@ services:
       # survives a container recreate without any preparation.
       - ./state:/state
     environment:
-      MC_WOL_CONFIG: /config.yml
+      MCWOD_CONFIG: /config.yml
       SERVER_SSH_KEY_PATH: /ssh/id_ed25519
       SERVER_SSH_KNOWN_HOSTS: /state/known_hosts

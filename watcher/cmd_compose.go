@@ -16,7 +16,7 @@ func offerContainerSetup(p *prompter, s *ServerSession, cfg *Config, facts Serve
 	fmt.Println("\n--- Minecraft container ---")
 	if !facts.Platform.HasDocker {
 		fmt.Println("No docker on the server, so there is nothing to set up yet.")
-		fmt.Println("Install Docker there, then run 'mc-wol-proxy config' and pick this again.")
+		fmt.Println("Install Docker there, then run 'mcwod config' and pick this again.")
 		return false
 	}
 	if len(facts.Containers) > 0 {
@@ -213,7 +213,7 @@ func writeComposeFiles(p *prompter, s *ServerSession, target ComposeTarget,
 	if err := validateComposeFile(s, target); err != nil {
 		fmt.Printf("\ncompose rejected the result: %v\n", err)
 		if backup != "" {
-			fmt.Printf("Put the old one back with: mc-wol-proxy restore-compose\n")
+			fmt.Printf("Put the old one back with: mcwod restore-compose\n")
 		}
 		return false
 	}
@@ -275,7 +275,7 @@ func runRestoreCompose() int {
 	dir := p.line("Directory the compose file lives in", defaultComposeDir(session, cfg))
 	backups, _ := listComposeBackups(session, dir)
 	if len(backups) == 0 {
-		fmt.Printf("\nNo backups from mc-wol-proxy in %s.\n", dir)
+		fmt.Printf("\nNo backups from mcwod in %s.\n", dir)
 		return 1
 	}
 
