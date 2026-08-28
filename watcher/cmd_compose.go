@@ -32,8 +32,7 @@ func offerContainerSetup(p *prompter, s *ServerSession, cfg *Config, facts Serve
 		return false
 	}
 
-	if !acceptEULA(p) {
-		fmt.Println("Without accepting it the server cannot run, so nothing was written.")
+	if !acceptEULAOnce(p, cfg) {
 		return false
 	}
 
@@ -65,7 +64,24 @@ func offerContainerSetup(p *prompter, s *ServerSession, cfg *Config, facts Serve
 	cfg.Server.ContainerName = spec.ServiceName
 	cfg.Server.MCPort = spec.MCPort
 	cfg.Server.ComposeDir = target.Dir
+	rememberFirstWorld(cfg, spec, target.Dir)
 	return true
+}
+
+// Without this the list stays empty and 'worlds' says the server was set up
+// before MCWOD kept track, about a world MCWOD just created itself.
+func rememberFirstWorld(cfg *Config, spec ComposeSpec, dir string) {
+	cfg.Worlds.List = append(cfg.Worlds.List, World{
+		Name:      spec.ServiceName,
+		Container: spec.ServiceName,
+		Port:      spec.MCPort,
+		Version:   spec.MCVersion,
+		Type:      spec.ServerType,
+		Dir:       dir,
+	})
+	if cfg.Worlds.Active == "" {
+		cfg.Worlds.Active = spec.ServiceName
+	}
 }
 
 // Default yes, but never silently: the text says what saying yes means.
