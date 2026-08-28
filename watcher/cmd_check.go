@@ -376,9 +376,9 @@ func checkDuckDNS(c *checker, cfg *Config, ctx context.Context) {
 		return
 	}
 	if err := updateDuckDNS(ctx, cfg); err != nil {
-		c.fail("update for %s.duckdns.org failed: %v", cfg.DuckDNS.Domain, err)
+		c.fail("update for %s failed: %v", cfg.DuckDNSHost(), err)
 		c.hint("check duckdns.domain and duckdns.token")
 		return
 	}
-	c.ok("update for %s.duckdns.org accepted", cfg.DuckDNS.Domain)
+	c.ok("update for %s accepted", cfg.DuckDNSHost())
 }

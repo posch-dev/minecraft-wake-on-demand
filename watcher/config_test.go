@@ -119,7 +119,6 @@ func TestValidationRejectsBadValues(t *testing.T) {
 		"missing ssh_user": "server:\n  mac: \"AA:BB:CC:DD:EE:FF\"\n  ip: \"192.168.1.1\"\n",
 		"bad wol mode":     minimalConfig + "\nwol:\n  mode: \"magic\"\n",
 		"duckdns no token": minimalConfig + "\nduckdns:\n  enabled: true\n  domain: \"mine\"\n",
-		"duckdns with dot": minimalConfig + "\nduckdns:\n  enabled: true\n  domain: \"mine.duckdns.org\"\n  token: \"t\"\n",
 		"bad motd json":    minimalConfig + "\nmotd:\n  sleeping: \"{not json\"\n",
 		"transfer no host": minimalConfig + "\ntransfer:\n  enabled: true\n",
 	}

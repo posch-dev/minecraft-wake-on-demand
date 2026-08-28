@@ -141,6 +141,10 @@ notes, so a version has to be listed here before it is tagged.
 
 ### Fixed
 
+- `duckdns.domain` takes the address either way round. `eliahmc` and
+  `eliahmc.duckdns.org` both work, and the suffix is trimmed on load. It used to
+  be a hard startup error, which is an odd thing to refuse given that the long
+  form is what the DuckDNS page shows you.
 - Running `mc-wol-proxy` with no argument at a terminal prints the help instead
   of silently starting the proxy. Started as a service, where nothing is
   attached, it still runs the proxy, so existing installations are unaffected.

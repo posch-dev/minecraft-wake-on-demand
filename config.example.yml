@@ -23,7 +23,7 @@ update:
 
 duckdns:
   enabled: true
-  domain: "your-domain"               # without .duckdns.org
+  domain: "your-domain"               # with or without .duckdns.org, both work
   token: "your-duckdns-token"
   update_interval_hours: 6
 

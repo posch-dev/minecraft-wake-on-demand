@@ -137,7 +137,7 @@ If you would rather fill the config in by hand, copy `config.example.yml` to `co
 | `server.ip` | Local IP of your server PC, from step 1 |
 | `server.ssh_user` | Your login name on the server |
 | `duckdns.enabled` | `false` if you skipped step 2, then ignore the two rows below |
-| `duckdns.domain` | Your DuckDNS subdomain, without `.duckdns.org` |
+| `duckdns.domain` | Your DuckDNS address, with or without `.duckdns.org` |
 | `duckdns.token` | Your DuckDNS token |
 
 Everything else has sensible defaults. Check the comments in the file for details.

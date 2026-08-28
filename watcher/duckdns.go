@@ -42,7 +42,7 @@ func updateDuckDNS(ctx context.Context, cfg *Config) error {
 	}
 	answer := strings.TrimSpace(string(body))
 	if answer == "OK" {
-		log.Infof("DuckDNS updated successfully for %s.duckdns.org", cfg.DuckDNS.Domain)
+		log.Infof("DuckDNS updated successfully for %s", cfg.DuckDNSHost())
 		return nil
 	}
 	// DuckDNS answers "KO" for a wrong domain or token, with status 200.

@@ -375,17 +375,15 @@ func (c *Config) Validate() error {
 	}
 
 	if c.DuckDNS.Enabled {
+		c.DuckDNS.Domain = normalizeDuckDNSDomain(c.DuckDNS.Domain)
 		if c.DuckDNS.Domain == "" || c.DuckDNS.Token == "" {
 			return fmt.Errorf("duckdns.enabled is true but domain or token is missing, set duckdns.enabled: false if you do not use it")
-		}
-		if strings.Contains(c.DuckDNS.Domain, ".") {
-			return fmt.Errorf("duckdns.domain %q contains a dot, use only the subdomain without .duckdns.org", c.DuckDNS.Domain)
 		}
 		if c.DuckDNS.UpdateIntervalHours < 1 {
 			return fmt.Errorf("duckdns.update_interval_hours is %d, it has to be at least 1", c.DuckDNS.UpdateIntervalHours)
 		}
 		if len(c.Watcher.AllowedHostnames) == 0 {
-			c.Watcher.AllowedHostnames = StringList{c.DuckDNS.Domain + ".duckdns.org"}
+			c.Watcher.AllowedHostnames = StringList{c.DuckDNSHost()}
 		}
 	}
 
@@ -459,6 +457,23 @@ func (c *Config) validateSleep() error {
 		}
 	}
 	return nil
+}
+
+// Both spellings people actually type, so the suffix is neither demanded nor
+// refused. A subdomain of its own is left alone, only ours is trimmed.
+func normalizeDuckDNSDomain(domain string) string {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	domain = strings.TrimSuffix(domain, ".")
+	domain = strings.TrimSuffix(domain, ".duckdns.org")
+	return strings.TrimSuffix(domain, ".")
+}
+
+// The full name players connect to.
+func (c *Config) DuckDNSHost() string {
+	if c.DuckDNS.Domain == "" {
+		return ""
+	}
+	return c.DuckDNS.Domain + ".duckdns.org"
 }
 
 // Invalid entries are dropped with a warning so one typo does not stop the watcher.

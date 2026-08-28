@@ -86,7 +86,7 @@ func duckDNSSummary(c *Config) string {
 	if !c.DuckDNS.Enabled {
 		return "off"
 	}
-	return fmt.Sprintf("%s.duckdns.org, every %dh", c.DuckDNS.Domain, c.DuckDNS.UpdateIntervalHours)
+	return fmt.Sprintf("%s, every %dh", c.DuckDNSHost(), c.DuckDNS.UpdateIntervalHours)
 }
 
 func transferSummary(c *Config) string {
@@ -188,15 +188,13 @@ func (e *configEditor) editDuckDNS() {
 		return
 	}
 
-	c.DuckDNS.Domain = e.p.validated("DuckDNS subdomain, without .duckdns.org", c.DuckDNS.Domain, func(v string) error {
-		if strings.TrimSpace(v) == "" {
-			return fmt.Errorf("this cannot be empty")
-		}
-		if strings.Contains(v, ".") {
-			return fmt.Errorf("only the subdomain, so 'mine' and not 'mine.duckdns.org'")
+	c.DuckDNS.Domain = e.p.validated("Your DuckDNS address", c.DuckDNSHost(), func(v string) error {
+		if normalizeDuckDNSDomain(v) == "" {
+			return fmt.Errorf("that is empty, it looks like yourname.duckdns.org")
 		}
 		return nil
 	})
+	c.DuckDNS.Domain = normalizeDuckDNSDomain(c.DuckDNS.Domain)
 	e.set(c.DuckDNS.Domain, "duckdns", "domain")
 
 	if e.p.yesNo("Replace the DuckDNS token", false) {
@@ -221,7 +219,7 @@ func (e *configEditor) editTransfer() {
 
 	fallback := c.Transfer.Host
 	if fallback == "" && c.DuckDNS.Enabled {
-		fallback = c.DuckDNS.Domain + ".duckdns.org"
+		fallback = c.DuckDNSHost()
 	}
 	c.Transfer.Host = e.p.validated("Public hostname players are sent to", fallback, func(v string) error {
 		if strings.TrimSpace(v) == "" {
