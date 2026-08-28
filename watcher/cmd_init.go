@@ -113,9 +113,9 @@ func runInit() int {
 	printHint("You can change all of this later.")
 
 	fmt.Println("")
+	printHint("Look it up in the network settings on that PC, or in your router.")
 	cfg.Server.IP = p.validated("Enter the IP address of the PC that will run Minecraft (192.168.178.xxx)",
 		"", validateHostOrIP)
-	printHint("Look it up in the network settings on that PC, or in your router.")
 
 	cfg.Server.SSHUser = p.validated("\nWhat is your username on that PC?", currentUserName(), func(v string) error {
 		if strings.TrimSpace(v) == "" {
@@ -142,9 +142,10 @@ func runInit() int {
 
 	if !provisioned {
 		cfg.Server.MAC = askMAC(p, cfg.Server.IP)
-		cfg.Server.ContainerName = p.validated("\nWhat is your Minecraft server called on that PC?",
-			"minecraft", validateContainerName)
+		fmt.Println("")
 		printHint("That is the name of its Docker container.")
+		cfg.Server.ContainerName = p.validated("What is your Minecraft server called on that PC?",
+			"minecraft", validateContainerName)
 	}
 
 	// Only asked when the watcher and the server are in different networks,
@@ -175,11 +176,11 @@ func runInit() int {
 			return nil
 		})
 		cfg.DuckDNS.Domain = normalizeDuckDNSDomain(cfg.DuckDNS.Domain)
+		printHint("It stays visible here so you can check it, and it goes into",
+			"config.yml, which only your user can read.")
 		for cfg.DuckDNS.Token == "" {
 			cfg.DuckDNS.Token = strings.TrimSpace(p.line("Your DuckDNS token", ""))
 		}
-		printHint("It stays visible here so you can check it, and it goes into",
-			"config.yml, which only your user can read.")
 	}
 
 	if err := cfg.Validate(); err != nil {
