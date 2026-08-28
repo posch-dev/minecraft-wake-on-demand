@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -183,38 +184,61 @@ func offerWakeOnLANFix(p *prompter, session *ServerSession, facts ServerFacts) {
 
 // Returns the chosen action, empty when the watcher should not sleep the PC.
 func offerSleep(p *prompter, facts ServerFacts) string {
-	fmt.Println("\n--- Auto-sleep ---")
-	fmt.Println("The watcher can send the PC back to sleep once nobody is playing.")
-	fmt.Println("That needs a helper script on the server and one sudoers line.")
-	if !p.yesNo("Set that up", false) {
+	fmt.Println("\nWhen the last player leaves, Minecraft pauses itself. Your PC stays on though.")
+	fmt.Println("")
+	if !p.yesNo("Should the PC switch itself off as well when nobody plays?", false) {
 		return ""
 	}
+	printHint("Your PC's own power settings cannot do this reliably: they only watch",
+		"for mouse and keyboard, not for players, so they tend to switch off in",
+		"the middle of a game. Turn any automatic sleep off there.")
 
-	fallback := "suspend"
-	if !facts.CanSuspend && facts.CanHibernate {
-		fmt.Println("The kernel does not offer suspend to RAM, hibernate does work.")
-		fallback = "hibernate"
+	fmt.Println("\nHow should it switch off?")
+	for i, choice := range sleepChoices {
+		fmt.Printf("  %d) %-10s %s\n", i+1, choice.label, hint(choice.what))
 	}
-	action := strings.ToLower(strings.TrimSpace(p.validated(
-		"Which action, suspend, hibernate or shutdown", fallback, func(v string) error {
-			if contains(installableSleepActions, strings.ToLower(strings.TrimSpace(v))) {
-				return nil
-			}
-			return fmt.Errorf("pick suspend, hibernate or shutdown")
-		})))
+	answer := p.validated("Pick one", "1", func(v string) error {
+		if _, ok := sleepActionByChoice(v); ok {
+			return nil
+		}
+		return fmt.Errorf("pick a number from 1 to %d", len(sleepChoices))
+	})
+	action, _ := sleepActionByChoice(answer)
 
-	if action == "shutdown" {
-		fmt.Println("  Waking from a full shutdown needs Wake-on-LAN enabled in the BIOS")
-		fmt.Println("  for the powered-off state, which not every board supports.")
+	if action == "suspend" && !facts.CanSuspend && facts.CanHibernate {
+		printWarning("That PC cannot sleep to RAM, only hibernate. Using hibernate.")
+		action = "hibernate"
 	}
 	if action == "suspend" && facts.Platform.Windows {
-		fmt.Println("  On Windows, suspend over SSH is unreliable. Hibernate is the safer")
-		fmt.Println("  choice, change sleep.action in config.yml if waking misbehaves.")
+		printWarning("On Windows, sleep over a remote connection is unreliable.")
+		printHint("If waking misbehaves, switch to hibernate in mcwod config.")
 	}
 	if !facts.Platform.Windows && facts.Platform.SystemctlPath == "" {
-		fmt.Println("  No systemctl on the server, so there is no standard sleep command.")
-		fmt.Println("  Set sleep.action: custom and sleep.command in config.yml instead.")
+		printWarning("That PC has no systemctl, so there is no standard way to switch it off.")
+		printHint("Set sleep.action to custom and sleep.command in config.yml instead.")
 		return ""
 	}
 	return action
+}
+
+// Named the way somebody would say it, not the way systemd spells it.
+var sleepChoices = []struct{ label, action, what string }{
+	{"Sleep", "suspend", "recommended, wakes fastest and most reliably"},
+	{"Hibernate", "hibernate", "uses no power at all, wakes slower, not recommended"},
+	{"Shut down", "shutdown", "needs Wake-on-LAN set in the BIOS, not recommended"},
+}
+
+// Takes the number or the word, so either way of answering works.
+func sleepActionByChoice(answer string) (string, bool) {
+	answer = strings.ToLower(strings.TrimSpace(answer))
+	if index, err := strconv.Atoi(answer); err == nil {
+		if index >= 1 && index <= len(sleepChoices) {
+			return sleepChoices[index-1].action, true
+		}
+		return "", false
+	}
+	if contains(installableSleepActions, answer) {
+		return answer, true
+	}
+	return "", false
 }

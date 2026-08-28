@@ -328,7 +328,7 @@ func TestEmptyWhitelistIsNotEnforced(t *testing.T) {
 	}
 }
 
-func TestWhitelistNamesAreWrittenAndFirstBecomesOperator(t *testing.T) {
+func TestWhitelistNamesAreWritten(t *testing.T) {
 	spec := testSpec()
 	spec.Whitelist = []string{"eliah", "someone", "third"}
 
@@ -339,10 +339,36 @@ func TestWhitelistNamesAreWrittenAndFirstBecomesOperator(t *testing.T) {
 	for _, want := range []string{
 		`WHITELIST: "eliah,someone,third"`,
 		`ENFORCE_WHITELIST: "TRUE"`,
-		`OPS: "eliah"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the file is missing %s:\n%s", want, body)
 		}
+	}
+}
+
+// The admin stands on its own, a server with no whitelist still needs one.
+func TestAdminIsWrittenWithoutAWhitelist(t *testing.T) {
+	spec := testSpec()
+	spec.Admin = "eliah"
+
+	body, err := newComposeFile(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, `OPS: "eliah"`) {
+		t.Errorf("the admin was not written:\n%s", body)
+	}
+	if strings.Contains(body, "ENFORCE_WHITELIST") {
+		t.Errorf("an admin is not a whitelist:\n%s", body)
+	}
+}
+
+func TestNoAdminWritesNoOps(t *testing.T) {
+	body, err := newComposeFile(testSpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(body, "OPS:") {
+		t.Errorf("nobody was named, so OPS should be absent:\n%s", body)
 	}
 }

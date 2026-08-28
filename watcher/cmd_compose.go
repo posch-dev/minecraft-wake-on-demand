@@ -13,22 +13,22 @@ const eulaURL = "https://aka.ms/MinecraftEULA"
 // Sets the Minecraft and backup containers up on the server, either as a fresh
 // compose file or as two services added to one that is already there.
 func offerContainerSetup(p *prompter, s *ServerSession, cfg *Config, facts ServerFacts) bool {
-	fmt.Println("\n--- Minecraft container ---")
+	fmt.Println("\nYour Minecraft server")
 	if !facts.Platform.HasDocker {
-		fmt.Println("No docker on the server, so there is nothing to set up yet.")
-		fmt.Println("Install Docker there, then run 'mcwod config' and pick this again.")
+		printWarning("Docker is not installed on that PC, so there is nothing to set up yet.")
+		printHint("Install Docker there, then run mcwod and pick this again.")
 		return false
 	}
 	if len(facts.Containers) > 0 {
-		fmt.Printf("The server already runs a container called %q.\n", cfg.Server.ContainerName)
-		if !p.yesNo("Set up another one anyway", false) {
+		printHint("That PC already runs " + cfg.Server.ContainerName + ".")
+		if !p.yesNo("Set up another server anyway?", false) {
 			return false
 		}
 	}
 
-	fmt.Println("The watcher can write the compose file and start the containers for you,")
-	fmt.Println("so you never have to log in to the server PC yourself.")
-	if !p.yesNo("Set up the Minecraft container now", len(facts.Containers) == 0) {
+	printHint("MCWOD can set the whole server up for you, so you never have to",
+		"open a terminal on that PC yourself.")
+	if !p.yesNo("Set up a Minecraft server on that PC now?", len(facts.Containers) == 0) {
 		return false
 	}
 
@@ -37,15 +37,15 @@ func offerContainerSetup(p *prompter, s *ServerSession, cfg *Config, facts Serve
 		return false
 	}
 
-	dir := p.line("Directory on the server for the compose file", defaultComposeDir(s, cfg))
+	dir := p.line("Where should the server live on that PC?", defaultComposeDir(s, cfg))
 	target := inspectComposeTarget(s, dir)
 	if target.Command == "" {
-		fmt.Println("\nNeither 'docker compose' nor 'docker-compose' works on the server.")
-		fmt.Println("Install the compose plugin there, then try again.")
+		printWarning("Docker Compose does not work on that PC.")
+		printHint("Install the compose plugin there, then try again.")
 		return false
 	}
 
-	spec := askComposeSpec(p, cfg, target)
+	spec := askComposeSpec(p, cfg, facts)
 	password, err := prepareRCONPassword(s, target)
 	if err != nil {
 		fmt.Printf("\n%v\n", err)
@@ -69,11 +69,9 @@ func offerContainerSetup(p *prompter, s *ServerSession, cfg *Config, facts Serve
 
 // Default yes, but never silently: the text says what saying yes means.
 func acceptEULA(p *prompter) bool {
-	fmt.Println("\nThe Minecraft server needs you to accept Mojang's End User License")
-	fmt.Println("Agreement. Saying yes here writes EULA=TRUE into the compose file on")
-	fmt.Println("your behalf, which is the same as accepting it yourself.")
-	fmt.Println("  " + eulaURL)
-	return p.yesNo("Do you accept the Minecraft EULA", true)
+	fmt.Println("\nMinecraft needs you to accept Mojang's rules, the EULA.")
+	printHint(eulaURL, "Saying yes here accepts them in your name.")
+	return p.yesNo("Do you accept them?", true)
 }
 
 func defaultComposeDir(s *ServerSession, cfg *Config) string {
@@ -83,57 +81,79 @@ func defaultComposeDir(s *ServerSession, cfg *Config) string {
 	return "/home/" + cfg.Server.SSHUser + "/minecraft"
 }
 
-func askComposeSpec(p *prompter, cfg *Config, target ComposeTarget) ComposeSpec {
+func askComposeSpec(p *prompter, cfg *Config, facts ServerFacts) ComposeSpec {
 	spec := defaultComposeSpec(cfg.Server.ContainerName, cfg.Server.MCPort)
 
-	spec.ServiceName = p.validated("Name for the container", spec.ServiceName, validateContainerName)
+	spec.ServiceName = p.validated("What should this world be called?", spec.ServiceName, validateContainerName)
 	spec.BackupName = spec.ServiceName + "-backup"
 	spec.ServerType = askServerType(p, spec.ServerType)
 	spec.MCVersion = askMCVersion(p, spec.MCVersion)
-	spec.Memory = p.line("Memory for the server, for example 4G", spec.Memory)
-	spec.MCPort = p.validatedPort("Port to publish on the server PC", spec.MCPort)
-	spec.DataDir = p.line("Where the world lives, relative to the compose file", spec.DataDir)
-	spec.Whitelist = askWhitelist(p)
+	spec.Memory = askMemory(p, facts.MemoryGB, spec.Memory)
+	spec.Admin = askAdmin(p)
+	spec.Whitelist = askWhitelist(p, spec.Admin)
 
-	spec.Backups = p.yesNo("Add the automatic backup container as well", true)
+	spec.Backups = p.yesNo("Make a backup of your world automatically?", true)
 	if spec.Backups {
-		spec.BackupInterval = p.line("How often to back up", spec.BackupInterval)
-		spec.KeepBackupDays = p.validatedInt("Days to keep old backups", spec.KeepBackupDays, 1)
+		spec.BackupInterval = p.line("How often?", spec.BackupInterval)
+		spec.KeepBackupDays = p.validatedInt("How many days of backups should be kept?", spec.KeepBackupDays, 1)
 	}
 	return spec
 }
 
+// Numbered, because a wrong word means retyping and these people are reading a
+// terminal for the first time.
 func askServerType(p *prompter, fallback string) string {
-	fmt.Println("\nVANILLA is the unmodified server. PAPER and PURPUR are faster and take")
-	fmt.Println("plugins. FABRIC, FORGE, NEOFORGE and QUILT run mods, and every player")
-	fmt.Println("then needs the same mods installed.")
+	fmt.Println("\nWhich kind of server?")
+	for i, choice := range serverTypeChoices {
+		fmt.Printf("  %d) %-9s %s\n", i+1, choice.name, hint(choice.what))
+	}
 
-	answer := p.validated("Server type ("+strings.Join(serverTypes, ", ")+")", fallback,
-		func(v string) error {
-			if contains(serverTypes, strings.ToUpper(strings.TrimSpace(v))) {
-				return nil
-			}
-			return fmt.Errorf("pick one of %s", strings.Join(serverTypes, ", "))
-		})
-	return strings.ToUpper(strings.TrimSpace(answer))
+	answer := p.validated("Pick one", "1", func(v string) error {
+		if _, ok := serverTypeByChoice(v); ok {
+			return nil
+		}
+		return fmt.Errorf("pick a number from 1 to %d", len(serverTypeChoices))
+	})
+	picked, _ := serverTypeByChoice(answer)
+	return picked
+}
+
+// Takes the number or the name, so somebody who knows what PAPER is can type it.
+func serverTypeByChoice(answer string) (string, bool) {
+	answer = strings.ToUpper(strings.TrimSpace(answer))
+	if index, err := strconv.Atoi(answer); err == nil {
+		if index >= 1 && index <= len(serverTypeChoices) {
+			return serverTypeChoices[index-1].name, true
+		}
+		return "", false
+	}
+	if contains(serverTypes, answer) {
+		return answer, true
+	}
+	return "", false
 }
 
 // Empty means anyone with the address can join, which is the default a fresh
 // server has. The first name given also becomes the operator.
-func askWhitelist(p *prompter) []string {
-	fmt.Println("\nA whitelist means only the players you name can join, which is worth it")
-	fmt.Println("for a server whose address is on the internet. Leave it empty and anyone")
-	fmt.Println("who knows the address can connect.")
+// Asked in two steps, so somebody who does not want one answers once and moves
+// on instead of facing an empty list they have to understand.
+func askWhitelist(p *prompter, admin string) []string {
+	fmt.Println("")
+	if !p.yesNo("Do you want a whitelist, so only people you name can join?", false) {
+		printHint("Anyone who knows your address can join.")
+		return nil
+	}
 
-	answer := p.line("Minecraft names allowed to join, comma separated", "")
+	answer := p.line("Which names may join? Separate them with commas", admin)
 	names := []string{}
 	for _, name := range splitList(answer) {
 		if trimmed := strings.TrimSpace(name); trimmed != "" {
 			names = append(names, trimmed)
 		}
 	}
-	if len(names) > 0 {
-		fmt.Printf("  %s also becomes the server operator.\n", names[0])
+	if admin != "" && !contains(names, admin) {
+		names = append(names, admin)
+		printHint(admin + " was added too, an admin who cannot join is no use.")
 	}
 	return names
 }
@@ -141,9 +161,30 @@ func askWhitelist(p *prompter) []string {
 // A concrete version by default. LATEST moves the server under the world
 // whenever the image is pulled again.
 func askMCVersion(p *prompter, fallback string) string {
-	fmt.Println("\nA fixed version keeps the server the same every time it starts.")
-	fmt.Println("LATEST works too, but then an update can arrive on its own.")
-	return strings.TrimSpace(p.line("Minecraft version", fallback))
+	answer := strings.TrimSpace(p.line("\nWhich Minecraft version?", fallback))
+	if strings.EqualFold(answer, "LATEST") {
+		printHint("Your server can then update itself to a new version on its own,",
+			"and a world cannot go back to an older one afterwards.")
+	}
+	return answer
+}
+
+// A quarter of the machine, which is the number people are told to use anyway.
+func askMemory(p *prompter, totalGB int, fallback string) string {
+	if totalGB > 0 {
+		fmt.Printf("\nThat PC has %d GB of RAM.\n", totalGB)
+		fallback = suggestedMemory(totalGB)
+	}
+	return strings.TrimSpace(p.line("How much should Minecraft get?", fallback))
+}
+
+// Without one nobody can run a command in the game, not even the owner.
+func askAdmin(p *prompter) string {
+	name := strings.TrimSpace(p.line("\nWho should be the admin? Enter their Minecraft name", ""))
+	if name != "" {
+		printHint(name + " is now a Minecraft admin.")
+	}
+	return name
 }
 
 // An existing password is left alone, replacing it would break whatever else

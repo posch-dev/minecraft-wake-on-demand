@@ -5,6 +5,28 @@ notes, so a version has to be listed here before it is tagged.
 
 ## [Unreleased]
 
+### Changed
+
+- Every question in the wizard is written for somebody who has not used a
+  terminal before. Choices that used to need a typed word are numbered, the
+  reason for a question sits under it in grey instead of in front of it, and
+  the technical vocabulary is gone from the questions themselves.
+- The server type is asked for, so a mod server is a choice rather than
+  something to edit afterwards. The heap size is suggested from the RAM the
+  server actually reports, a quarter of it, no less than 2G and no more than 8G.
+- The admin is its own question. It used to be a side effect of naming a
+  whitelist, so a server without one had nobody who could run a command in the
+  game at all.
+- The whitelist is asked in two steps, first whether you want one and only then
+  for the names, with the admin filled in so nobody locks themselves out.
+- The DuckDNS token stays visible while you type it. It is pasted off a page
+  rather than remembered, and hiding it only makes it harder to check.
+- Transfer mode is no longer part of `init`. It is an optimisation with an
+  unpleasant failure mode and it lives in `mcwod config`.
+- `get-server-icon` explains itself before it asks, warns before it replaces a
+  picture that is already there, and keeps the old one as `server-icon-old.png`
+  only if you say so.
+
 ### Added
 
 - Server version and player slots are now learned from a status probe on first

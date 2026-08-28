@@ -109,20 +109,25 @@ func runInit() int {
 	p := newPrompter()
 	cfg := defaultConfig()
 
-	fmt.Println("\n--- Server PC ---")
-	cfg.Server.IP = p.validated("IP address or hostname of the server PC", "", validateHostOrIP)
-	cfg.Server.SSHUser = p.validated("Which user should the watcher log in as", currentUserName(), func(v string) error {
+	fmt.Println("\nNothing is set up yet, so let's do that now.")
+	printHint("You can change all of this later.")
+
+	fmt.Println("")
+	cfg.Server.IP = p.validated("Enter the IP address of the PC that will run Minecraft (192.168.178.xxx)",
+		"", validateHostOrIP)
+	printHint("Look it up in the network settings on that PC, or in your router.")
+
+	cfg.Server.SSHUser = p.validated("\nWhat is your username on that PC?", currentUserName(), func(v string) error {
 		if strings.TrimSpace(v) == "" {
 			return fmt.Errorf("this cannot be empty")
 		}
 		return nil
 	})
 
-	fmt.Println("\nThe watcher can log in once with a password and set the rest up itself:")
-	fmt.Println("MAC address, broadcast address, the container, Wake-on-LAN in the network")
-	fmt.Println("driver and its own SSH key. The password is used once and not stored.")
+	fmt.Println("\nI can log in to that PC once and set everything up for you.")
+	printHint("Your password is used for this one login and is never saved.")
 	provisioned := false
-	if p.yesNo("Set the server up over SSH", true) {
+	if p.yesNo("Let me do that?", true) {
 		signer, err := ensureKeyPair(cfg.ResolvedSSHKeyPath())
 		if err != nil {
 			fmt.Printf("\nCannot prepare the SSH key: %v\n", err)
@@ -137,7 +142,9 @@ func runInit() int {
 
 	if !provisioned {
 		cfg.Server.MAC = askMAC(p, cfg.Server.IP)
-		cfg.Server.ContainerName = p.validated("Name of the Minecraft container", "minecraft", validateContainerName)
+		cfg.Server.ContainerName = p.validated("\nWhat is your Minecraft server called on that PC?",
+			"minecraft", validateContainerName)
+		printHint("That is the name of its Docker container.")
 	}
 
 	// Only asked when the watcher and the server are in different networks,
@@ -156,10 +163,10 @@ func runInit() int {
 		})
 	}
 
-	fmt.Println("\n--- DuckDNS ---")
-	fmt.Println("DuckDNS gives you a hostname that follows your changing public IP.")
-	fmt.Println("Skip this if only players on your own network are going to join.")
-	cfg.DuckDNS.Enabled = p.yesNo("Use DuckDNS", true)
+	fmt.Println("\nYour home internet address changes every few days, so your friends need")
+	fmt.Println("a name that follows it. DuckDNS gives you one for free.")
+	printHint("Skip this if only people on your own network are going to join.")
+	cfg.DuckDNS.Enabled = p.yesNo("Use DuckDNS?", true)
 	if cfg.DuckDNS.Enabled {
 		cfg.DuckDNS.Domain = p.validated("Your DuckDNS address", "", func(v string) error {
 			if normalizeDuckDNSDomain(v) == "" {
@@ -169,27 +176,10 @@ func runInit() int {
 		})
 		cfg.DuckDNS.Domain = normalizeDuckDNSDomain(cfg.DuckDNS.Domain)
 		for cfg.DuckDNS.Token == "" {
-			cfg.DuckDNS.Token = p.secret("DuckDNS token")
+			cfg.DuckDNS.Token = strings.TrimSpace(p.line("Your DuckDNS token", ""))
 		}
-	}
-
-	fmt.Println("\n--- Transfer mode ---")
-	fmt.Println("Off means all traffic goes through this machine, which always works.")
-	fmt.Println("On means players are redirected to the server after the wake up,")
-	fmt.Println("which is faster but needs a second port forwarded on your router.")
-	cfg.Transfer.Enabled = p.yesNo("Enable transfer mode", false)
-	if cfg.Transfer.Enabled {
-		fallbackHost := ""
-		if cfg.DuckDNS.Enabled {
-			fallbackHost = cfg.DuckDNSHost()
-		}
-		cfg.Transfer.Host = p.validated("Public hostname players are sent to", fallbackHost, func(v string) error {
-			if v == "" {
-				return fmt.Errorf("this cannot be empty")
-			}
-			return nil
-		})
-		cfg.Transfer.Port = p.validatedPort("Port forwarded straight to the server PC", 25566)
+		printHint("It stays visible here so you can check it, and it goes into",
+			"config.yml, which only your user can read.")
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -202,14 +192,20 @@ func runInit() int {
 	}
 
 	fmt.Printf("\nWritten to %s\n", target)
-	fmt.Println("\nNext steps:")
+	if cfg.DuckDNS.Enabled {
+		fmt.Printf("\nAll set. Your friends connect to %s:%d\n", cfg.DuckDNSHost(), cfg.Watcher.ListenPort)
+	} else {
+		fmt.Println("\nAll set.")
+	}
+	fmt.Println("")
 	if provisioned {
-		fmt.Println("  mcwod check           confirm everything is wired up")
+		fmt.Println("Check that everything works: mcwod check")
 		printUpdateHint(&cfg)
 		return 0
 	}
-	fmt.Println("  1. mcwod setup-ssh    give the watcher access to the server PC")
-	fmt.Println("  2. mcwod check        confirm everything is wired up")
+	fmt.Println("Two things left:")
+	fmt.Println("  mcwod setup-ssh   let the watcher reach that PC")
+	fmt.Println("  mcwod check       check that everything works")
 	printUpdateHint(&cfg)
 	return 0
 }
