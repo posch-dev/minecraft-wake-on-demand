@@ -34,6 +34,10 @@ func runWorlds() int {
 				return 1
 			}
 		case "3":
+			if changeWorldVersion(p, cfg, doc) != 0 {
+				return 1
+			}
+		case "4":
 			if removeWorld(p, cfg, doc) != 0 {
 				return 1
 			}
@@ -68,7 +72,8 @@ func printWorlds(cfg *Config) {
 	fmt.Println("")
 	fmt.Println("  1) Play a different world")
 	fmt.Println("  2) Make a new world")
-	fmt.Println("  3) Remove a world from this list")
+	fmt.Println("  3) Change version or server kind")
+	fmt.Println("  4) Remove a world from this list")
 	fmt.Println("  q) Back")
 }
 

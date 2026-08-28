@@ -33,6 +33,13 @@ notes, so a version has to be listed here before it is tagged.
 
 ### Added
 
+- A world's Minecraft version and server kind can be changed from
+  `mcwod worlds`. A backup is taken on the server first and is not optional,
+  because Minecraft upgrades a world's format the first time it opens it and
+  the older server refuses to load it afterwards. Going backwards, or from a
+  mod server to a plainer one, says why it will not work and offers a fresh
+  world or a backup, with doing it anyway as the last option. Keeping the old
+  world means it is moved aside, never deleted.
 - `mcwod worlds` keeps several Minecraft worlds side by side and switches
   between them. Each one gets its own folder and its own compose file, so a
   broken world is one broken world, and only the active one is ever started.
