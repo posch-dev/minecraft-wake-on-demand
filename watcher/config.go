@@ -94,8 +94,10 @@ type LimitsConfig struct {
 }
 
 type MOTDConfig struct {
-	Sleeping   string `yaml:"sleeping"`
-	Starting   string `yaml:"starting"`
+	Sleeping string `yaml:"sleeping"`
+	Starting string `yaml:"starting"`
+	// Empty leaves the running server's own MOTD alone.
+	Live       string `yaml:"live"`
 	LoginWait  string `yaml:"login_wait"`
 	ServerFull string `yaml:"server_full"`
 	MaxPlayers int    `yaml:"max_players"`
@@ -400,7 +402,11 @@ func (c *Config) Validate() error {
 		{"motd.starting", c.MOTD.Starting},
 		{"motd.login_wait", c.MOTD.LoginWait},
 		{"motd.server_full", c.MOTD.ServerFull},
+		{"motd.live", c.MOTD.Live},
 	} {
+		if m.value == "" {
+			continue
+		}
 		if !json.Valid([]byte(m.value)) {
 			return fmt.Errorf("%s is not valid JSON, it has to look like %s", m.name, defaultMOTDSleeping)
 		}

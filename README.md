@@ -215,15 +215,25 @@ The server list ping the watcher answers while the server is asleep now reports 
 
 ### Custom MOTD and server icon
 
-You can customize what players see in their server list when the server is sleeping. Edit the files in `watcher/assets/`:
+Out of the box the watcher answers with its own icon, three blue Z that grow, the largest turning into a red exclamation mark while the PC boots. It is built into the binary, so there is nothing to install for it.
+
+Everything below is optional and goes in `watcher/assets/`. Ready to copy examples live in `watcher/assets/examples/`.
 
 | File | What it does |
 |------|-------------|
-| `motd-sleeping.json` | Text shown when server is off |
-| `motd-starting.json` | Text shown while server is booting |
-| `server-icon.png` | 64x64 PNG for the server list |
+| `motd-sleeping.json` | text shown while the server is off |
+| `motd-starting.json` | text shown while it is booting |
+| `motd-live.json` | text shown while it is running, replacing the server's own MOTD |
+| `server-icon.png` | your 64x64 icon, shown at half opacity under the Z |
+| `server-icon-sleeping.png` | replaces the sleeping icon outright, no Z drawn over it |
+| `server-icon-starting.png` | same for the booting icon |
+| `server-icon-live.png` | replaces the running server's own icon |
 
-These are read fresh on every request, so a change takes effect without restarting the watcher.
+A file beats the matching `motd.*` entry in `config.yml`, which beats the built-in default. The `-live` files are the ones that let you set the MOTD and the icon in one place instead of configuring them on the Minecraft server, and leaving them out keeps the server's own, which is the default.
+
+Icons have to be exactly 64x64 and under 64 kB. Anything else is skipped with a line in the log, because clients drop the whole server list entry over a wrongly sized icon.
+
+Assets are read fresh when they change, so editing one takes effect without restarting the watcher.
 
 ### Auto-sleep
 

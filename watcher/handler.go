@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -125,13 +126,13 @@ func (h *Handler) readHandshake(conn net.Conn) ([]byte, *Handshake) {
 
 func (h *Handler) handleStatus(ctx context.Context, conn net.Conn, initial []byte, hs *Handshake) {
 	if h.waker.MCPortReachable(ctx, false) {
-		h.proxy(ctx, conn, initial)
+		h.proxyStatus(ctx, conn, initial)
 		return
 	}
 
-	motd := h.assets.MOTDSleeping()
+	motd, icon := h.assets.MOTDSleeping(), h.assets.IconSleeping()
 	if h.waker.Booting() {
-		motd = h.assets.MOTDStarting()
+		motd, icon = h.assets.MOTDStarting(), h.assets.IconStarting()
 	}
 
 	// Clients can pack handshake, status request, and ping in one segment; read only when nothing followed.
@@ -167,7 +168,7 @@ func (h *Handler) handleStatus(ctx context.Context, conn net.Conn, initial []byt
 		maxPlayers = info.MaxPlayers
 	}
 
-	response, err := makeStatusResponse(motd, maxPlayers, 0, h.assets.Icon(), versionName, versionProtocol)
+	response, err := makeStatusResponse(motd, maxPlayers, 0, icon, versionName, versionProtocol)
 	if err != nil {
 		log.Errorf("Cannot build status response: %v", err)
 		return
@@ -234,6 +235,81 @@ func (h *Handler) handleLogin(ctx context.Context, conn net.Conn, initial []byte
 		return
 	}
 	h.proxy(ctx, conn, initial)
+}
+
+// Forwards the ping to the real server, then swaps in the watcher's own MOTD
+// and icon if either is overridden. Player count and version stay real.
+func (h *Handler) proxyStatus(ctx context.Context, conn net.Conn, initial []byte) {
+	motd, icon := h.assets.MOTDLive(), h.assets.IconLive()
+	if motd == "" && icon == "" {
+		h.proxy(ctx, conn, initial)
+		return
+	}
+
+	target := net.JoinHostPort(h.cfg.Server.IP, strconv.Itoa(h.cfg.Server.MCPort))
+	dialer := net.Dialer{Timeout: 10 * time.Second}
+	server, err := dialer.DialContext(ctx, "tcp", target)
+	if err != nil {
+		log.Errorf("Cannot reach %s for a status ping: %v", target, err)
+		return
+	}
+	defer server.Close()
+
+	server.SetDeadline(time.Now().Add(statusTimeout))
+	if _, err := server.Write(initial); err != nil {
+		return
+	}
+	body, err := readFramedPacket(server, maxStatusResponseBytes)
+	if err != nil {
+		log.Warnf("Cannot read the status response from %s: %v", target, err)
+		return
+	}
+	payload, err := parseStatusPayload(body)
+	if err != nil {
+		log.Warnf("Cannot parse the status response from %s: %v", target, err)
+		return
+	}
+
+	if motd != "" {
+		payload.Description = json.RawMessage(motd)
+	}
+	if icon != "" {
+		payload.Favicon = icon
+	}
+	response, err := encodeStatusPayload(payload)
+	if err != nil {
+		log.Errorf("Cannot rebuild the status response: %v", err)
+		return
+	}
+
+	conn.SetWriteDeadline(time.Now().Add(statusTimeout))
+	if _, err := conn.Write(response); err != nil {
+		return
+	}
+	h.answerPing(conn, server)
+}
+
+// The client's ping payload has to come back unchanged, so it is relayed rather
+// than parsed.
+func (h *Handler) answerPing(client, server net.Conn) {
+	client.SetReadDeadline(time.Now().Add(statusTimeout))
+	buf := make([]byte, readBufferSize)
+	n, err := client.Read(buf)
+	if err != nil || n == 0 {
+		return
+	}
+
+	server.SetDeadline(time.Now().Add(statusTimeout))
+	if _, err := server.Write(buf[:n]); err != nil {
+		return
+	}
+	pong := make([]byte, readBufferSize)
+	n, err = server.Read(pong)
+	if err != nil || n == 0 {
+		return
+	}
+	client.SetWriteDeadline(time.Now().Add(statusTimeout))
+	client.Write(pong[:n])
 }
 
 // Client receives a transfer packet, traffic skips the watcher.

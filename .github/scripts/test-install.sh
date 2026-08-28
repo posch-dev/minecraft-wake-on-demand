@@ -87,7 +87,7 @@ ok_if "binary installed and executable" test -x /opt/mc-wol-proxy/mc-wol-proxy
 ok_if "config.yml placed" test -f /opt/mc-wol-proxy/config.yml
 MODE="$(stat -c %a /opt/mc-wol-proxy/config.yml 2>/dev/null || echo none)"
 ok_if "config.yml is mode 600, it holds the DuckDNS token (got $MODE)" test "$MODE" = "600"
-ok_if "assets copied" test -f /opt/mc-wol-proxy/assets/motd-sleeping.json
+ok_if "example assets copied" test -f /opt/mc-wol-proxy/assets/examples/motd-sleeping.json
 ok_if "known_hosts created" test -f /opt/mc-wol-proxy/known_hosts
 ok_if "unit installed" test -f /etc/systemd/system/mc-wol-proxy.service
 ok_if "unit grants CAP_NET_RAW, otherwise ICMP falls back to the ping binary" \

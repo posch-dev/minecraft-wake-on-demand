@@ -153,12 +153,15 @@ type statusPayload struct {
 }
 
 func makeStatusResponse(motdJSON string, maxPlayers, online int, icon string, versionName string, versionProtocol int) ([]byte, error) {
-	payload := statusPayload{
+	return encodeStatusPayload(&statusPayload{
 		Version:     statusVersion{Name: versionName, Protocol: versionProtocol},
 		Players:     statusPlayers{Max: maxPlayers, Online: online},
 		Description: json.RawMessage(motdJSON),
 		Favicon:     icon,
-	}
+	})
+}
+
+func encodeStatusPayload(payload *statusPayload) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	// The MOTD may contain characters Go would escape as < by default.

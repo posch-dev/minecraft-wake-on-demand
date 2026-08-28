@@ -56,6 +56,7 @@ motd:
   # \n splits the two lines the server list shows.
   sleeping: '{"text":"Server currently asleep","color":"gray","extra":[{"text":"\nJoin to wake it up","color":"green"}]}'
   starting: '{"text":"Server is starting","color":"gold","extra":[{"text":"\nGive it a moment, then join","color":"gray"}]}'
+  live: ''                            # empty = leave the running server's own MOTD alone
   login_wait: '{"text":"Server is waking up. Please reconnect in a moment.","color":"gold"}'
   server_full: '{"text":"Server is full. Please try again in a moment.","color":"red"}'
   max_players: 10                     # only shown until the real number is learned from the server
