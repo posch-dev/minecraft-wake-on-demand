@@ -84,7 +84,8 @@ func runGetServerIcon() int {
 		printError(err.Error())
 		return 1
 	}
-	fmt.Println("  Done. It shows while your server sleeps.")
+	fmt.Println("  Done. It shows in all three states, plain while the server runs.")
+	printHint("A running watcher picks it up within a minute.")
 	return 0
 }
 

@@ -145,6 +145,12 @@ func runProxy() int {
 		}()
 	}
 
+	tasks.Add(1)
+	go func() {
+		defer tasks.Done()
+		handler.assets.KeepFresh(ctx)
+	}()
+
 	// Unblocks the Accept call below when a signal arrives.
 	go func() {
 		<-ctx.Done()

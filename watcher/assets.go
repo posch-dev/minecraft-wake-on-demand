@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/base64"
 	"encoding/binary"
@@ -25,6 +26,8 @@ const (
 	maxMOTDBytes = 8 * 1024
 	iconEdge     = 64
 )
+
+const assetRefreshInterval = time.Minute
 
 //go:embed assets/embed/overlay-sleeping.png
 var overlaySleepingPNG []byte
@@ -58,7 +61,33 @@ type cachedIcon struct {
 }
 
 func NewAssets(cfg *Config) *Assets {
-	return &Assets{dir: cfg.AssetsDir(), cfg: cfg, iconCache: map[string]cachedIcon{}}
+	assets := &Assets{dir: cfg.AssetsDir(), cfg: cfg, iconCache: map[string]cachedIcon{}}
+	assets.warm()
+	return assets
+}
+
+// Composing an icon is milliseconds, but no client should ever wait for it, so
+// it happens on a tick. A ping then only stats files it has already composed.
+func (a *Assets) KeepFresh(ctx context.Context) {
+	ticker := time.NewTicker(assetRefreshInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.warm()
+		}
+	}
+}
+
+func (a *Assets) warm() {
+	a.MOTDSleeping()
+	a.MOTDStarting()
+	a.MOTDLive()
+	a.IconSleeping()
+	a.IconStarting()
+	a.IconLive()
 }
 
 // A world can look different without repeating what it shares, so its own
@@ -126,10 +155,13 @@ func (a *Assets) IconStarting() string {
 	return a.stateIcon(stateStarting, overlayStartingPNG)
 }
 
-// Only its own file, never the shared icon, so a running server keeps the icon
-// it was configured with unless someone deliberately overrides it.
+// The same rule as the other two states: a file for this state wins, otherwise
+// the shared icon, which a running server needs no overlay on.
 func (a *Assets) IconLive() string {
-	return a.firstIconFile("server-icon-live.png")
+	if dedicated := a.firstIconFile("server-icon-live.png"); dedicated != "" {
+		return dedicated
+	}
+	return a.firstIconFile("server-icon.png")
 }
 
 func (a *Assets) firstIconFile(name string) string {
