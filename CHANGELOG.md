@@ -158,6 +158,13 @@ notes, so a version has to be listed here before it is tagged.
   says where the old config is. Two watchers on port 25565 would have produced
   failures that look random rather than one clear message.
 
+### Added
+
+- `assets/examples/` ships a placeholder `server-icon.png` and the MOTD files
+  now say `CHANGE THIS TOP LINE` rather than repeating the built-in text, so it
+  is obvious what to edit. Its README lists the colours Minecraft accepts and
+  spells out that a file beats `config.yml`, which beats the built-in text.
+
 ### Fixed
 
 - `duckdns.domain` takes the address either way round. `eliahmc` and
