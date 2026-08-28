@@ -29,8 +29,10 @@ func runHome() int {
 		case "2":
 			runConfigEdit()
 		case "3":
-			runGetServerIcon()
+			runPlayers()
 		case "4":
+			runGetServerIcon()
+		case "5":
 			runUpdate()
 		case "q", "quit", "exit", "":
 			return 0
@@ -50,8 +52,9 @@ func printHomeMenu() {
 	fmt.Println("")
 	fmt.Println("  1) Check that everything works")
 	fmt.Println("  2) Change settings")
-	fmt.Println("  3) Use the picture from your server")
-	fmt.Println("  4) Update MCWOD")
+	fmt.Println("  3) Manage players")
+	fmt.Println("  4) Use the picture from your server")
+	fmt.Println("  5) Update MCWOD")
 	fmt.Println("  q) Quit")
 }
 

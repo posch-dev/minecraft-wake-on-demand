@@ -45,6 +45,9 @@ type ServerConfig struct {
 	SSHStrictHostKey string `yaml:"ssh_strict_host_key"`
 	SSHKnownHosts    string `yaml:"ssh_known_hosts"`
 	ContainerName    string `yaml:"container_name"`
+	// Where the compose file lives on the server, remembered so nothing has to
+	// ask for it again.
+	ComposeDir string `yaml:"compose_dir"`
 	// True once setup-ssh installed the helper script. The watcher then sends
 	// verbs instead of whole commands, see remotehelper.go.
 	RemoteHelper bool `yaml:"remote_helper"`

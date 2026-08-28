@@ -125,6 +125,8 @@ mcwod check       # confirms everything is wired up
 
 **`mcwod`** on its own is the place to start. The first time it walks you through the setup, after that it shows what your server is doing and asks what you want to do.
 
+**`players`** is where you say who may join and who is an admin. It reads and writes your server's own settings, so what you set here survives the container being rebuilt. `whitelist` is the same command.
+
 **`config`** changes an existing setup through a menu, so nothing has to be edited by hand. `edit` and `settings` are the same command. Your own comments in `config.yml` are kept.
 
 **`setup-ssh`** creates the key, shows you the server's host key fingerprint so you can confirm it is the right machine, asks for your server password once, and installs the key. By default it restricts the key so it can only run `docker start`, which means a leaked key cannot do anything else. The password is used for that one login and is not stored.
