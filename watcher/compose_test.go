@@ -381,3 +381,15 @@ func TestNoAdminWritesNoOps(t *testing.T) {
 		t.Errorf("nobody was named, so OPS should be absent:\n%s", body)
 	}
 }
+
+// init offers transfer mode, so the server it creates has to accept transfers,
+// otherwise the tool hands players to a server that turns them away.
+func TestGeneratedComposeAcceptsTransfers(t *testing.T) {
+	body, err := newComposeFile(testSpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, `ACCEPTS_TRANSFERS: "TRUE"`) {
+		t.Errorf("the generated file does not accept transfers:\n%s", body)
+	}
+}

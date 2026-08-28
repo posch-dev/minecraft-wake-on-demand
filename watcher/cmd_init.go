@@ -371,6 +371,8 @@ func askTransferMode(p *prompter, cfg *Config) {
 	fmt.Println("")
 	printHint("Forward this port on your router to " + cfg.Server.IP + ".")
 	cfg.Transfer.Port = p.validatedPort("Which port goes straight to the server PC?", cfg.Server.MCPort)
+	printHint("A server MCWOD set up accepts transfers already. One set up by",
+		"hand needs accepts-transfers=true in its server.properties.")
 }
 
 // A hostname is accepted, but WoL and the MAC lookup need the address, so it is

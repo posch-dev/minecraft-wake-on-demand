@@ -231,6 +231,9 @@ func (e *configEditor) editTransfer() {
 
 	c.Transfer.Port = e.p.validatedPort("Port forwarded straight to the server PC", c.Transfer.Port)
 	e.set(c.Transfer.Port, "transfer", "port")
+
+	printHint("A server MCWOD set up accepts transfers already. One set up by",
+		"hand needs accepts-transfers=true in its server.properties.")
 }
 
 func (e *configEditor) editSleep() {
