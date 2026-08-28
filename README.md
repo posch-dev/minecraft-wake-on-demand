@@ -89,17 +89,51 @@ After this, the watcher handles starting it via SSH. You don't need to touch it 
 
 ### 5. Install and set up the watcher
 
-**Linux:**
+There are two ways on each system. The one-liner is quicker. The step-by-step
+way lets you look at what you are about to run before you run it, which is worth
+something: piping a script off the internet straight into a root shell means
+trusting whoever wrote it, sight unseen. Both end up in the same place.
+
+**Linux, one line:**
 
 ```bash
-sudo ./watcher/install.sh
+curl -fsSL https://raw.githubusercontent.com/posch-dev/minecraft-wake-on-demand/main/watcher/install.sh | sudo bash
 ```
 
-**Windows:**
+It works out which build fits your machine, checks the download against the
+checksums published with the release, and refuses to install anything that does
+not match.
+
+**Linux, step by step:**
+
+```bash
+curl -fsSLO https://github.com/posch-dev/minecraft-wake-on-demand/releases/latest/download/mcwod_linux_amd64
+chmod +x mcwod_linux_amd64
+sudo ./mcwod_linux_amd64 install
+```
+
+Swap `amd64` for `arm64`, `armv7` or `armv6` if that is what you have; a
+Raspberry Pi 4 or 5 on a 64-bit system is `arm64`, an older one is `armv7`.
+`uname -m` tells you. The binary carries its own service file and example
+assets, so this is the whole download.
+
+**Windows, one line** (PowerShell):
+
+```powershell
+iwr -useb https://github.com/posch-dev/minecraft-wake-on-demand/releases/latest/download/mcwod_windows_amd64.exe -OutFile mcwod.exe; .\mcwod.exe install
+```
+
+**Windows, step by step:**
 
 1. Download `mcwod_windows_amd64.exe` from the [releases page](https://github.com/posch-dev/minecraft-wake-on-demand/releases)
-2. Rename it to `mcwod.exe` and put it in the `watcher` folder
-3. For autostart later, put a shortcut to `watcher\windows-start.vbs` in your `shell:startup` folder
+2. Rename it to `mcwod.exe`
+3. Run `.\mcwod.exe install` in PowerShell
+
+On Windows the watcher installs into your own profile, so it needs no
+administrator, and it starts with your session through a script placed in your
+`shell:startup` folder. **A proper Windows service is coming**; until then the
+watcher runs while you are logged in, which is enough for a PC that is switched
+on when people play. Deleting that script in `shell:startup` stops it starting.
 
 **Docker:**
 
@@ -107,11 +141,19 @@ sudo ./watcher/install.sh
 cp config.example.yml config.yml
 ```
 
-Fill in `config.yml` by hand, then `cd watcher && docker compose up -d`. The three commands below are available in the other two setups, the table further down lists what goes in the file.
+Fill in `config.yml` by hand, then `cd watcher && docker compose up -d`. The
+three commands below are available in the other two setups, the table further
+down lists what goes in the file.
 
 ---
 
-Now let the watcher set itself up. On Linux, `install.sh` prints these three lines with the right paths already filled in:
+`install` does the whole setup: it puts the binary in place, registers it to
+start with the machine, and then asks the same questions `init` asks before
+starting the watcher. On Linux it runs those questions as the account you called
+`sudo` from, so the SSH key it creates lands in your home and not in root's.
+
+If you would rather do the steps yourself, or you are setting up a second world
+later, these are the same three commands `install` runs for you:
 
 ```bash
 mcwod init        # asks a handful of questions and writes config.yml
@@ -165,8 +207,8 @@ Always add the port. Minecraft is supposed to assume `25565` on its own, but dep
 
 1. Add the server in Minecraft. The list shows "Server currently asleep" and under it "Join to wake it up"
 2. Click Join. The watcher wakes the PC and starts the container.
-3. This takes roughly 30 to 60 seconds. Minecraft usually gives up before that and shows a timeout, or you get "Server is waking up, please reconnect in a moment".
-4. Click Join again. Now you're in.
+3. You are sent straight back with "Server is waking up, please reconnect in a moment". Waking takes roughly 30 to 60 seconds, longer than Minecraft waits, so it says so rather than leaving you on a progress bar that then fails.
+4. Wait for the list to show the server as up, then click Join again. Now you're in.
 
 Only the first player after a sleep goes through this. Everyone joining while the server is already up connects straight away.
 
@@ -177,6 +219,7 @@ Only the first player after a sleep goes through this. Everyone joining while th
 | Command | What it does |
 |---------|--------------|
 | `mcwod` | starts the watcher, this is what the service runs |
+| `mcwod install` | installs this binary and starts it with the machine |
 | `mcwod init` | asks for your settings and writes `config.yml` |
 | `mcwod setup-ssh` | creates the SSH key and installs it on the server |
 | `mcwod check` | tests the setup and reports what is missing |
