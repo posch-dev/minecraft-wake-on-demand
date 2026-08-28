@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -73,7 +74,7 @@ func backupComposeFile(s *ServerSession, target ComposeTarget) (string, error) {
 	if !target.Exists() {
 		return "", nil
 	}
-	backup := joinRemote(s, target.Dir, composeBackupPrefix+time.Now().UTC().Format("20060102-150405"))
+	backup := joinRemote(s, target.Dir, composeBackupName(time.Now().UTC().Format("20060102-150405")))
 
 	var command string
 	if s.Platform().Windows {
@@ -155,4 +156,41 @@ func composeInvocation(s *ServerSession, target ComposeTarget, args string) stri
 	}
 	return "cd " + shellQuote(target.Dir) + " && " + target.Command +
 		" -f " + shellQuote(target.File) + " " + args
+}
+
+// Newest first, which is what someone restoring almost always wants.
+func listComposeBackups(s *ServerSession, dir string) ([]string, error) {
+	var command string
+	if s.Platform().Windows {
+		command = "Get-ChildItem -LiteralPath " + powerShellQuote(dir) + " -Filter " +
+			powerShellQuote(composeBackupPrefix+"*") + " | Select-Object -ExpandProperty Name"
+	} else {
+		command = "ls -1 " + shellQuote(dir) + " 2>/dev/null | grep '^" + composeBackupPrefix + "'"
+	}
+
+	out, err := s.Run(command)
+	if err != nil {
+		return nil, nil
+	}
+	names := filterComposeBackups(strings.Fields(out))
+	sortComposeBackups(names)
+	return names, nil
+}
+
+func composeBackupName(stamp string) string {
+	return composeBackupPrefix + stamp
+}
+
+func filterComposeBackups(lines []string) []string {
+	names := []string{}
+	for _, line := range lines {
+		if strings.HasPrefix(line, composeBackupPrefix) {
+			names = append(names, line)
+		}
+	}
+	return names
+}
+
+func sortComposeBackups(names []string) {
+	sort.Sort(sort.Reverse(sort.StringSlice(names)))
 }

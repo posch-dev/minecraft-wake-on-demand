@@ -247,6 +247,8 @@ Assets are read fresh when they change, so editing one takes effect without rest
 
 If there is already a compose file in that directory, the two services are added to it. Everything else in the file, other services, the top level keys, your comments, stays exactly as it was. Before anything is written a copy is kept as `docker-compose.yml.mcwol-bak-<time>`, the result has to pass `docker compose config`, and a service name that is already taken is refused rather than overwritten.
 
+`mc-wol-proxy restore-compose` puts one of those backups back, and keeps the current file as a backup on the way, so the restore itself is undoable.
+
 Accepting the Minecraft EULA is a separate question. Saying yes writes `EULA=TRUE` into the compose file, which is the same as accepting it yourself.
 
 ### Auto-sleep
