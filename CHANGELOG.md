@@ -141,6 +141,13 @@ notes, so a version has to be listed here before it is tagged.
 
 ### Changed
 
+- The wizard and `check` use colour: what you type is green, side notes are
+  grey, warnings amber and failures red. It is off whenever nothing is attached
+  to the terminal, so pipes and the journal stay clean, `NO_COLOR` and
+  `TERM=dumb` switch it off, and on Windows the console is put into virtual
+  terminal mode first because the older `conhost` otherwise prints the escape
+  codes as text.
+
 - **The tool is called `mcwod` now.** The binary, the release assets, the
   install directory `/opt/mcwod`, the systemd unit, the helper on the server,
   its sudoers file, the Wake-on-LAN unit, the SSH key and the environment

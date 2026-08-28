@@ -32,11 +32,13 @@ func newPrompterFrom(r io.Reader) *prompter {
 
 func (p *prompter) line(question, fallback string) string {
 	if fallback != "" {
-		fmt.Printf("%s [%s]: ", question, fallback)
+		fmt.Printf("%s %s: ", question, hint("["+fallback+"]"))
 	} else {
 		fmt.Printf("%s: ", question)
 	}
+	beginInputColor()
 	text, err := p.in.ReadString('\n')
+	endInputColor()
 	if err != nil && text == "" {
 		return fallback
 	}
@@ -52,7 +54,7 @@ func (p *prompter) validated(question, fallback string, check func(string) error
 	for {
 		answer := p.line(question, fallback)
 		if err := check(answer); err != nil {
-			fmt.Printf("  %v\n", err)
+			printError("  " + err.Error())
 			continue
 		}
 		return answer
@@ -60,13 +62,15 @@ func (p *prompter) validated(question, fallback string, check func(string) error
 }
 
 func (p *prompter) yesNo(question string, fallback bool) bool {
-	hint := "y/N"
+	choices := "y/N"
 	if fallback {
-		hint = "Y/n"
+		choices = "Y/n"
 	}
 	for {
-		fmt.Printf("%s [%s]: ", question, hint)
+		fmt.Printf("%s %s: ", question, hint("["+choices+"]"))
+		beginInputColor()
 		text, _ := p.in.ReadString('\n')
+		endInputColor()
 		switch strings.ToLower(strings.TrimSpace(text)) {
 		case "":
 			return fallback
