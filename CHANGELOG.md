@@ -10,10 +10,6 @@ notes, so a version has to be listed here before it is tagged.
 - **The watcher no longer uses `~/.ssh/id_ed25519`, and there is no fallback to
   it.** Only the key it generates itself at `~/.ssh/mcwod` is ever used. If your
   install was set up before this version, run `mcwod setup-ssh`.
-- `.server-info.json` is keyed per world now. An older file written by 2.0 is
-  ignored and the version is learned again on the next boot.
-- Transfer mode is part of `init` again. 2.0 moved it to `mcwod config`; it is
-  offered in the wizard once more, but only to people who use DuckDNS.
 
 ### Added
 
@@ -49,7 +45,8 @@ notes, so a version has to be listed here before it is tagged.
   reason this project appears to do nothing.
 - `init` and `config` can set the Minecraft container up. They write a compose
   file with `itzg/minecraft-server` and `itzg/mc-backup` on pinned tags, RCON
-  on, AUTOPAUSE on, an RCON password in a `.env` with mode 600, and bring it up.
+  on, AUTOPAUSE on, transfers accepted, an RCON password in a `.env` with mode
+  600, and bring it up.
   The version is asked for rather than left at `LATEST`.
 - An existing compose file gets the two services added instead. Other services,
   keys and comments stay, a backup is kept, `docker compose config` has to
@@ -107,12 +104,8 @@ notes, so a version has to be listed here before it is tagged.
   all follow. `MC_WOL_*` still works and warns once.
 - A player whose join wakes the server is told to come back instead of being
   held on the connection. Waking takes longer than any client waits.
-- One `server-icon.png` feeds all three states, plain while the server runs and
-  at half opacity under the Z while it sleeps. `server-icon-live.png` is now an
-  ordinary override like the other two.
-- Icons are composed on a one minute tick, never inside a request.
-- A generated compose always sets `ACCEPTS_TRANSFERS`, so turning transfer mode
-  on later is a change to the watcher and nothing else.
+- Your `server-icon.png` feeds all three states, plain while the server runs and
+  at half opacity under the Z while it sleeps.
 - A generated compose sets `ENFORCE_SECURE_PROFILE: "FALSE"`, so chat is
   unsigned and nothing is held back or reportable. `ONLINE_MODE` is untouched.
 - Waking brings the whole compose project up, so the backup service comes back
@@ -132,6 +125,8 @@ notes, so a version has to be listed here before it is tagged.
   only if you say so.
 - `install.sh` stops an `mc-wol-proxy` service if it finds one. Two watchers on
   port 25565 would have failed in ways that look random.
+- Transfer mode is only offered in the wizard to people who use DuckDNS.
+  Everyone else has nothing to forward.
 - Transfer mode needs 1.20.5 (protocol 766), the first version with the
   Transfer packet. Proxy mode still supports 1.7.6+.
 
@@ -145,24 +140,18 @@ notes, so a version has to be listed here before it is tagged.
 - The status request is forwarded to the real server. Clients may send it apart
   from the handshake, and only the handshake was passed on, so a running server
   showed up in the list as asleep.
-- The connection is drained before the wait message's socket closes. Closing on
-  an unread login packet sends a reset, and the client showed a socket error
-  instead of the message.
 - The watcher waits for Minecraft to answer before calling the server live. The
   published port came about 24 seconds earlier.
-- The learned version survives a restart and is kept per world. It was written
-  under one name and read back under another.
-- The container image is pinned without a Java suffix, so the image picks the
-  runtime that fits.
 - The watcher generates its own SSH key and never adopts `~/.ssh/id_ed25519`.
   An internet facing service ended up holding the key its owner logs in with
   everywhere else.
 - `setup-ssh` replaces an outdated entry for its own key instead of leaving it.
   Every other line in `authorized_keys` stays as it was.
-- A first install works. Several things assumed a setup that already existed.
-- `init` remembers the world it just created.
-- `check` reports the container state instead of the refusal a restricted key
-  answers with.
+- `install.sh` no longer strands a first install. It put the example config in
+  place, which made the `init` it then told you to run refuse to start, and it
+  printed that step with `sudo`, so `setup-ssh` wrote the key under `/root`
+  where the service cannot read it.
+- `install.sh` no longer prints a curl write error over every install.
 - The setup questions no longer repeat forever when their answers run out. A
   closed input gives empty reads forever, and one validated question filled a
   log with 197 MB in seconds.
@@ -173,15 +162,9 @@ notes, so a version has to be listed here before it is tagged.
 - The broadcast address is read off the watcher's own interface instead of
   assuming a `/24`. On a `/16` the guess was wrong and waking simply never
   worked.
-- The status response is read by its length prefix instead of one 4096 byte
-  read. A response with an icon never arrives in one segment, so version
-  learning did nothing on any server that had one.
 - An icon over 64 kB or not 64x64 is skipped with a warning. A status ping is
   answered to anyone, so an oversized icon turned a 30 byte request into a
   multi megabyte reply. MOTD files are capped at 8 kB.
-- `watcher.allowed_hostnames` no longer rejects Forge players and players behind
-  a proxy. Both append fields after a NUL byte, so only the part before the
-  first NUL is compared now.
 
 ## 2.0.0
 
