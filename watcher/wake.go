@@ -11,6 +11,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // A burst of connections shares one probe instead of hammering the server.
@@ -77,7 +79,7 @@ func (w *Waker) loadServerInfo() {
 		return
 	}
 	w.info = info
-	log.Infof("Loaded cached server info: %s (protocol %d, max players %d)",
+	logging.Infof("Loaded cached server info: %s (protocol %d, max players %d)",
 		info.Name, info.Protocol, info.MaxPlayers)
 }
 
@@ -97,7 +99,7 @@ func readServerInfoCache(path string) map[string]*ServerInfo {
 		return cache
 	}
 	if err := json.Unmarshal(data, &cache); err != nil {
-		log.Infof("Replacing the server info cache %s, it is from an older version", path)
+		logging.Infof("Replacing the server info cache %s, it is from an older version", path)
 		return map[string]*ServerInfo{}
 	}
 	return cache
@@ -108,16 +110,16 @@ func readServerInfoCache(path string) map[string]*ServerInfo {
 func writeServerInfoCache(path string, cache map[string]*ServerInfo) {
 	data, err := json.MarshalIndent(cache, "", "  ")
 	if err != nil {
-		log.Warnf("Cannot encode server info cache: %v", err)
+		logging.Warnf("Cannot encode server info cache: %v", err)
 		return
 	}
 	tmpPath := fmt.Sprintf("%s.tmp.%d", path, time.Now().UnixNano())
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
-		log.Warnf("Cannot write server info cache %s: %v", tmpPath, err)
+		logging.Warnf("Cannot write server info cache %s: %v", tmpPath, err)
 		return
 	}
 	if err := os.Rename(tmpPath, path); err != nil {
-		log.Warnf("Cannot update server info cache %s: %v", path, err)
+		logging.Warnf("Cannot update server info cache %s: %v", path, err)
 		os.Remove(tmpPath)
 	}
 }
@@ -195,7 +197,7 @@ func (w *Waker) SendMagicPacket() error {
 	if _, err := conn.Write(payload); err != nil {
 		return fmt.Errorf("cannot send WoL packet: %w", err)
 	}
-	log.Infof("WoL magic packet sent to %s (%s mode)", target, w.cfg.WoL.Mode)
+	logging.Infof("WoL magic packet sent to %s (%s mode)", target, w.cfg.WoL.Mode)
 	return nil
 }
 
@@ -286,7 +288,7 @@ func (w *Waker) learnServerInfo(body []byte) {
 	}
 
 	w.info = learned
-	log.Infof("Learned server info: %s (protocol %d, max players %d)",
+	logging.Infof("Learned server info: %s (protocol %d, max players %d)",
 		learned.Name, learned.Protocol, learned.MaxPlayers)
 	go w.saveServerInfo(learned)
 }
@@ -376,7 +378,7 @@ func (w *Waker) endBoot(ok bool) {
 		return
 	}
 	w.failures++
-	log.Warnf("Boot sequence failed (%d in a row), next attempt in %ds",
+	logging.Warnf("Boot sequence failed (%d in a row), next attempt in %ds",
 		w.failures, int(w.cooldownRemainingLocked().Seconds()))
 }
 
@@ -395,17 +397,17 @@ func (w *Waker) waitFor(ctx context.Context, label string, timeout int, probe fu
 		case <-time.After(2 * time.Second):
 		}
 	}
-	log.Errorf("%s did not become ready within %ds", label, timeout)
+	logging.Errorf("%s did not become ready within %ds", label, timeout)
 	return false
 }
 
 func (w *Waker) waitForHost(ctx context.Context) bool {
-	log.Infof("Waiting for server PC to respond to ping (timeout %ds)...", w.cfg.Timeouts.BootTimeout)
+	logging.Infof("Waiting for server PC to respond to ping (timeout %ds)...", w.cfg.Timeouts.BootTimeout)
 	ok := w.waitFor(ctx, "Server PC", w.cfg.Timeouts.BootTimeout, func(ctx context.Context) bool {
 		return w.pinger.Ping(ctx, w.cfg.Server.IP, 1500*time.Millisecond)
 	})
 	if ok {
-		log.Infof("Server PC is up")
+		logging.Infof("Server PC is up")
 	}
 	return ok
 }
@@ -416,11 +418,11 @@ func (w *Waker) waitForSSH(ctx context.Context) bool {
 }
 
 func (w *Waker) waitForMC(ctx context.Context) bool {
-	log.Infof("Waiting for Minecraft port %d (timeout %ds)...",
+	logging.Infof("Waiting for Minecraft port %d (timeout %ds)...",
 		w.cfg.Server.MCPort, w.cfg.Timeouts.MCReadyTimeout)
 	ok := w.waitFor(ctx, "Minecraft server", w.cfg.Timeouts.MCReadyTimeout, w.mcAcceptsStatus)
 	if ok {
-		log.Infof("Minecraft server is ready")
+		logging.Infof("Minecraft server is ready")
 	}
 	return ok
 }
@@ -437,7 +439,7 @@ func (w *Waker) FullBoot(ctx context.Context) bool {
 		w.stateMu.Lock()
 		failures := w.failures
 		w.stateMu.Unlock()
-		log.Warnf("Boot attempt refused, %ds cooldown remaining (%d consecutive failures)",
+		logging.Warnf("Boot attempt refused, %ds cooldown remaining (%d consecutive failures)",
 			int(cooldown.Seconds()), failures)
 		return false
 	}
@@ -447,11 +449,11 @@ func (w *Waker) FullBoot(ctx context.Context) bool {
 	defer func() { w.endBoot(ok) }()
 
 	if w.SSHPortReachable(ctx) {
-		log.Infof("Server PC is up but MC not running, starting container...")
+		logging.Infof("Server PC is up but MC not running, starting container...")
 	} else {
-		log.Infof("Server PC is sleeping, sending WoL...")
+		logging.Infof("Server PC is sleeping, sending WoL...")
 		if err := w.SendMagicPacket(); err != nil {
-			log.Errorf("WoL failed: %v", err)
+			logging.Errorf("WoL failed: %v", err)
 			return false
 		}
 		if !w.waitForHost(ctx) {
@@ -463,7 +465,7 @@ func (w *Waker) FullBoot(ctx context.Context) bool {
 	}
 
 	if err := w.ssh.StartContainer(ctx); err != nil {
-		log.Errorf("Container start failed: %v", err)
+		logging.Errorf("Container start failed: %v", err)
 		return false
 	}
 

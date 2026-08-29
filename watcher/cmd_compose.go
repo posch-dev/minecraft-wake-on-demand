@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 const eulaURL = "https://aka.ms/MinecraftEULA"
@@ -246,7 +248,7 @@ func writeComposeFiles(p *prompter, s *ServerSession, target ComposeTarget,
 
 	// Before either file, the directory may not exist yet.
 	if out, err := s.Run(makeDirCommand(s, target.Dir)); err != nil {
-		fmt.Printf("\nCannot create %s: %v: %s\n", target.Dir, err, sanitizeForLog(out, 200))
+		fmt.Printf("\nCannot create %s: %v: %s\n", target.Dir, err, logging.Sanitize(out, 200))
 		return false
 	}
 
@@ -284,7 +286,7 @@ func writeComposeFiles(p *prompter, s *ServerSession, target ComposeTarget,
 	out, err := composeUp(s, target)
 	if err != nil {
 		fmt.Printf("  could not start them: %v\n", err)
-		fmt.Printf("  %s\n", sanitizeForLog(out, 400))
+		fmt.Printf("  %s\n", logging.Sanitize(out, 400))
 		return true
 	}
 	fmt.Println("Containers started.")

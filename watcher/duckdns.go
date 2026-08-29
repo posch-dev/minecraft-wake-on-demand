@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 const duckDNSEndpoint = "https://www.duckdns.org/update"
@@ -30,24 +32,24 @@ func updateDuckDNS(ctx context.Context, cfg *Config) error {
 	}
 	resp, err := duckDNSClient.Do(req)
 	if err != nil {
-		log.Warnf("DuckDNS update failed: %v", err)
+		logging.Warnf("DuckDNS update failed: %v", err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
 	if err != nil {
-		log.Warnf("DuckDNS update failed: %v", err)
+		logging.Warnf("DuckDNS update failed: %v", err)
 		return err
 	}
 	answer := strings.TrimSpace(string(body))
 	if answer == "OK" {
-		log.Infof("DuckDNS updated successfully for %s", cfg.DuckDNSHost())
+		logging.Infof("DuckDNS updated successfully for %s", cfg.DuckDNSHost())
 		return nil
 	}
 	// DuckDNS answers "KO" for a wrong domain or token, with status 200.
-	log.Warnf("DuckDNS update returned: %s", sanitizeForLog(answer, 64))
-	return fmt.Errorf("DuckDNS answered %q instead of OK", sanitizeForLog(answer, 64))
+	logging.Warnf("DuckDNS update returned: %s", logging.Sanitize(answer, 64))
+	return fmt.Errorf("DuckDNS answered %q instead of OK", logging.Sanitize(answer, 64))
 }
 
 func runDuckDNSUpdater(ctx context.Context, cfg *Config) {

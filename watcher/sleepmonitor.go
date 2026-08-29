@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // A client that connects and goes quiet would hold the counter above zero forever.
@@ -46,7 +48,7 @@ func NewSleepMonitor(cfg *Config, waker *Waker) *SleepMonitor {
 
 func runSleepMonitor(ctx context.Context, cfg *Config, waker *Waker) {
 	monitor := NewSleepMonitor(cfg, waker)
-	log.Infof("Sleep monitor active, %s after %ds without players",
+	logging.Infof("Sleep monitor active, %s after %ds without players",
 		cfg.Sleep.Action, cfg.Sleep.IdleAfter)
 
 	ticker := time.NewTicker(monitor.tickInterval())
@@ -115,7 +117,7 @@ func (m *SleepMonitor) tick(ctx context.Context) {
 
 	if m.pendingSince.IsZero() {
 		m.pendingSince = now
-		log.Infof("Nobody is playing, checking once more in %ds before going to %s",
+		logging.Infof("Nobody is playing, checking once more in %ds before going to %s",
 			m.cfg.Sleep.ConfirmDelay, m.cfg.Sleep.Action)
 		return
 	}
@@ -129,9 +131,9 @@ func (m *SleepMonitor) tick(ctx context.Context) {
 func (m *SleepMonitor) hold(reason string) {
 	// Logged on change only, this ticks every 30 seconds.
 	if !m.pendingSince.IsZero() {
-		log.Infof("Sleep cancelled, %s", reason)
+		logging.Infof("Sleep cancelled, %s", reason)
 	} else if reason != m.lastReason {
-		log.Infof("Not sleeping, %s", reason)
+		logging.Infof("Not sleeping, %s", reason)
 	}
 	m.pendingSince = time.Time{}
 	m.zeroPlayersFrom = time.Time{}
@@ -168,7 +170,7 @@ func (m *SleepMonitor) playersOnline(ctx context.Context) (int, bool) {
 	// A stopped container has nobody on it, which saves the second round trip.
 	state, err := m.runVerb(ctx, remoteVerbStatus)
 	if err != nil {
-		log.Warnf("Sleep monitor cannot read the container state: %v", err)
+		logging.Warnf("Sleep monitor cannot read the container state: %v", err)
 		return 0, false
 	}
 	if strings.TrimSpace(state) != "running" {
@@ -177,12 +179,12 @@ func (m *SleepMonitor) playersOnline(ctx context.Context) (int, bool) {
 
 	out, err := m.runVerb(ctx, remoteVerbPlayers)
 	if err != nil {
-		log.Warnf("Sleep monitor cannot read the player count: %v", err)
+		logging.Warnf("Sleep monitor cannot read the player count: %v", err)
 		return 0, false
 	}
 	online, ok := parsePlayerCount(out)
 	if !ok {
-		log.Warnf("Sleep monitor cannot read a player count from %q", sanitizeForLog(out, 60))
+		logging.Warnf("Sleep monitor cannot read a player count from %q", logging.Sanitize(out, 60))
 	}
 	return online, ok
 }
@@ -197,17 +199,17 @@ func (m *SleepMonitor) sleepServer(ctx context.Context) {
 
 	// Suspend resumes the process, hibernate and shutdown do not, so save first.
 	if m.cfg.Sleep.Action == "hibernate" || m.cfg.Sleep.Action == "shutdown" {
-		log.Infof("Stopping the container before %s so the world is saved", m.cfg.Sleep.Action)
+		logging.Infof("Stopping the container before %s so the world is saved", m.cfg.Sleep.Action)
 		if err := m.stopContainer(actionCtx); err != nil {
-			log.Errorf("Not sleeping, the container would not stop: %v", err)
+			logging.Errorf("Not sleeping, the container would not stop: %v", err)
 			return
 		}
 	}
 
-	log.Infof("Sending the server PC to %s", m.cfg.Sleep.Action)
+	logging.Infof("Sending the server PC to %s", m.cfg.Sleep.Action)
 	// The connection dies mid command as the machine goes down, that is success.
 	if _, err := m.runVerb(actionCtx, remoteVerbSleep); err != nil {
-		log.Infof("Sleep command returned %v, normal when the PC goes down mid connection", err)
+		logging.Infof("Sleep command returned %v, normal when the PC goes down mid connection", err)
 	}
 }
 

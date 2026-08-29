@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // What one password login can find out about the server PC, so init can fill
@@ -203,7 +205,7 @@ func enableWakeOnLAN(s *ServerSession, iface string) error {
 		shellQuote(wakeOnLANUnitName(iface)))
 
 	if out, err := s.RunSudo(install); err != nil {
-		return fmt.Errorf("%w: %s", err, sanitizeForLog(out, 200))
+		return fmt.Errorf("%w: %s", err, logging.Sanitize(out, 200))
 	}
 	s.Run("rm -f " + shellQuote(staged))
 	return nil

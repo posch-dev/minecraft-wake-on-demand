@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // Where the compose file lives on the server and what is already in it.
@@ -84,7 +86,7 @@ func backupComposeFile(s *ServerSession, target ComposeTarget) (string, error) {
 		command = "cp -p " + shellQuote(target.File) + " " + shellQuote(backup)
 	}
 	if out, err := s.Run(command); err != nil {
-		return "", fmt.Errorf("cannot back up %s: %w: %s", target.File, err, sanitizeForLog(out, 200))
+		return "", fmt.Errorf("cannot back up %s: %w: %s", target.File, err, logging.Sanitize(out, 200))
 	}
 	return backup, nil
 }
@@ -99,7 +101,7 @@ func writeRemoteFile(s *ServerSession, path, content string) error {
 		command += "\nMove-Item -Force -LiteralPath " + powerShellQuote(path+".tmp") +
 			" -Destination " + powerShellQuote(path)
 		if out, err := s.Run(command); err != nil {
-			return fmt.Errorf("cannot write %s: %w: %s", path, err, sanitizeForLog(out, 200))
+			return fmt.Errorf("cannot write %s: %w: %s", path, err, logging.Sanitize(out, 200))
 		}
 		return nil
 	}
@@ -108,7 +110,7 @@ func writeRemoteFile(s *ServerSession, path, content string) error {
 		shellQuote(path+".tmp"), marker, strings.TrimRight(content, "\n"), marker,
 		shellQuote(path+".tmp"), shellQuote(path))
 	if out, err := s.Run(command); err != nil {
-		return fmt.Errorf("cannot write %s: %w: %s", path, err, sanitizeForLog(out, 200))
+		return fmt.Errorf("cannot write %s: %w: %s", path, err, logging.Sanitize(out, 200))
 	}
 	return nil
 }
@@ -122,12 +124,12 @@ func writeRemoteEnvFile(s *ServerSession, path, content string) error {
 		out, err := s.Run("icacls " + powerShellQuote(path) + " /inheritance:r /grant:r " +
 			"\"$env:USERNAME:(F)\" /grant \"Administrators:(F)\" /grant \"SYSTEM:(F)\"")
 		if err != nil {
-			log.Warnf("Could not lock down %s: %v: %s", path, err, sanitizeForLog(out, 200))
+			logging.Warnf("Could not lock down %s: %v: %s", path, err, logging.Sanitize(out, 200))
 		}
 		return nil
 	}
 	if out, err := s.Run("chmod 600 " + shellQuote(path)); err != nil {
-		return fmt.Errorf("cannot set the mode on %s: %w: %s", path, err, sanitizeForLog(out, 200))
+		return fmt.Errorf("cannot set the mode on %s: %w: %s", path, err, logging.Sanitize(out, 200))
 	}
 	return nil
 }
@@ -140,7 +142,7 @@ func validateComposeFile(s *ServerSession, target ComposeTarget) error {
 	}
 	out, err := s.Run(composeInvocation(s, target, "config --quiet"))
 	if err != nil {
-		return fmt.Errorf("%w: %s", err, sanitizeForLog(out, 400))
+		return fmt.Errorf("%w: %s", err, logging.Sanitize(out, 400))
 	}
 	return nil
 }

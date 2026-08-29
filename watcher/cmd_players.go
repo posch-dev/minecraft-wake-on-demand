@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // Who may join and who may run commands, both read from and written back to the
@@ -250,7 +252,7 @@ func applyPlayerList(p *prompter, s *ServerSession, cfg *Config, target ComposeT
 		return 0
 	}
 	if out, err := composeUp(s, target); err != nil {
-		printError("Could not restart it: " + sanitizeForLog(out, 300))
+		printError("Could not restart it: " + logging.Sanitize(out, 300))
 		return 1
 	}
 	fmt.Println("Done.")

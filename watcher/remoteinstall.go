@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // Staged as the user, then moved by one sudo call, so only the password
@@ -42,7 +44,7 @@ func installRemoteHelperUnix(s *ServerSession, cfg *Config) error {
 	}
 
 	if out, err := s.RunSudo("set -e; " + install); err != nil {
-		return fmt.Errorf("cannot install the helper: %w: %s", err, sanitizeForLog(out, 300))
+		return fmt.Errorf("cannot install the helper: %w: %s", err, logging.Sanitize(out, 300))
 	}
 
 	// The staged copies are removable by the user, the installed ones are not.
@@ -60,11 +62,11 @@ func stageFile(s *ServerSession, label, content string) (string, error) {
 
 	out, err := s.Run(command)
 	if err != nil {
-		return "", fmt.Errorf("cannot stage %s: %w: %s", label, err, sanitizeForLog(out, 200))
+		return "", fmt.Errorf("cannot stage %s: %w: %s", label, err, logging.Sanitize(out, 200))
 	}
 	path := lastLine(out)
 	if !strings.HasPrefix(path, "/") {
-		return "", fmt.Errorf("cannot stage %s, the server answered %q", label, sanitizeForLog(out, 200))
+		return "", fmt.Errorf("cannot stage %s, the server answered %q", label, logging.Sanitize(out, 200))
 	}
 	return path, nil
 }

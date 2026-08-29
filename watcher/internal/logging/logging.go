@@ -1,4 +1,4 @@
-package main
+package logging
 
 import (
 	"fmt"
@@ -12,14 +12,21 @@ import (
 
 // Same shape as the Python logging output so existing log filters keep working:
 // 2006-01-02 15:04:05 [INFO] message
-type Logger struct {
+type logger struct {
 	mu  sync.Mutex
 	out io.Writer
 }
 
-var log = &Logger{out: os.Stdout}
+var std = &logger{out: os.Stdout}
 
-func (l *Logger) write(level, format string, args ...any) {
+// Commands print a laid out report, so their log lines go to stderr instead.
+func SetOutput(w io.Writer) {
+	std.mu.Lock()
+	defer std.mu.Unlock()
+	std.out = w
+}
+
+func (l *logger) write(level, format string, args ...any) {
 	msg := format
 	if len(args) > 0 {
 		msg = fmt.Sprintf(format, args...)
@@ -30,12 +37,12 @@ func (l *Logger) write(level, format string, args ...any) {
 	io.WriteString(l.out, line)
 }
 
-func (l *Logger) Infof(format string, args ...any)  { l.write("INFO", format, args...) }
-func (l *Logger) Warnf(format string, args ...any)  { l.write("WARNING", format, args...) }
-func (l *Logger) Errorf(format string, args ...any) { l.write("ERROR", format, args...) }
+func Infof(format string, args ...any)  { std.write("INFO", format, args...) }
+func Warnf(format string, args ...any)  { std.write("WARNING", format, args...) }
+func Errorf(format string, args ...any) { std.write("ERROR", format, args...) }
 
 // Client supplied text reaches the log, so newlines could forge log lines.
-func sanitizeForLog(value string, maxLen int) string {
+func Sanitize(value string, maxLen int) string {
 	runes := []rune(value)
 	if len(runes) > maxLen {
 		runes = runes[:maxLen]

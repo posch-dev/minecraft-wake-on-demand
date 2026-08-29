@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 type Config struct {
@@ -238,7 +240,7 @@ func LoadConfig() (*Config, error) {
 		}
 		cfg.Path = p
 		applyEnvOverrides(&cfg)
-		log.Infof("Loading config from %s", p)
+		logging.Infof("Loading config from %s", p)
 		if err := cfg.Validate(); err != nil {
 			return nil, fmt.Errorf("%s: %w", p, err)
 		}
@@ -261,7 +263,7 @@ func applyEnvOverrides(cfg *Config) {
 			if n, err := strconv.Atoi(v); err == nil {
 				*target = n
 			} else {
-				log.Warnf("Ignoring %s=%q, not a number", key, v)
+				logging.Warnf("Ignoring %s=%q, not a number", key, v)
 			}
 		}
 	}
@@ -348,7 +350,7 @@ func (c *Config) Validate() error {
 	case "broadcast":
 		if c.WoL.BroadcastAddress == "" {
 			c.WoL.BroadcastAddress = "255.255.255.255"
-			log.Warnf("wol.broadcast_address is empty, falling back to 255.255.255.255")
+			logging.Warnf("wol.broadcast_address is empty, falling back to 255.255.255.255")
 		}
 		if net.ParseIP(c.WoL.BroadcastAddress) == nil {
 			return fmt.Errorf("wol.broadcast_address %q is not an IP address", c.WoL.BroadcastAddress)
@@ -368,17 +370,17 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("limits.max_logins is %d, use 0 to take the limit from the server", c.Limits.MaxLogins)
 	}
 	if c.Limits.MaxPerIP < 1 {
-		log.Warnf("limits.max_per_ip is %d, falling back to 8", c.Limits.MaxPerIP)
+		logging.Warnf("limits.max_per_ip is %d, falling back to 8", c.Limits.MaxPerIP)
 		c.Limits.MaxPerIP = 8
 	}
 
 	c.Server.SSHStrictHostKey = strings.ToLower(strings.TrimSpace(c.Server.SSHStrictHostKey))
 	if !contains(strictHostKeyModes, c.Server.SSHStrictHostKey) {
-		log.Warnf("Invalid server.ssh_strict_host_key %q, falling back to 'accept-new'", c.Server.SSHStrictHostKey)
+		logging.Warnf("Invalid server.ssh_strict_host_key %q, falling back to 'accept-new'", c.Server.SSHStrictHostKey)
 		c.Server.SSHStrictHostKey = "accept-new"
 	}
 	if c.Server.SSHStrictHostKey == "no" {
-		log.Warnf("server.ssh_strict_host_key is 'no', any host key is accepted, " +
+		logging.Warnf("server.ssh_strict_host_key is 'no', any host key is accepted, " +
 			"which allows man-in-the-middle attacks on the SSH connection")
 	}
 
@@ -476,7 +478,7 @@ func renamedEnv(key string) string {
 	old := strings.Replace(key, "MCWOD_", "MC_WOL_", 1)
 	value := os.Getenv(old)
 	if value != "" {
-		log.Warnf("%s is the old name for %s, it still works but rename it", old, key)
+		logging.Warnf("%s is the old name for %s, it still works but rename it", old, key)
 	}
 	return value
 }
@@ -508,7 +510,7 @@ func (c *Config) ParsedLocalNetworks() []*net.IPNet {
 		}
 		_, n, err := net.ParseCIDR(entry)
 		if err != nil {
-			log.Warnf("Ignoring invalid network in transfer.local_networks: %s", entry)
+			logging.Warnf("Ignoring invalid network in transfer.local_networks: %s", entry)
 			continue
 		}
 		nets = append(nets, n)

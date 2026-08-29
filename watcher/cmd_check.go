@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 type checker struct {
@@ -269,7 +271,7 @@ func checkRemoteHelper(c *checker, cfg *Config, runner *SSHRunner, ctx context.C
 		}
 		// An older forced command runs docker start for every word it is sent,
 		// so a wrong answer here means sleep would start the container instead.
-		c.fail("the helper answered %q instead of %q", sanitizeForLog(answer, 60), remoteHelperMarker)
+		c.fail("the helper answered %q instead of %q", logging.Sanitize(answer, 60), remoteHelperMarker)
 		c.hint("an older mcwod line in authorized_keys is still bound to the key")
 		c.hint("remove it on the server, then run: mcwod setup-ssh")
 		return
@@ -325,7 +327,7 @@ func checkPlayerQuery(c *checker, cfg *Config, runner *SSHRunner, ctx context.Co
 	}
 	online, ok := parsePlayerCount(out)
 	if !ok {
-		c.warn("could not read a player count from %q", sanitizeForLog(out, 60))
+		c.warn("could not read a player count from %q", logging.Sanitize(out, 60))
 		c.hint("the sleep monitor treats an unreadable answer as 'someone is playing'")
 		return
 	}

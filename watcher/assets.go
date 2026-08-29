@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // Unauthenticated and answered to anyone, so an uncapped icon is an amplifier.
@@ -140,7 +142,7 @@ func (a *Assets) motdAt(path string) string {
 		return ""
 	}
 	if info.Size() > maxMOTDBytes {
-		log.Warnf("Ignoring %s: %d bytes is over the %d byte limit", path, info.Size(), maxMOTDBytes)
+		logging.Warnf("Ignoring %s: %d bytes is over the %d byte limit", path, info.Size(), maxMOTDBytes)
 		return ""
 	}
 	data, err := os.ReadFile(path)
@@ -149,7 +151,7 @@ func (a *Assets) motdAt(path string) string {
 	}
 	content := strings.TrimSpace(string(data))
 	if !json.Valid([]byte(content)) {
-		log.Warnf("Failed to load %s: not valid JSON, using fallback", path)
+		logging.Warnf("Failed to load %s: not valid JSON, using fallback", path)
 		return ""
 	}
 	return content
@@ -213,7 +215,7 @@ func (a *Assets) readBaseIcon(path string, info os.FileInfo, statErr error) imag
 		return nil
 	}
 	if info.Size() > maxIconBytes {
-		log.Warnf("Ignoring %s: %d bytes is over the %d byte limit", path, info.Size(), maxIconBytes)
+		logging.Warnf("Ignoring %s: %d bytes is over the %d byte limit", path, info.Size(), maxIconBytes)
 		return nil
 	}
 	data, err := os.ReadFile(path)
@@ -222,7 +224,7 @@ func (a *Assets) readBaseIcon(path string, info os.FileInfo, statErr error) imag
 	}
 	decoded, err := decodeIconPNG(path, data)
 	if err != nil {
-		log.Warnf("Ignoring %s: %v", path, err)
+		logging.Warnf("Ignoring %s: %v", path, err)
 		return nil
 	}
 	return decoded
@@ -245,10 +247,10 @@ func (a *Assets) iconFile(path string) string {
 	// A rejected file is cached as empty too, so it is complained about once.
 	dataURI := ""
 	if info.Size() > maxIconBytes {
-		log.Warnf("Ignoring %s: %d bytes is over the %d byte limit", path, info.Size(), maxIconBytes)
+		logging.Warnf("Ignoring %s: %d bytes is over the %d byte limit", path, info.Size(), maxIconBytes)
 	} else if data, err := os.ReadFile(path); err == nil {
 		if _, err := decodeIconPNG(path, data); err != nil {
-			log.Warnf("Ignoring %s: %v", path, err)
+			logging.Warnf("Ignoring %s: %v", path, err)
 		} else {
 			dataURI = encodeDataURI(data)
 		}
@@ -288,7 +290,7 @@ func (c cachedIcon) matches(info os.FileInfo, statErr error) bool {
 func composeOverlay(base image.Image, overlayPNG []byte) string {
 	overlay, err := png.Decode(bytes.NewReader(overlayPNG))
 	if err != nil {
-		log.Errorf("Built-in overlay does not decode: %v", err)
+		logging.Errorf("Built-in overlay does not decode: %v", err)
 		return ""
 	}
 
@@ -302,7 +304,7 @@ func composeOverlay(base image.Image, overlayPNG []byte) string {
 
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, canvas); err != nil {
-		log.Errorf("Cannot encode the composed icon: %v", err)
+		logging.Errorf("Cannot encode the composed icon: %v", err)
 		return ""
 	}
 	return encodeDataURI(buf.Bytes())

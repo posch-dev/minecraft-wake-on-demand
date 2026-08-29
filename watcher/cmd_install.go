@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 //go:embed mcwod.service
@@ -37,7 +39,7 @@ func runInstall() int {
 		return 1
 	}
 	if err := writeExampleAssets(dir); err != nil {
-		log.Warnf("Cannot write the example assets: %v", err)
+		logging.Warnf("Cannot write the example assets: %v", err)
 	}
 	if err := registerAutostart(dir, binary); err != nil {
 		printError("Cannot set up the autostart: " + err.Error())
@@ -45,7 +47,7 @@ func runInstall() int {
 	}
 	// Last, so everything written above belongs to the account that runs it.
 	if err := handOverInstallDir(dir); err != nil {
-		log.Warnf("Cannot hand %s to the service user: %v", dir, err)
+		logging.Warnf("Cannot hand %s to the service user: %v", dir, err)
 	}
 
 	configPath := filepath.Join(dir, "config.yml")

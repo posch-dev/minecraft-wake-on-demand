@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 const (
@@ -177,7 +179,7 @@ func (h *Handler) answerStatus(ctx context.Context, conn net.Conn, rest []byte, 
 
 	response, err := makeStatusResponse(motd, maxPlayers, 0, icon, versionName, versionProtocol)
 	if err != nil {
-		log.Errorf("Cannot build status response: %v", err)
+		logging.Errorf("Cannot build status response: %v", err)
 		return
 	}
 	conn.SetWriteDeadline(time.Now().Add(statusTimeout))
@@ -211,7 +213,7 @@ func (h *Handler) answerStatus(ctx context.Context, conn net.Conn, rest []byte, 
 }
 
 func (h *Handler) handleLogin(ctx context.Context, conn net.Conn, initial []byte, hs *Handshake, addr net.Addr, releaseStatusSlot func()) {
-	log.Infof("Login attempt from %s", addr)
+	logging.Infof("Login attempt from %s", addr)
 
 	// A login holds its slot for the whole session, so it moves out of the short
 	// lived status pool into the one sized after the player slots.
@@ -231,7 +233,7 @@ func (h *Handler) handleLogin(ctx context.Context, conn net.Conn, initial []byte
 	// Booting takes half a minute, longer than a client waits, so the player is
 	// told to come back rather than left staring at a bar that then fails.
 	if !h.waker.MCPortReachable(ctx, false) {
-		log.Infof("Login from %s starts the server, sending the wait message", addr)
+		logging.Infof("Login from %s starts the server, sending the wait message", addr)
 		conn.SetWriteDeadline(time.Now().Add(statusTimeout))
 		conn.Write(makeLoginDisconnect(h.assets.MOTDLoginWait()))
 		drainBeforeClose(conn)
@@ -254,7 +256,7 @@ func (h *Handler) proxyStatus(ctx context.Context, conn net.Conn, initial, rest 
 	dialer := net.Dialer{Timeout: 10 * time.Second}
 	server, err := dialer.DialContext(ctx, "tcp", target)
 	if err != nil {
-		log.Warnf("Cannot reach %s for a status ping: %v", target, err)
+		logging.Warnf("Cannot reach %s for a status ping: %v", target, err)
 		return false
 	}
 	defer server.Close()
@@ -272,13 +274,13 @@ func (h *Handler) proxyStatus(ctx context.Context, conn net.Conn, initial, rest 
 	}
 	body, err := readFramedPacket(server, maxStatusResponseBytes)
 	if err != nil {
-		log.Warnf("Cannot read the status response from %s: %v", target, err)
+		logging.Warnf("Cannot read the status response from %s: %v", target, err)
 		return false
 	}
 
 	response, err := h.dressStatusResponse(body)
 	if err != nil {
-		log.Warnf("Cannot rebuild the status response from %s: %v", target, err)
+		logging.Warnf("Cannot rebuild the status response from %s: %v", target, err)
 		return false
 	}
 
@@ -330,7 +332,7 @@ func (h *Handler) handleTransfer(ctx context.Context, conn net.Conn, initial []b
 		buf := make([]byte, readBufferSize)
 		n, err := conn.Read(buf)
 		if err != nil || n == 0 {
-			log.Errorf("Transfer failed for %s: no login packet", addr)
+			logging.Errorf("Transfer failed for %s: no login packet", addr)
 			return
 		}
 		loginData = buf[:n]
@@ -338,13 +340,13 @@ func (h *Handler) handleTransfer(ctx context.Context, conn net.Conn, initial []b
 
 	name, uuid, err := parseLoginStart(loginData)
 	if err != nil {
-		log.Warnf("Failed to parse login start from %s: %v", addr, err)
+		logging.Warnf("Failed to parse login start from %s: %v", addr, err)
 		return
 	}
 
 	conn.SetWriteDeadline(time.Now().Add(statusTimeout))
 	if _, err := conn.Write(makeLoginSuccess(uuid, name, hs.ProtocolVersion)); err != nil {
-		log.Errorf("Transfer failed for %s: %v", addr, err)
+		logging.Errorf("Transfer failed for %s: %v", addr, err)
 		return
 	}
 
@@ -352,7 +354,7 @@ func (h *Handler) handleTransfer(ctx context.Context, conn net.Conn, initial []b
 	conn.SetReadDeadline(time.Now().Add(statusTimeout))
 	ack := make([]byte, readBufferSize)
 	if _, err := conn.Read(ack); err != nil {
-		log.Errorf("Transfer failed for %s: %v", addr, err)
+		logging.Errorf("Transfer failed for %s: %v", addr, err)
 		return
 	}
 
@@ -361,7 +363,7 @@ func (h *Handler) handleTransfer(ctx context.Context, conn net.Conn, initial []b
 		targetHost, targetPort = h.cfg.Server.IP, h.cfg.Server.MCPort
 	}
 
-	log.Infof("Transferring %s to %s:%d", sanitizeForLog(name, 64), targetHost, targetPort)
+	logging.Infof("Transferring %s to %s:%d", logging.Sanitize(name, 64), targetHost, targetPort)
 	conn.SetWriteDeadline(time.Now().Add(statusTimeout))
 	conn.Write(makeTransferPacket(targetHost, targetPort))
 }
@@ -378,10 +380,10 @@ func drainBeforeClose(conn net.Conn) {
 // the time that player comes back.
 func (h *Handler) bootInBackground(ctx context.Context, addr net.Addr) {
 	if h.waker.FullBoot(ctx) {
-		log.Infof("Server is ready, %s can reconnect", addr)
+		logging.Infof("Server is ready, %s can reconnect", addr)
 		return
 	}
-	log.Errorf("The boot %s asked for did not finish", addr)
+	logging.Errorf("The boot %s asked for did not finish", addr)
 }
 
 func (h *Handler) proxy(ctx context.Context, client net.Conn, initial []byte) {
@@ -389,12 +391,12 @@ func (h *Handler) proxy(ctx context.Context, client net.Conn, initial []byte) {
 	dialer := net.Dialer{Timeout: 10 * time.Second}
 	server, err := dialer.DialContext(ctx, "tcp", target)
 	if err != nil {
-		log.Errorf("Failed to connect to MC server for %s: %v", client.RemoteAddr(), err)
+		logging.Errorf("Failed to connect to MC server for %s: %v", client.RemoteAddr(), err)
 		return
 	}
 	defer server.Close()
 
-	log.Infof("Forwarding connection from %s to %s", client.RemoteAddr(), target)
+	logging.Infof("Forwarding connection from %s to %s", client.RemoteAddr(), target)
 
 	// The deadlines from the handshake must not cut the session short.
 	client.SetDeadline(time.Time{})
@@ -408,7 +410,7 @@ func (h *Handler) proxy(ctx context.Context, client net.Conn, initial []byte) {
 	go pipe(&wg, client, server)
 	wg.Wait()
 
-	log.Infof("Connection from %s closed", client.RemoteAddr())
+	logging.Infof("Connection from %s closed", client.RemoteAddr())
 }
 
 // Half closes the destination when the source is done, so the peer notices.
@@ -458,7 +460,7 @@ func (h *Handler) isAllowedHostname(hs *Handshake, addr net.Addr) bool {
 			return true
 		}
 	}
-	log.Infof("Dropping connection from %s: hostname %q not in allowed list", addr, sanitizeForLog(requested, 100))
+	logging.Infof("Dropping connection from %s: hostname %q not in allowed list", addr, logging.Sanitize(requested, 100))
 	return false
 }
 

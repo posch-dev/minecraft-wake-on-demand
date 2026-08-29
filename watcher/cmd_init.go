@@ -15,6 +15,8 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 type prompter struct {
@@ -361,7 +363,7 @@ func giveToInvokingUser(path string) {
 		return
 	}
 	if err := os.Chown(path, uid, gid); err != nil {
-		log.Warnf("Cannot hand %s to the user who ran sudo: %v", path, err)
+		logging.Warnf("Cannot hand %s to the user who ran sudo: %v", path, err)
 	}
 }
 

@@ -13,6 +13,8 @@ import (
 	"syscall"
 
 	"golang.org/x/term"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // Set via ldflags in the release build.
@@ -31,14 +33,14 @@ func main() {
 		if !attachedToTerminal() {
 			os.Exit(runProxy())
 		}
-		log.out = os.Stderr
+		logging.SetOutput(os.Stderr)
 		os.Exit(runHome())
 	case "run":
 		os.Exit(runProxy())
 	case "install", "check", "init", "setup-ssh", "config", "edit", "settings", "update", "get-server-icon", "learn-server-icon", "restore-compose", "players", "whitelist", "worlds", "world":
 		// These print a laid out report, so log lines go to stderr instead of
 		// interleaving with it.
-		log.out = os.Stderr
+		logging.SetOutput(os.Stderr)
 		switch command {
 		case "install":
 			os.Exit(runInstall())
@@ -130,7 +132,7 @@ func runProxy() int {
 
 	var tasks sync.WaitGroup
 	if cfg.DuckDNS.Enabled {
-		log.Infof("DuckDNS updater enabled for %s.duckdns.org (every %dh)",
+		logging.Infof("DuckDNS updater enabled for %s.duckdns.org (every %dh)",
 			cfg.DuckDNS.Domain, cfg.DuckDNS.UpdateIntervalHours)
 		tasks.Add(1)
 		go func() {
@@ -156,7 +158,7 @@ func runProxy() int {
 	// Unblocks the Accept call below when a signal arrives.
 	go func() {
 		<-ctx.Done()
-		log.Infof("Shutting down...")
+		logging.Infof("Shutting down...")
 		listener.Close()
 	}()
 
@@ -167,7 +169,7 @@ func runProxy() int {
 			if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
 				break
 			}
-			log.Warnf("Accept failed: %v", err)
+			logging.Warnf("Accept failed: %v", err)
 			continue
 		}
 		conns.Add(1)
@@ -179,25 +181,25 @@ func runProxy() int {
 
 	conns.Wait()
 	tasks.Wait()
-	log.Infof("Proxy stopped")
+	logging.Infof("Proxy stopped")
 	return 0
 }
 
 func logStartup(cfg *Config) {
-	log.Infof("Minecraft Wake-on-Demand Proxy %s listening on %s:%d",
+	logging.Infof("Minecraft Wake-on-Demand Proxy %s listening on %s:%d",
 		version, cfg.Watcher.ListenAddress, cfg.Watcher.ListenPort)
-	log.Infof("Server: %s (%s) port %d, container '%s'",
+	logging.Infof("Server: %s (%s) port %d, container '%s'",
 		cfg.Server.IP, cfg.Server.MAC, cfg.Server.MCPort, cfg.Server.ContainerName)
-	log.Infof("WoL mode: %s", cfg.WoL.Mode)
+	logging.Infof("WoL mode: %s", cfg.WoL.Mode)
 	if cfg.Sleep.Enabled {
-		log.Infof("Auto-sleep: %s after %ds without players", cfg.Sleep.Action, cfg.Sleep.IdleAfter)
+		logging.Infof("Auto-sleep: %s after %ds without players", cfg.Sleep.Action, cfg.Sleep.IdleAfter)
 	}
 
 	if !cfg.Transfer.Enabled {
-		log.Infof("Proxy mode: full connection forwarding")
+		logging.Infof("Proxy mode: full connection forwarding")
 		return
 	}
-	log.Infof("Transfer mode: %s:%d", cfg.Transfer.Host, cfg.Transfer.Port)
+	logging.Infof("Transfer mode: %s:%d", cfg.Transfer.Host, cfg.Transfer.Port)
 
 	networks := "any private IP"
 	if nets := cfg.ParsedLocalNetworks(); len(nets) > 0 {
@@ -207,6 +209,6 @@ func logStartup(cfg *Config) {
 		}
 		networks = strings.Join(parts, ", ")
 	}
-	log.Infof("Local players are transferred to %s:%d instead (local networks: %s)",
+	logging.Infof("Local players are transferred to %s:%d instead (local networks: %s)",
 		cfg.Server.IP, cfg.Server.MCPort, networks)
 }

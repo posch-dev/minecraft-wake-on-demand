@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // Where a world can actually be lost, so the backup runs before anything else
@@ -140,7 +142,7 @@ func applyWorldChange(p *prompter, s *ServerSession, cfg *Config, doc *yamlDocum
 
 	fmt.Printf("Starting %s on %s %s...\n", world.Container, version, prettyServerType(serverType))
 	if out, err := composeUp(s, target); err != nil {
-		printError("It did not start: " + sanitizeForLog(out, 300))
+		printError("It did not start: " + logging.Sanitize(out, 300))
 		printHint("Restore the backup in " + world.Dir + "/backups if it stays down.")
 		return 1
 	}
@@ -159,7 +161,7 @@ func backUpWorld(s *ServerSession, world World, version string) bool {
 
 	command := backupWorldCommand(s, world.Dir, name)
 	if out, err := s.Run(command); err != nil {
-		printError("The backup failed, so nothing was changed: " + sanitizeForLog(out, 300))
+		printError("The backup failed, so nothing was changed: " + logging.Sanitize(out, 300))
 		return false
 	}
 	fmt.Printf("  Backup written to %s\n", joinRemote(s, world.Dir, "backups/"+name))
@@ -189,7 +191,7 @@ func moveWorldAside(s *ServerSession, world World, version string) bool {
 		command = "cd " + shellQuote(world.Dir) + " && mv data " + shellQuote(aside)
 	}
 	if out, err := s.Run(command); err != nil {
-		printError("Could not move the old world aside: " + sanitizeForLog(out, 200))
+		printError("Could not move the old world aside: " + logging.Sanitize(out, 200))
 		return false
 	}
 	fmt.Printf("  The old world is now %s\n", joinRemote(s, world.Dir, aside))

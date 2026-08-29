@@ -15,6 +15,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 const sshPort = 22
@@ -108,7 +110,7 @@ func (r *SSHRunner) hostKeyCallback() (ssh.HostKeyCallback, error) {
 				hostname, path, ssh.FingerprintSHA256(key))
 		}
 
-		log.Infof("Learned host key for %s (%s), fingerprint %s",
+		logging.Infof("Learned host key for %s (%s), fingerprint %s",
 			hostname, key.Type(), ssh.FingerprintSHA256(key))
 		return r.appendKnownHost(path, hostname, key)
 	}, nil
@@ -118,7 +120,7 @@ func (r *SSHRunner) hostKeyCallback() (ssh.HostKeyCallback, error) {
 // its fingerprint, so at least the change is visible after the fact.
 func (r *SSHRunner) acceptAnyHostKey() ssh.HostKeyCallback {
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		log.Warnf("Accepting unverified host key for %s (%s), fingerprint %s, "+
+		logging.Warnf("Accepting unverified host key for %s (%s), fingerprint %s, "+
 			"because server.ssh_strict_host_key is 'no'",
 			hostname, key.Type(), ssh.FingerprintSHA256(key))
 		return nil
@@ -249,28 +251,28 @@ func (r *SSHRunner) RunVerb(ctx context.Context, verb string) (string, error) {
 // A restricted key may ignore the command entirely, which is the recommended
 // setup, so an empty response is success as long as the exit status is zero.
 func (r *SSHRunner) StartContainer(ctx context.Context) error {
-	log.Infof("Starting container %s via SSH", r.cfg.Server.ContainerName)
+	logging.Infof("Starting container %s via SSH", r.cfg.Server.ContainerName)
 
 	out, err := r.RunVerb(ctx, remoteVerbStart)
 	if err != nil {
 		if out != "" {
-			return fmt.Errorf("%w: %s", err, sanitizeForLog(out, 200))
+			return fmt.Errorf("%w: %s", err, logging.Sanitize(out, 200))
 		}
 		return err
 	}
-	log.Infof("Container started successfully")
+	logging.Infof("Container started successfully")
 	return nil
 }
 
 // Used before a hibernate or shutdown so the world is written out. Suspend does
 // not need it, the process simply resumes.
 func (r *SSHRunner) StopContainer(ctx context.Context) error {
-	log.Infof("Stopping container %s via SSH", r.cfg.Server.ContainerName)
+	logging.Infof("Stopping container %s via SSH", r.cfg.Server.ContainerName)
 
 	out, err := r.RunVerb(ctx, remoteVerbStop)
 	if err != nil {
 		if out != "" {
-			return fmt.Errorf("%w: %s", err, sanitizeForLog(out, 200))
+			return fmt.Errorf("%w: %s", err, logging.Sanitize(out, 200))
 		}
 		return err
 	}

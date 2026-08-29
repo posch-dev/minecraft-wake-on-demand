@@ -14,6 +14,8 @@ import (
 
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 type pingMode int
@@ -54,13 +56,13 @@ func (p *Pinger) detect() {
 		} else {
 			p.mode = pingExec
 		}
-		log.Infof("Host reachability checks use %s", p.mode)
+		logging.Infof("Host reachability checks use %s", p.mode)
 
 		// The container image ships no ping binary, so falling back to it
 		// there means the wake sequence would never see the PC come up.
 		if p.mode == pingExec {
 			if _, err := exec.LookPath("ping"); err != nil {
-				log.Errorf("No ICMP socket and no ping command available, " +
+				logging.Errorf("No ICMP socket and no ping command available, " +
 					"the watcher cannot tell when the server PC has booted. " +
 					"Grant CAP_NET_RAW to the process or install iputils-ping.")
 			}

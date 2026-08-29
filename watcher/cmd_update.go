@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // Always asks first. An unattended service replacing its own binary without
@@ -160,7 +162,7 @@ func restartService() {
 
 	fmt.Println("Restarting mcwod...")
 	if out, err := exec.Command("systemctl", "restart", "mcwod").CombinedOutput(); err != nil {
-		fmt.Printf("  could not restart it: %v: %s\n", err, sanitizeForLog(string(out), 200))
+		fmt.Printf("  could not restart it: %v: %s\n", err, logging.Sanitize(string(out), 200))
 		fmt.Println("  restart it yourself with: sudo systemctl restart mcwod")
 		return
 	}

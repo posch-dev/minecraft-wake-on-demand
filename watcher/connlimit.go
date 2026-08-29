@@ -4,6 +4,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // Separate pools: shared, server list pings would eat the slots players need.
@@ -55,7 +57,7 @@ func (l *ConnectionLimiter) Acquire(addr net.Addr) bool {
 		// flood in the journal.
 		if time.Since(l.lastLogAt) >= limitLogInterval {
 			l.lastLogAt = time.Now()
-			log.Warnf("Refusing %s connection from %s: %s (%d of %d in use)",
+			logging.Warnf("Refusing %s connection from %s: %s (%d of %d in use)",
 				l.kind, ip, reason, l.inUse, l.max)
 		}
 		return false

@@ -15,6 +15,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 func runSetupSSH() int {
@@ -156,7 +158,7 @@ func runSetupSSH() int {
 		return 1
 	}
 	if strings.TrimSpace(out) != remoteHelperMarker {
-		fmt.Printf("The helper answered %q instead of %q.\n", sanitizeForLog(out, 80), remoteHelperMarker)
+		fmt.Printf("The helper answered %q instead of %q.\n", logging.Sanitize(out, 80), remoteHelperMarker)
 		fmt.Println("An older mcwod line in authorized_keys is still bound to the key.")
 		fmt.Println("Remove it and run setup-ssh again.")
 		return 1
@@ -229,7 +231,7 @@ func appendAuthorizedKey(s *ServerSession, entry string) (string, error) {
 	}
 	out, err := s.Run(command)
 	if err != nil {
-		return "", fmt.Errorf("cannot write authorized_keys: %w: %s", err, sanitizeForLog(out, 200))
+		return "", fmt.Errorf("cannot write authorized_keys: %w: %s", err, logging.Sanitize(out, 200))
 	}
 	return strings.TrimSpace(out), nil
 }
