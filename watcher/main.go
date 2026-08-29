@@ -12,11 +12,9 @@ import (
 	"sync"
 	"syscall"
 
-	"golang.org/x/term"
-
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
-
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"golang.org/x/term"
 )
 
 // Set via ldflags in the release build.

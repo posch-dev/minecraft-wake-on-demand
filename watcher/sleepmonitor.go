@@ -6,9 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
-
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // A client that connects and goes quiet would hold the counter above zero forever.

@@ -17,10 +17,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
-
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // A real SSH server in the test process, so the host key policy is exercised

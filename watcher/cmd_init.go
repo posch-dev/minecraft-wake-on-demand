@@ -12,13 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
-
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
-
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 type prompter struct {

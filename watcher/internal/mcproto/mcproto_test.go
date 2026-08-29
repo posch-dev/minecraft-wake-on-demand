@@ -1,4 +1,4 @@
-package main
+package mcproto
 
 import (
 	"bytes"
@@ -15,8 +15,8 @@ import (
 func TestVarIntRoundTrip(t *testing.T) {
 	values := []int32{0, 1, 2, 127, 128, 255, 2147483647, -1, -2147483648}
 	for _, want := range values {
-		encoded := writeVarInt(want)
-		got, off, err := readVarInt(encoded, 0)
+		encoded := WriteVarInt(want)
+		got, off, err := ReadVarInt(encoded, 0)
 		if err != nil {
 			t.Fatalf("%d: %v", want, err)
 		}
@@ -32,12 +32,12 @@ func TestVarIntRoundTrip(t *testing.T) {
 // The Python version shifted a negative int and looped until it ran out of
 // memory, which hung the readiness probe in wait_for_mc.
 func TestNegativeVarIntTerminates(t *testing.T) {
-	got := writeVarInt(-1)
+	got := WriteVarInt(-1)
 	want := []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x0F}
 	if !bytes.Equal(got, want) {
 		t.Errorf("writeVarInt(-1) = % x, want % x", got, want)
 	}
-	if len(writeVarInt(-2147483648)) != 5 {
+	if len(WriteVarInt(-2147483648)) != 5 {
 		t.Error("every negative VarInt has to fit in five bytes")
 	}
 }
@@ -52,38 +52,29 @@ func TestVarIntKnownEncodings(t *testing.T) {
 		25565: {0xDD, 0xC7, 0x01},
 	}
 	for value, want := range cases {
-		if got := writeVarInt(value); !bytes.Equal(got, want) {
+		if got := WriteVarInt(value); !bytes.Equal(got, want) {
 			t.Errorf("writeVarInt(%d) = % x, want % x", value, got, want)
 		}
 	}
 }
 
 func TestVarIntErrors(t *testing.T) {
-	if _, _, err := readVarInt(nil, 0); err != ErrIncompleteVarInt {
+	if _, _, err := ReadVarInt(nil, 0); err != ErrIncompleteVarInt {
 		t.Errorf("empty input gave %v", err)
 	}
-	if _, _, err := readVarInt([]byte{0x80}, 0); err != ErrIncompleteVarInt {
+	if _, _, err := ReadVarInt([]byte{0x80}, 0); err != ErrIncompleteVarInt {
 		t.Errorf("truncated input gave %v", err)
 	}
 	tooLong := []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80}
-	if _, _, err := readVarInt(tooLong, 0); err != ErrVarIntTooBig {
+	if _, _, err := ReadVarInt(tooLong, 0); err != ErrVarIntTooBig {
 		t.Errorf("oversized input gave %v", err)
 	}
 }
 
-func buildHandshake(proto int32, addr string, port uint16, next int32) []byte {
-	body := writeVarInt(0x00)
-	body = append(body, writeVarInt(proto)...)
-	body = append(body, writeString(addr)...)
-	body = binary.BigEndian.AppendUint16(body, port)
-	body = append(body, writeVarInt(next)...)
-	return framePacket(body)
-}
-
 func TestParseHandshake(t *testing.T) {
 	for _, next := range []int32{1, 2} {
-		raw := buildHandshake(770, "mc.example.org", 25565, next)
-		hs, err := parseHandshake(raw)
+		raw := MakeHandshake(770, "mc.example.org", 25565, next)
+		hs, err := ParseHandshake(raw)
 		if err != nil {
 			t.Fatalf("next=%d: %v", next, err)
 		}
@@ -108,11 +99,11 @@ func TestParseHandshake(t *testing.T) {
 // Clients may pack the handshake and the status request into one segment, so
 // End has to point at the start of the trailing data.
 func TestParseHandshakeWithTrailingData(t *testing.T) {
-	raw := buildHandshake(770, "host", 25565, 1)
-	trailer := makeStatusRequest()
+	raw := MakeHandshake(770, "host", 25565, 1)
+	trailer := MakeStatusRequest()
 	combined := append(append([]byte{}, raw...), trailer...)
 
-	hs, err := parseHandshake(combined)
+	hs, err := ParseHandshake(combined)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,12 +119,12 @@ func TestParseHandshakeRejectsGarbage(t *testing.T) {
 	cases := map[string][]byte{
 		"empty":         {},
 		"truncated":     {0x10, 0x00},
-		"wrong id":      framePacket(append(writeVarInt(0x42), writeVarInt(1)...)),
-		"address lies":  framePacket(append(append(writeVarInt(0x00), writeVarInt(770)...), writeVarInt(200)...)),
-		"no next state": framePacket(append(append(writeVarInt(0x00), writeVarInt(770)...), writeString("h")...)),
+		"wrong id":      FramePacket(append(WriteVarInt(0x42), WriteVarInt(1)...)),
+		"address lies":  FramePacket(append(append(WriteVarInt(0x00), WriteVarInt(770)...), WriteVarInt(200)...)),
+		"no next state": FramePacket(append(append(WriteVarInt(0x00), WriteVarInt(770)...), WriteString("h")...)),
 	}
 	for name, raw := range cases {
-		if _, err := parseHandshake(raw); err == nil {
+		if _, err := ParseHandshake(raw); err == nil {
 			t.Errorf("%s: expected an error", name)
 		}
 	}
@@ -141,29 +132,29 @@ func TestParseHandshakeRejectsGarbage(t *testing.T) {
 
 func TestStatusResponseDecodes(t *testing.T) {
 	motd := "{\"text\":\"sleeping\",\"color\":\"yellow\"}"
-	raw, err := makeStatusResponse(motd, 10, 0, "data:image/png;base64,AAA", "1.21.4", 769)
+	raw, err := MakeStatusResponse(motd, 10, 0, "data:image/png;base64,AAA", "1.21.4", 769)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	length, off, err := readVarInt(raw, 0)
+	length, off, err := ReadVarInt(raw, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if int(length) != len(raw)-off {
 		t.Errorf("frame length %d does not match body %d", length, len(raw)-off)
 	}
-	pktID, off, err := readVarInt(raw, off)
+	pktID, off, err := ReadVarInt(raw, off)
 	if err != nil || pktID != 0x00 {
 		t.Fatalf("packet id = %d, err %v", pktID, err)
 	}
-	strLen, off, err := readVarInt(raw, off)
+	strLen, off, err := ReadVarInt(raw, off)
 	if err != nil {
 		t.Fatal(err)
 	}
 	body := raw[off : off+int(strLen)]
 
-	var decoded statusPayload
+	var decoded StatusPayload
 	if err := json.Unmarshal(body, &decoded); err != nil {
 		t.Fatalf("payload is not valid JSON: %v", err)
 	}
@@ -185,7 +176,7 @@ func TestStatusResponseDecodes(t *testing.T) {
 }
 
 func TestStatusResponseOmitsEmptyFavicon(t *testing.T) {
-	raw, err := makeStatusResponse("{\"text\":\"x\"}", 5, 0, "", "", 770)
+	raw, err := MakeStatusResponse("{\"text\":\"x\"}", 5, 0, "", "", 770)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,12 +186,12 @@ func TestStatusResponseOmitsEmptyFavicon(t *testing.T) {
 }
 
 func TestPingResponse(t *testing.T) {
-	raw := makePingResponse(0x0123456789ABCDEF)
-	_, off, err := readVarInt(raw, 0)
+	raw := MakePingResponse(0x0123456789ABCDEF)
+	_, off, err := ReadVarInt(raw, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pktID, off, err := readVarInt(raw, off)
+	pktID, off, err := ReadVarInt(raw, off)
 	if err != nil || pktID != 0x01 {
 		t.Fatalf("packet id = %d", pktID)
 	}
@@ -209,15 +200,9 @@ func TestPingResponse(t *testing.T) {
 	}
 }
 
-func buildLoginStart(name string, uuid []byte) []byte {
-	body := append(writeVarInt(0x00), writeString(name)...)
-	body = append(body, uuid...)
-	return framePacket(body)
-}
-
 func TestParseLoginStart(t *testing.T) {
 	uuid := bytes.Repeat([]byte{0xAB}, 16)
-	name, got, err := parseLoginStart(buildLoginStart("Notch", uuid))
+	name, got, err := ParseLoginStart(MakeLoginStart("Notch", uuid))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,36 +218,36 @@ func TestParseLoginStartRejectsBadInput(t *testing.T) {
 	uuid := bytes.Repeat([]byte{0x01}, 16)
 	cases := map[string][]byte{
 		"empty":         {},
-		"name too long": buildLoginStart("ThisNameIsWayTooLongForMinecraft", uuid),
-		"no uuid":       framePacket(append(writeVarInt(0x00), writeString("Notch")...)),
-		"empty name":    buildLoginStart("", uuid),
-		"wrong id":      framePacket(append(writeVarInt(0x05), writeString("Notch")...)),
+		"name too long": MakeLoginStart("ThisNameIsWayTooLongForMinecraft", uuid),
+		"no uuid":       FramePacket(append(WriteVarInt(0x00), WriteString("Notch")...)),
+		"empty name":    MakeLoginStart("", uuid),
+		"wrong id":      FramePacket(append(WriteVarInt(0x05), WriteString("Notch")...)),
 	}
 	for name, raw := range cases {
-		if _, _, err := parseLoginStart(raw); err == nil {
+		if _, _, err := ParseLoginStart(raw); err == nil {
 			t.Errorf("%s: expected an error", name)
 		}
 	}
 }
 
 func TestTransferPacket(t *testing.T) {
-	raw := makeTransferPacket("mc.example.org", 25566)
-	_, off, err := readVarInt(raw, 0)
+	raw := MakeTransferPacket("mc.example.org", 25566)
+	_, off, err := ReadVarInt(raw, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pktID, off, err := readVarInt(raw, off)
+	pktID, off, err := ReadVarInt(raw, off)
 	if err != nil || pktID != 0x0B {
 		t.Fatalf("packet id = %d, want 0x0B", pktID)
 	}
-	hostLen, off, err := readVarInt(raw, off)
+	hostLen, off, err := ReadVarInt(raw, off)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(raw[off:off+int(hostLen)]) != "mc.example.org" {
 		t.Errorf("host = %q", raw[off:off+int(hostLen)])
 	}
-	port, _, err := readVarInt(raw, off+int(hostLen))
+	port, _, err := ReadVarInt(raw, off+int(hostLen))
 	if err != nil || port != 25566 {
 		t.Errorf("port = %d", port)
 	}
@@ -270,9 +255,9 @@ func TestTransferPacket(t *testing.T) {
 
 func TestLoginSuccessAndDisconnect(t *testing.T) {
 	uuid := bytes.Repeat([]byte{0x07}, 16)
-	raw := makeLoginSuccess(uuid, "Notch", 767)
-	_, off, _ := readVarInt(raw, 0)
-	pktID, off, err := readVarInt(raw, off)
+	raw := MakeLoginSuccess(uuid, "Notch", 767)
+	_, off, _ := ReadVarInt(raw, 0)
+	pktID, off, err := ReadVarInt(raw, off)
 	if err != nil || pktID != 0x02 {
 		t.Fatalf("login success id = %d", pktID)
 	}
@@ -281,13 +266,13 @@ func TestLoginSuccessAndDisconnect(t *testing.T) {
 	}
 
 	reason := "{\"text\":\"wait\"}"
-	dis := makeLoginDisconnect(reason)
-	_, off, _ = readVarInt(dis, 0)
-	pktID, off, err = readVarInt(dis, off)
+	dis := MakeLoginDisconnect(reason)
+	_, off, _ = ReadVarInt(dis, 0)
+	pktID, off, err = ReadVarInt(dis, off)
 	if err != nil || pktID != 0x00 {
 		t.Fatalf("disconnect id = %d", pktID)
 	}
-	strLen, off, _ := readVarInt(dis, off)
+	strLen, off, _ := ReadVarInt(dis, off)
 	if string(dis[off:off+int(strLen)]) != reason {
 		t.Errorf("reason = %q", dis[off:off+int(strLen)])
 	}
@@ -296,15 +281,15 @@ func TestLoginSuccessAndDisconnect(t *testing.T) {
 // Protocol 767 (1.21.1) must include the strict error handling byte.
 func TestLoginSuccessProtocol767IncludesStrictByte(t *testing.T) {
 	uuid := bytes.Repeat([]byte{0x07}, 16)
-	raw := makeLoginSuccess(uuid, "Notch", 767)
+	raw := MakeLoginSuccess(uuid, "Notch", 767)
 
 	// Parse past frame, packet ID, UUID, username, properties count.
-	_, off, _ := readVarInt(raw, 0)
-	_, off, _ = readVarInt(raw, off)
+	_, off, _ := ReadVarInt(raw, 0)
+	_, off, _ = ReadVarInt(raw, off)
 	off += 16
-	nameLen, off, _ := readVarInt(raw, off)
+	nameLen, off, _ := ReadVarInt(raw, off)
 	off += int(nameLen)
-	_, off, _ = readVarInt(raw, off)
+	_, off, _ = ReadVarInt(raw, off)
 
 	if off >= len(raw) {
 		t.Fatal("packet too short, strict error handling byte is missing")
@@ -321,14 +306,14 @@ func TestLoginSuccessProtocol767IncludesStrictByte(t *testing.T) {
 // Protocol 766 (1.20.5) must also include the strict error handling byte.
 func TestLoginSuccessProtocol766IncludesStrictByte(t *testing.T) {
 	uuid := bytes.Repeat([]byte{0x07}, 16)
-	raw := makeLoginSuccess(uuid, "Notch", 766)
+	raw := MakeLoginSuccess(uuid, "Notch", 766)
 
-	_, off, _ := readVarInt(raw, 0)
-	_, off, _ = readVarInt(raw, off)
+	_, off, _ := ReadVarInt(raw, 0)
+	_, off, _ = ReadVarInt(raw, off)
 	off += 16
-	nameLen, off, _ := readVarInt(raw, off)
+	nameLen, off, _ := ReadVarInt(raw, off)
 	off += int(nameLen)
-	_, off, _ = readVarInt(raw, off)
+	_, off, _ = ReadVarInt(raw, off)
 
 	if off >= len(raw) {
 		t.Fatal("packet too short, strict error handling byte is missing")
@@ -341,14 +326,14 @@ func TestLoginSuccessProtocol766IncludesStrictByte(t *testing.T) {
 // Protocol 768 (1.21.2) must NOT include the strict error handling byte.
 func TestLoginSuccessProtocol768OmitsStrictByte(t *testing.T) {
 	uuid := bytes.Repeat([]byte{0x07}, 16)
-	raw := makeLoginSuccess(uuid, "Notch", 768)
+	raw := MakeLoginSuccess(uuid, "Notch", 768)
 
-	_, off, _ := readVarInt(raw, 0)
-	_, off, _ = readVarInt(raw, off)
+	_, off, _ := ReadVarInt(raw, 0)
+	_, off, _ = ReadVarInt(raw, off)
 	off += 16
-	nameLen, off, _ := readVarInt(raw, off)
+	nameLen, off, _ := ReadVarInt(raw, off)
 	off += int(nameLen)
-	_, off, _ = readVarInt(raw, off)
+	_, off, _ = ReadVarInt(raw, off)
 
 	if off != len(raw) {
 		t.Errorf("packet has %d bytes after properties, want 0 (no strict byte)", len(raw)-off)
@@ -358,7 +343,7 @@ func TestLoginSuccessProtocol768OmitsStrictByte(t *testing.T) {
 // Protocol 770 (1.21.5) sits between the two trailing fields and gets neither.
 func TestLoginSuccessProtocol770OmitsBothTrailingFields(t *testing.T) {
 	uuid := bytes.Repeat([]byte{0x07}, 16)
-	raw := makeLoginSuccess(uuid, "Notch", 770)
+	raw := MakeLoginSuccess(uuid, "Notch", 770)
 
 	off := afterLoginSuccessProperties(t, raw)
 	if off != len(raw) {
@@ -370,7 +355,7 @@ func TestLoginSuccessProtocol770OmitsBothTrailingFields(t *testing.T) {
 // client refuse the packet with a decoder error.
 func TestLoginSuccessProtocol776CarriesASessionID(t *testing.T) {
 	uuid := bytes.Repeat([]byte{0x07}, 16)
-	raw := makeLoginSuccess(uuid, "Notch", 776)
+	raw := MakeLoginSuccess(uuid, "Notch", 776)
 
 	off := afterLoginSuccessProperties(t, raw)
 	if len(raw)-off != 16 {
@@ -388,8 +373,8 @@ func TestLoginSuccessProtocol776CarriesASessionID(t *testing.T) {
 // Two different logins must not share a session id.
 func TestLoginSuccessSessionIDsDiffer(t *testing.T) {
 	uuid := bytes.Repeat([]byte{0x07}, 16)
-	first := makeLoginSuccess(uuid, "Notch", 776)
-	second := makeLoginSuccess(uuid, "Notch", 776)
+	first := MakeLoginSuccess(uuid, "Notch", 776)
+	second := MakeLoginSuccess(uuid, "Notch", 776)
 	if bytes.Equal(first, second) {
 		t.Error("session id repeated across logins")
 	}
@@ -398,19 +383,19 @@ func TestLoginSuccessSessionIDsDiffer(t *testing.T) {
 // Frame length, packet id, uuid, username and the property count, in that order.
 func afterLoginSuccessProperties(t *testing.T, raw []byte) int {
 	t.Helper()
-	_, off, _ := readVarInt(raw, 0)
-	_, off, _ = readVarInt(raw, off)
+	_, off, _ := ReadVarInt(raw, 0)
+	_, off, _ = ReadVarInt(raw, off)
 	off += 16
-	nameLen, off, _ := readVarInt(raw, off)
+	nameLen, off, _ := ReadVarInt(raw, off)
 	off += int(nameLen)
-	_, off, _ = readVarInt(raw, off)
+	_, off, _ = ReadVarInt(raw, off)
 	return off
 }
 
 // A status handshake carries protocol version -1, the case that used to hang.
 func TestStatusHandshakeIsWellFormed(t *testing.T) {
-	raw := makeStatusHandshake("192.168.1.100", 25565)
-	hs, err := parseHandshake(raw)
+	raw := MakeStatusHandshake("192.168.1.100", 25565)
+	hs, err := ParseHandshake(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,14 +411,14 @@ func TestStatusHandshakeIsWellFormed(t *testing.T) {
 }
 
 func TestStatusResponseEchoesClientProtocol(t *testing.T) {
-	raw, err := makeStatusResponse("{\"text\":\"sleeping\"}", 10, 0, "", "", 770)
+	raw, err := MakeStatusResponse("{\"text\":\"sleeping\"}", 10, 0, "", "", 770)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, off, _ := readVarInt(raw, 0)
-	_, off, _ = readVarInt(raw, off)
-	strLen, off, _ := readVarInt(raw, off)
-	var decoded statusPayload
+	_, off, _ := ReadVarInt(raw, 0)
+	_, off, _ = ReadVarInt(raw, off)
+	strLen, off, _ := ReadVarInt(raw, off)
+	var decoded StatusPayload
 	if err := json.Unmarshal(raw[off:off+int(strLen)], &decoded); err != nil {
 		t.Fatal(err)
 	}
@@ -446,7 +431,7 @@ func TestStatusResponseEchoesClientProtocol(t *testing.T) {
 // server that had an icon, because the response spans segments.
 func TestReadFramedPacketReassemblesASplitResponse(t *testing.T) {
 	icon := "data:image/png;base64," + strings.Repeat("A", 12000)
-	frame, err := makeStatusResponse(config.DefaultMOTDSleeping, 20, 3, icon, "1.21.4", 769)
+	frame, err := MakeStatusResponse(config.DefaultMOTDSleeping, 20, 3, icon, "1.21.4", 769)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -454,12 +439,12 @@ func TestReadFramedPacketReassemblesASplitResponse(t *testing.T) {
 		t.Fatalf("frame is only %d bytes, the test needs one that spans segments", len(frame))
 	}
 
-	body, err := readFramedPacket(iotest.OneByteReader(bytes.NewReader(frame)), maxStatusResponseBytes)
+	body, err := ReadFramedPacket(iotest.OneByteReader(bytes.NewReader(frame)), MaxStatusResponseBytes)
 	if err != nil {
 		t.Fatalf("readFramedPacket: %v", err)
 	}
 
-	payload, err := parseStatusPayload(body)
+	payload, err := ParseStatusPayload(body)
 	if err != nil {
 		t.Fatalf("parseStatusPayload: %v", err)
 	}
@@ -472,31 +457,31 @@ func TestReadFramedPacketReassemblesASplitResponse(t *testing.T) {
 }
 
 func TestReadFramedPacketRejectsAnOversizedLength(t *testing.T) {
-	frame := append(writeVarInt(int32(maxStatusResponseBytes+1)), 0x00)
+	frame := append(WriteVarInt(int32(MaxStatusResponseBytes+1)), 0x00)
 
-	if _, err := readFramedPacket(bytes.NewReader(frame), maxStatusResponseBytes); !errors.Is(err, ErrPacketTooBig) {
+	if _, err := ReadFramedPacket(bytes.NewReader(frame), MaxStatusResponseBytes); !errors.Is(err, ErrPacketTooBig) {
 		t.Errorf("err = %v, want ErrPacketTooBig", err)
 	}
 }
 
 func TestReadFramedPacketRejectsAnEmptyPacket(t *testing.T) {
-	if _, err := readFramedPacket(bytes.NewReader([]byte{0x00}), maxStatusResponseBytes); !errors.Is(err, ErrShortPacket) {
+	if _, err := ReadFramedPacket(bytes.NewReader([]byte{0x00}), MaxStatusResponseBytes); !errors.Is(err, ErrShortPacket) {
 		t.Errorf("err = %v, want ErrShortPacket", err)
 	}
 }
 
 func TestReadFramedPacketFailsOnATruncatedBody(t *testing.T) {
-	frame := append(writeVarInt(10), 1, 2, 3)
+	frame := append(WriteVarInt(10), 1, 2, 3)
 
-	if _, err := readFramedPacket(bytes.NewReader(frame), maxStatusResponseBytes); err == nil {
+	if _, err := ReadFramedPacket(bytes.NewReader(frame), MaxStatusResponseBytes); err == nil {
 		t.Error("a body shorter than its length prefix should fail")
 	}
 }
 
 func TestParseStatusPayloadRejectsAnotherPacketID(t *testing.T) {
-	body := append(writeVarInt(packetIDPing), writeString("{}")...)
+	body := append(WriteVarInt(packetIDPing), WriteString("{}")...)
 
-	if _, err := parseStatusPayload(body); !errors.Is(err, ErrWrongPacketID) {
+	if _, err := ParseStatusPayload(body); !errors.Is(err, ErrWrongPacketID) {
 		t.Errorf("err = %v, want ErrWrongPacketID", err)
 	}
 }

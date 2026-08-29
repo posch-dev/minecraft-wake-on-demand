@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
-
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // Staged as the user, then moved by one sudo call, so only the password

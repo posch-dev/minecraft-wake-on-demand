@@ -1,9 +1,8 @@
 package main
 
 import (
-	"testing"
-
 	"slices"
+	"testing"
 )
 
 // Numbers, because a wrong word means retyping and these people are reading a

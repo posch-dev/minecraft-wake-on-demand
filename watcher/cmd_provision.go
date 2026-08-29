@@ -3,10 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
-
-	"slices"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )

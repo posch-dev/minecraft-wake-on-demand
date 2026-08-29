@@ -10,17 +10,14 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
-
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
-
-	"slices"
-
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 func runSetupSSH() int {

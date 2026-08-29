@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
 )
 
 // Docker publishes the port the moment the container starts, so a bare dial
@@ -37,10 +39,10 @@ func TestStatusPingFallsBackWhenTheServerGoesQuiet(t *testing.T) {
 	handler := NewHandler(cfg, waker)
 	client := serveOnce(t, handler)
 
-	if _, err := client.Write(buildHandshake(770, "watcher.local", 25565, 1)); err != nil {
+	if _, err := client.Write(mcproto.MakeHandshake(770, "watcher.local", 25565, 1)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Write(makeStatusRequest()); err != nil {
+	if _, err := client.Write(mcproto.MakeStatusRequest()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -58,9 +60,9 @@ func TestRewritingAStatusResponseKeepsUnknownFields(t *testing.T) {
 		`"players":{"max":10,"online":1,"sample":[{"name":"KampfKroete_","id":"x"}]},` +
 		`"description":{"text":"theirs"},"enforcesSecureChat":false,` +
 		`"modinfo":{"type":"FML","modList":[]}}`
-	body := append(writeVarInt(packetIDStatus), writeString(original)...)
+	body := append(mcproto.WriteVarInt(mcproto.PacketIDStatus), mcproto.WriteString(original)...)
 
-	framed, err := rewriteStatusResponse(body, `{"text":"ours"}`, "data:image/png;base64,AAAA")
+	framed, err := mcproto.RewriteStatusResponse(body, `{"text":"ours"}`, "data:image/png;base64,AAAA")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +85,7 @@ func TestRewritingAStatusResponseKeepsUnknownFields(t *testing.T) {
 func TestAStatusResponseWithoutOverridesIsPassedOnUnchanged(t *testing.T) {
 	original := `{"version":{"name":"26.2","protocol":776},"players":{"max":10,"online":0},` +
 		`"description":{"text":"theirs"},"enforcesSecureChat":false}`
-	body := append(writeVarInt(packetIDStatus), writeString(original)...)
+	body := append(mcproto.WriteVarInt(mcproto.PacketIDStatus), mcproto.WriteString(original)...)
 
 	cfg := sleepingConfig()
 	handler := NewHandler(cfg, NewWaker(cfg))
@@ -92,7 +94,7 @@ func TestAStatusResponseWithoutOverridesIsPassedOnUnchanged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(framed) != string(framePacket(body)) {
+	if string(framed) != string(mcproto.FramePacket(body)) {
 		t.Error("the server's own answer was rewritten")
 	}
 }

@@ -19,11 +19,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
-
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
-
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // Unauthenticated and answered to anyone, so an uncapped icon is an amplifier.

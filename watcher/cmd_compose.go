@@ -3,15 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
-
-	"slices"
-
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 const eulaURL = "https://aka.ms/MinecraftEULA"

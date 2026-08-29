@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
-) // Port 1 on loopback refuses instantly, which is the sleeping server case
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
+)
+
 // without waiting for a timeout.
 func sleepingConfig() *config.Config {
 	cfg := config.Default()
@@ -55,7 +57,7 @@ func readFrame(t *testing.T, conn net.Conn) []byte {
 		n, err := conn.Read(chunk)
 		if n > 0 {
 			buf = append(buf, chunk[:n]...)
-			if length, off, err := readVarInt(buf, 0); err == nil {
+			if length, off, err := mcproto.ReadVarInt(buf, 0); err == nil {
 				if len(buf) >= off+int(length) {
 					return buf[:off+int(length)]
 				}
@@ -67,21 +69,21 @@ func readFrame(t *testing.T, conn net.Conn) []byte {
 	}
 }
 
-func decodeStatus(t *testing.T, frame []byte) statusPayload {
+func decodeStatus(t *testing.T, frame []byte) mcproto.StatusPayload {
 	t.Helper()
-	_, off, err := readVarInt(frame, 0)
+	_, off, err := mcproto.ReadVarInt(frame, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pktID, off, err := readVarInt(frame, off)
+	pktID, off, err := mcproto.ReadVarInt(frame, off)
 	if err != nil || pktID != 0x00 {
 		t.Fatalf("packet id = %d, err %v", pktID, err)
 	}
-	strLen, off, err := readVarInt(frame, off)
+	strLen, off, err := mcproto.ReadVarInt(frame, off)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var payload statusPayload
+	var payload mcproto.StatusPayload
 	if err := json.Unmarshal(frame[off:off+int(strLen)], &payload); err != nil {
 		t.Fatalf("status payload is not JSON: %v", err)
 	}
@@ -93,10 +95,10 @@ func TestStatusPingWhileSleeping(t *testing.T) {
 	h := NewHandler(cfg, NewWaker(cfg))
 	client := serveOnce(t, h)
 
-	if _, err := client.Write(buildHandshake(770, "watcher.local", 25565, 1)); err != nil {
+	if _, err := client.Write(mcproto.MakeHandshake(770, "watcher.local", 25565, 1)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Write(makeStatusRequest()); err != nil {
+	if _, err := client.Write(mcproto.MakeStatusRequest()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -115,8 +117,8 @@ func TestStatusPingInOneSegment(t *testing.T) {
 	h := NewHandler(cfg, NewWaker(cfg))
 	client := serveOnce(t, h)
 
-	combined := append(buildHandshake(770, "watcher.local", 25565, 1), makeStatusRequest()...)
-	combined = append(combined, makePingResponse(1234567890)...)
+	combined := append(mcproto.MakeHandshake(770, "watcher.local", 25565, 1), mcproto.MakeStatusRequest()...)
+	combined = append(combined, mcproto.MakePingResponse(1234567890)...)
 	if _, err := client.Write(combined); err != nil {
 		t.Fatal(err)
 	}
@@ -128,8 +130,8 @@ func TestStatusPingInOneSegment(t *testing.T) {
 
 	// The ping that came along has to be answered with the same payload.
 	pong := readFrame(t, client)
-	_, off, _ := readVarInt(pong, 0)
-	pktID, off, err := readVarInt(pong, off)
+	_, off, _ := mcproto.ReadVarInt(pong, 0)
+	pktID, off, err := mcproto.ReadVarInt(pong, off)
 	if err != nil || pktID != 0x01 {
 		t.Fatalf("pong packet id = %d", pktID)
 	}
@@ -148,20 +150,20 @@ func TestLoginWhileSleepingSendsWaitMessage(t *testing.T) {
 	h := NewHandler(cfg, waker)
 	client := serveOnce(t, h)
 
-	if _, err := client.Write(buildHandshake(770, "watcher.local", 25565, 2)); err != nil {
+	if _, err := client.Write(mcproto.MakeHandshake(770, "watcher.local", 25565, 2)); err != nil {
 		t.Fatal(err)
 	}
 	frame := readFrame(t, client)
 
-	_, off, err := readVarInt(frame, 0)
+	_, off, err := mcproto.ReadVarInt(frame, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pktID, off, err := readVarInt(frame, off)
+	pktID, off, err := mcproto.ReadVarInt(frame, off)
 	if err != nil || pktID != 0x00 {
 		t.Fatalf("disconnect packet id = %d", pktID)
 	}
-	strLen, off, err := readVarInt(frame, off)
+	strLen, off, err := mcproto.ReadVarInt(frame, off)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,10 +188,10 @@ func TestStatusPingWhileSleepingShowsCachedInfo(t *testing.T) {
 	h := NewHandler(cfg, waker)
 	client := serveOnce(t, h)
 
-	if _, err := client.Write(buildHandshake(770, "watcher.local", 25565, 1)); err != nil {
+	if _, err := client.Write(mcproto.MakeHandshake(770, "watcher.local", 25565, 1)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Write(makeStatusRequest()); err != nil {
+	if _, err := client.Write(mcproto.MakeStatusRequest()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -245,7 +247,7 @@ func TestHandshakeSplitAcrossReads(t *testing.T) {
 	h := NewHandler(cfg, NewWaker(cfg))
 	client := serveOnce(t, h)
 
-	combined := append(buildHandshake(770, "watcher.local", 25565, 1), makeStatusRequest()...)
+	combined := append(mcproto.MakeHandshake(770, "watcher.local", 25565, 1), mcproto.MakeStatusRequest()...)
 
 	// One byte at a time is the worst case the handler has to survive.
 	for i := 0; i < len(combined); i++ {
@@ -262,8 +264,8 @@ func TestHandshakeSplitAcrossReads(t *testing.T) {
 
 // The same, with the handshake split at every possible offset.
 func TestHandshakeSplitAtEveryOffset(t *testing.T) {
-	handshake := buildHandshake(770, "watcher.local", 25565, 1)
-	request := makeStatusRequest()
+	handshake := mcproto.MakeHandshake(770, "watcher.local", 25565, 1)
+	request := mcproto.MakeStatusRequest()
 
 	for split := 1; split < len(handshake); split++ {
 		cfg := sleepingConfig()
@@ -291,7 +293,7 @@ func TestAllowedHostnamesEmptyPermitsAll(t *testing.T) {
 	h := NewHandler(cfg, NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
-	hs := &Handshake{ServerAddress: "1.2.3.4", NextState: 1}
+	hs := &mcproto.Handshake{ServerAddress: "1.2.3.4", NextState: 1}
 	if !h.isAllowedHostname(hs, remote) {
 		t.Error("empty allowed_hostnames should permit all connections")
 	}
@@ -303,7 +305,7 @@ func TestAllowedHostnamesBlocksUnknownRemote(t *testing.T) {
 	h := NewHandler(cfg, NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
-	hs := &Handshake{ServerAddress: "1.2.3.4", NextState: 1}
+	hs := &mcproto.Handshake{ServerAddress: "1.2.3.4", NextState: 1}
 	if h.isAllowedHostname(hs, remote) {
 		t.Error("remote IP not in allowed list should be blocked")
 	}
@@ -315,7 +317,7 @@ func TestAllowedHostnamesAllowsMatchingRemote(t *testing.T) {
 	h := NewHandler(cfg, NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
-	hs := &Handshake{ServerAddress: "mc.example.org", NextState: 1}
+	hs := &mcproto.Handshake{ServerAddress: "mc.example.org", NextState: 1}
 	if !h.isAllowedHostname(hs, remote) {
 		t.Error("hostname match from remote IP should be allowed")
 	}
@@ -327,7 +329,7 @@ func TestAllowedHostnamesLocalBypassesCheck(t *testing.T) {
 	h := NewHandler(cfg, NewWaker(cfg))
 
 	loopback, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:5000")
-	hs := &Handshake{ServerAddress: "scanner.ip", NextState: 1}
+	hs := &mcproto.Handshake{ServerAddress: "scanner.ip", NextState: 1}
 	if !h.isAllowedHostname(hs, loopback) {
 		t.Error("local client should bypass hostname check")
 	}
@@ -339,7 +341,7 @@ func TestAllowedHostnamesMatchIsCaseInsensitive(t *testing.T) {
 	h := NewHandler(cfg, NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
-	hs := &Handshake{ServerAddress: "mc.example.org", NextState: 1}
+	hs := &mcproto.Handshake{ServerAddress: "mc.example.org", NextState: 1}
 	if !h.isAllowedHostname(hs, remote) {
 		t.Error("hostname matching should be case-insensitive")
 	}
@@ -362,7 +364,7 @@ func TestAllowedHostnamesAutoPopulatedFromDuckDNS(t *testing.T) {
 
 	h := NewHandler(cfg, NewWaker(cfg))
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
-	hs := &Handshake{ServerAddress: "my-world.duckdns.org", NextState: 1}
+	hs := &mcproto.Handshake{ServerAddress: "my-world.duckdns.org", NextState: 1}
 	if !h.isAllowedHostname(hs, remote) {
 		t.Error("auto-populated DuckDNS domain should be accepted")
 	}
@@ -380,7 +382,7 @@ func TestAllowedHostnamesIgnoreForgeMarker(t *testing.T) {
 		"mc.example.org\x00203.0.113.7\x0069e8e2ee\x00[]",
 		"mc.example.org.",
 	} {
-		hs := &Handshake{ServerAddress: address, NextState: 1}
+		hs := &mcproto.Handshake{ServerAddress: address, NextState: 1}
 		if !h.isAllowedHostname(hs, remote) {
 			t.Errorf("address %q should be accepted", address)
 		}
@@ -399,7 +401,7 @@ func TestAllowedHostnamesStillBlockOtherNames(t *testing.T) {
 		"mc.example.org.evil.net",
 		"",
 	} {
-		hs := &Handshake{ServerAddress: address, NextState: 1}
+		hs := &mcproto.Handshake{ServerAddress: address, NextState: 1}
 		if h.isAllowedHostname(hs, remote) {
 			t.Errorf("address %q should be blocked", address)
 		}

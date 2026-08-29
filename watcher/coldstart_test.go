@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
 )
 
 // A client that sends the login packet on its own must not be cut off with a
@@ -16,11 +18,11 @@ func TestColdStartLoginIsClosedCleanly(t *testing.T) {
 	handler := NewHandler(cfg, NewWaker(cfg))
 	client := serveOnce(t, handler)
 
-	if _, err := client.Write(buildHandshake(770, "watcher.local", 25565, 2)); err != nil {
+	if _, err := client.Write(mcproto.MakeHandshake(770, "watcher.local", 25565, 2)); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(120 * time.Millisecond)
-	if _, err := client.Write(buildLoginStart("KampfKroete_", bytes.Repeat([]byte{0x07}, 16))); err != nil {
+	if _, err := client.Write(mcproto.MakeLoginStart("KampfKroete_", bytes.Repeat([]byte{0x07}, 16))); err != nil {
 		t.Fatal(err)
 	}
 

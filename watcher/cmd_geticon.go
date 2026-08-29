@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
-
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
 )
 
 const iconDataURIPrefix = "data:image/png;base64,"
@@ -93,7 +93,7 @@ func runGetServerIcon() int {
 	return 0
 }
 
-func fetchServerStatus(ctx context.Context, cfg *config.Config) (*statusPayload, error) {
+func fetchServerStatus(ctx context.Context, cfg *config.Config) (*mcproto.StatusPayload, error) {
 	address := net.JoinHostPort(cfg.Server.IP, strconv.Itoa(cfg.Server.MCPort))
 
 	dialer := net.Dialer{Timeout: 5 * time.Second}
@@ -105,18 +105,18 @@ func fetchServerStatus(ctx context.Context, cfg *config.Config) (*statusPayload,
 
 	conn.SetDeadline(time.Now().Add(10 * time.Second))
 	request := append(
-		makeStatusHandshake(cfg.Server.IP, cfg.Server.MCPort),
-		makeStatusRequest()...,
+		mcproto.MakeStatusHandshake(cfg.Server.IP, cfg.Server.MCPort),
+		mcproto.MakeStatusRequest()...,
 	)
 	if _, err := conn.Write(request); err != nil {
 		return nil, fmt.Errorf("cannot ask %s: %w", address, err)
 	}
 
-	body, err := readFramedPacket(conn, maxStatusResponseBytes)
+	body, err := mcproto.ReadFramedPacket(conn, mcproto.MaxStatusResponseBytes)
 	if err != nil {
 		return nil, fmt.Errorf("no usable answer from %s: %w", address, err)
 	}
-	return parseStatusPayload(body)
+	return mcproto.ParseStatusPayload(body)
 }
 
 func decodeFaviconDataURI(favicon string) ([]byte, error) {

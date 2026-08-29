@@ -1,4 +1,4 @@
-package main
+package mcproto
 
 import (
 	"bytes"
@@ -20,8 +20,11 @@ var (
 )
 
 const (
+	// A status response with an icon is tens of kilobytes, never megabytes.
+	MaxStatusResponseBytes = 256 * 1024
+
 	maxUsernameLen = 16
-	packetIDStatus = 0x00
+	PacketIDStatus = 0x00
 	packetIDPing   = 0x01
 	// Transfer lives in the configuration state, not the login state.
 	packetIDTransfer     = 0x0B
@@ -36,7 +39,7 @@ const (
 	sessionIDFirstProtocol   = 776
 )
 
-func readVarInt(data []byte, offset int) (int32, int, error) {
+func ReadVarInt(data []byte, offset int) (int32, int, error) {
 	var result uint32
 	var shift uint
 	for {
@@ -58,7 +61,7 @@ func readVarInt(data []byte, offset int) (int32, int, error) {
 }
 
 // Negative values need the unsigned shift, shifting a signed int never ends.
-func writeVarInt(value int32) []byte {
+func WriteVarInt(value int32) []byte {
 	v := uint32(value)
 	out := make([]byte, 0, 5)
 	for {
@@ -75,14 +78,14 @@ func writeVarInt(value int32) []byte {
 	return out
 }
 
-func writeString(s string) []byte {
+func WriteString(s string) []byte {
 	b := []byte(s)
-	return append(writeVarInt(int32(len(b))), b...)
+	return append(WriteVarInt(int32(len(b))), b...)
 }
 
 // Every packet on the wire is its own length followed by the body.
-func framePacket(body []byte) []byte {
-	return append(writeVarInt(int32(len(body))), body...)
+func FramePacket(body []byte) []byte {
+	return append(WriteVarInt(int32(len(body))), body...)
 }
 
 type Handshake struct {
@@ -94,8 +97,8 @@ type Handshake struct {
 	End int
 }
 
-func parseHandshake(data []byte) (*Handshake, error) {
-	pktLen, off, err := readVarInt(data, 0)
+func ParseHandshake(data []byte) (*Handshake, error) {
+	pktLen, off, err := ReadVarInt(data, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -104,18 +107,18 @@ func parseHandshake(data []byte) (*Handshake, error) {
 	}
 	end := off + int(pktLen)
 
-	pktID, off, err := readVarInt(data, off)
+	pktID, off, err := ReadVarInt(data, off)
 	if err != nil {
 		return nil, err
 	}
-	if pktID != packetIDStatus {
+	if pktID != PacketIDStatus {
 		return nil, ErrWrongPacketID
 	}
-	protoVer, off, err := readVarInt(data, off)
+	protoVer, off, err := ReadVarInt(data, off)
 	if err != nil {
 		return nil, err
 	}
-	addrLen, off, err := readVarInt(data, off)
+	addrLen, off, err := ReadVarInt(data, off)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +134,7 @@ func parseHandshake(data []byte) (*Handshake, error) {
 	port := binary.BigEndian.Uint16(data[off : off+2])
 	off += 2
 
-	nextState, _, err := readVarInt(data, off)
+	nextState, _, err := ReadVarInt(data, off)
 	if err != nil {
 		return nil, err
 	}
@@ -154,15 +157,15 @@ type statusPlayers struct {
 	Online int `json:"online"`
 }
 
-type statusPayload struct {
+type StatusPayload struct {
 	Version     statusVersion   `json:"version"`
 	Players     statusPlayers   `json:"players"`
 	Description json.RawMessage `json:"description"`
 	Favicon     string          `json:"favicon,omitempty"`
 }
 
-func makeStatusResponse(motdJSON string, maxPlayers, online int, icon string, versionName string, versionProtocol int) ([]byte, error) {
-	return encodeStatusPayload(&statusPayload{
+func MakeStatusResponse(motdJSON string, maxPlayers, online int, icon string, versionName string, versionProtocol int) ([]byte, error) {
+	return encodeStatusPayload(&StatusPayload{
 		Version:     statusVersion{Name: versionName, Protocol: versionProtocol},
 		Players:     statusPlayers{Max: maxPlayers, Online: online},
 		Description: json.RawMessage(motdJSON),
@@ -170,7 +173,7 @@ func makeStatusResponse(motdJSON string, maxPlayers, online int, icon string, ve
 	})
 }
 
-func encodeStatusPayload(payload *statusPayload) ([]byte, error) {
+func encodeStatusPayload(payload *StatusPayload) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	// The MOTD may contain characters Go would escape as < by default.
@@ -180,13 +183,13 @@ func encodeStatusPayload(payload *statusPayload) ([]byte, error) {
 	}
 	encoded := bytes.TrimRight(buf.Bytes(), "\n")
 
-	body := append(writeVarInt(packetIDStatus), writeString(string(encoded))...)
-	return framePacket(body), nil
+	body := append(WriteVarInt(PacketIDStatus), WriteString(string(encoded))...)
+	return FramePacket(body), nil
 }
 
 // A response with an icon is around 10 kB and never arrives in one Read.
 // Returns the body without the length prefix.
-func readFramedPacket(r io.Reader, maxLen int) ([]byte, error) {
+func ReadFramedPacket(r io.Reader, maxLen int) ([]byte, error) {
 	var length int32
 	var shift uint
 	one := make([]byte, 1)
@@ -219,15 +222,15 @@ func readFramedPacket(r io.Reader, maxLen int) ([]byte, error) {
 // Body of a status response packet, so packet id followed by the JSON string.
 // Fields are kept raw so everything the server sends that we do not model, the
 // mod list and the player sample among them, survives being rewritten.
-func rewriteStatusResponse(body []byte, motd, icon string) ([]byte, error) {
-	pktID, off, err := readVarInt(body, 0)
+func RewriteStatusResponse(body []byte, motd, icon string) ([]byte, error) {
+	pktID, off, err := ReadVarInt(body, 0)
 	if err != nil {
 		return nil, err
 	}
-	if pktID != packetIDStatus {
+	if pktID != PacketIDStatus {
 		return nil, ErrWrongPacketID
 	}
-	jsonLen, off, err := readVarInt(body, off)
+	jsonLen, off, err := ReadVarInt(body, off)
 	if err != nil {
 		return nil, err
 	}
@@ -257,52 +260,52 @@ func rewriteStatusResponse(body []byte, motd, icon string) ([]byte, error) {
 		return nil, err
 	}
 	encoded := bytes.TrimRight(buf.Bytes(), "' + NL + '")
-	return framePacket(append(writeVarInt(packetIDStatus), writeString(string(encoded))...)), nil
+	return FramePacket(append(WriteVarInt(PacketIDStatus), WriteString(string(encoded))...)), nil
 }
 
-func parseStatusPayload(body []byte) (*statusPayload, error) {
-	pktID, off, err := readVarInt(body, 0)
+func ParseStatusPayload(body []byte) (*StatusPayload, error) {
+	pktID, off, err := ReadVarInt(body, 0)
 	if err != nil {
 		return nil, err
 	}
-	if pktID != packetIDStatus {
+	if pktID != PacketIDStatus {
 		return nil, ErrWrongPacketID
 	}
-	jsonLen, off, err := readVarInt(body, off)
+	jsonLen, off, err := ReadVarInt(body, off)
 	if err != nil {
 		return nil, err
 	}
 	if jsonLen <= 0 || off+int(jsonLen) > len(body) {
 		return nil, ErrShortPacket
 	}
-	var payload statusPayload
+	var payload StatusPayload
 	if err := json.Unmarshal(body[off:off+int(jsonLen)], &payload); err != nil {
 		return nil, err
 	}
 	return &payload, nil
 }
 
-func makePingResponse(payload int64) []byte {
-	body := writeVarInt(packetIDPing)
+func MakePingResponse(payload int64) []byte {
+	body := WriteVarInt(packetIDPing)
 	body = binary.BigEndian.AppendUint64(body, uint64(payload))
-	return framePacket(body)
+	return FramePacket(body)
 }
 
 // Returns the username and its 16 byte UUID, both empty when the packet does
 // not parse or the name breaks the 16 character limit.
-func parseLoginStart(data []byte) (string, []byte, error) {
-	_, off, err := readVarInt(data, 0)
+func ParseLoginStart(data []byte) (string, []byte, error) {
+	_, off, err := ReadVarInt(data, 0)
 	if err != nil {
 		return "", nil, err
 	}
-	pktID, off, err := readVarInt(data, off)
+	pktID, off, err := ReadVarInt(data, off)
 	if err != nil {
 		return "", nil, err
 	}
-	if pktID != packetIDStatus {
+	if pktID != PacketIDStatus {
 		return "", nil, ErrWrongPacketID
 	}
-	nameLen, off, err := readVarInt(data, off)
+	nameLen, off, err := ReadVarInt(data, off)
 	if err != nil {
 		return "", nil, err
 	}
@@ -328,18 +331,18 @@ func parseLoginStart(data []byte) (string, []byte, error) {
 
 // A field too many or too few and the client drops the connection with a
 // decoder error, so both trailing fields are tied to the exact protocol range.
-func makeLoginSuccess(uuid []byte, username string, protocolVersion int32) []byte {
-	body := writeVarInt(packetIDLoginSuccess)
+func MakeLoginSuccess(uuid []byte, username string, protocolVersion int32) []byte {
+	body := WriteVarInt(packetIDLoginSuccess)
 	body = append(body, uuid...)
-	body = append(body, writeString(username)...)
-	body = append(body, writeVarInt(0)...) // no properties
+	body = append(body, WriteString(username)...)
+	body = append(body, WriteVarInt(0)...) // no properties
 	if protocolVersion >= strictErrorFirstProtocol && protocolVersion <= strictErrorLastProtocol {
 		body = append(body, 0x01) // strict error handling
 	}
 	if protocolVersion >= sessionIDFirstProtocol {
 		body = append(body, randomUUID()...)
 	}
-	return framePacket(body)
+	return FramePacket(body)
 }
 
 // The client is transferred away before it ever uses the session, so any well
@@ -355,28 +358,43 @@ func randomUUID() []byte {
 }
 
 // Login state disconnect, so the client shows the message instead of an error.
-func makeLoginDisconnect(reasonJSON string) []byte {
-	body := append(writeVarInt(packetIDStatus), writeString(reasonJSON)...)
-	return framePacket(body)
+func MakeLoginDisconnect(reasonJSON string) []byte {
+	body := append(WriteVarInt(PacketIDStatus), WriteString(reasonJSON)...)
+	return FramePacket(body)
 }
 
-func makeTransferPacket(host string, port int) []byte {
-	body := append(writeVarInt(packetIDTransfer), writeString(host)...)
-	body = append(body, writeVarInt(int32(port))...)
-	return framePacket(body)
+func MakeTransferPacket(host string, port int) []byte {
+	body := append(WriteVarInt(packetIDTransfer), WriteString(host)...)
+	body = append(body, WriteVarInt(int32(port))...)
+	return FramePacket(body)
 }
 
 // Handshake a real server the way a client would, to tell an open port apart
 // from a server that is still booting.
-func makeStatusHandshake(host string, port int) []byte {
-	body := writeVarInt(packetIDStatus)
-	body = append(body, writeVarInt(-1)...) // protocol version, any value works
-	body = append(body, writeString(host)...)
+func MakeStatusHandshake(host string, port int) []byte {
+	body := WriteVarInt(PacketIDStatus)
+	body = append(body, WriteVarInt(-1)...) // protocol version, any value works
+	body = append(body, WriteString(host)...)
 	body = binary.BigEndian.AppendUint16(body, uint16(port))
-	body = append(body, writeVarInt(1)...) // next state: status
-	return framePacket(body)
+	body = append(body, WriteVarInt(1)...) // next state: status
+	return FramePacket(body)
 }
 
-func makeStatusRequest() []byte {
-	return framePacket(writeVarInt(packetIDStatus))
+func MakeStatusRequest() []byte {
+	return FramePacket(WriteVarInt(PacketIDStatus))
+}
+
+func MakeHandshake(proto int32, addr string, port uint16, next int32) []byte {
+	body := WriteVarInt(0x00)
+	body = append(body, WriteVarInt(proto)...)
+	body = append(body, WriteString(addr)...)
+	body = binary.BigEndian.AppendUint16(body, port)
+	body = append(body, WriteVarInt(next)...)
+	return FramePacket(body)
+}
+
+func MakeLoginStart(name string, uuid []byte) []byte {
+	body := append(WriteVarInt(0x00), WriteString(name)...)
+	body = append(body, uuid...)
+	return FramePacket(body)
 }

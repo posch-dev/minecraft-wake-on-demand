@@ -4,12 +4,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
-
-	"slices"
 )
 
 const foreignCompose = `# Someone else's stack, do not break it.

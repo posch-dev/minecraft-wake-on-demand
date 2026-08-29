@@ -8,9 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/crypto/ssh/knownhosts"
-
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 func setupSSHConfig(t *testing.T, server *testSSHServer, keyPath string) (*SSHRunner, string) {

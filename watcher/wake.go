@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
-
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
 )
 
 // A burst of connections shares one probe instead of hammering the server.
@@ -250,13 +250,13 @@ func (w *Waker) mcAcceptsStatus(ctx context.Context) bool {
 
 	conn.SetDeadline(time.Now().Add(3 * time.Second))
 	request := append(
-		makeStatusHandshake(w.cfg.Server.IP, w.cfg.Server.MCPort),
-		makeStatusRequest()...,
+		mcproto.MakeStatusHandshake(w.cfg.Server.IP, w.cfg.Server.MCPort),
+		mcproto.MakeStatusRequest()...,
 	)
 	if _, err := conn.Write(request); err != nil {
 		return false
 	}
-	body, err := readFramedPacket(conn, maxStatusResponseBytes)
+	body, err := mcproto.ReadFramedPacket(conn, mcproto.MaxStatusResponseBytes)
 	if err != nil {
 		return false
 	}
@@ -267,7 +267,7 @@ func (w *Waker) mcAcceptsStatus(ctx context.Context) bool {
 // Takes version and player slots from the body of a status response and caches
 // them when anything changed.
 func (w *Waker) learnServerInfo(body []byte) {
-	payload, err := parseStatusPayload(body)
+	payload, err := mcproto.ParseStatusPayload(body)
 	if err != nil {
 		return
 	}

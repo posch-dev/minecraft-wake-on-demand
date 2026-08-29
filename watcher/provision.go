@@ -5,9 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
-
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // What one password login can find out about the server PC, so init can fill

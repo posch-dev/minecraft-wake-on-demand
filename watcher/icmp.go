@@ -12,10 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
-
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 type pingMode int

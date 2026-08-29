@@ -9,11 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/crypto/ssh"
-
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
-
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"golang.org/x/crypto/ssh"
 )
 
 type checker struct {

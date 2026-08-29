@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
 )
 
 // Stands in for the real Minecraft server so the paths that only run when the
@@ -53,9 +54,9 @@ func startFakeMCServer(t *testing.T, answerStatus bool, echo []byte) *fakeMCServ
 				}
 				// The watcher probes readiness with protocol version -1, which
 				// no client sends. A real server answers it, so this one does.
-				hs, hsErr := parseHandshake(buf[:n])
+				hs, hsErr := mcproto.ParseHandshake(buf[:n])
 				if echo != nil && hsErr == nil && hs.ProtocolVersion == -1 {
-					probe, _ := makeStatusResponse(config.DefaultMOTDSleeping, 42, 0, "", "1.21.4", 769)
+					probe, _ := mcproto.MakeStatusResponse(config.DefaultMOTDSleeping, 42, 0, "", "1.21.4", 769)
 					conn.Write(probe)
 					conn.Read(buf)
 					return
@@ -67,7 +68,7 @@ func startFakeMCServer(t *testing.T, answerStatus bool, echo []byte) *fakeMCServ
 
 				if answerStatus {
 					motd := "{\"text\":\"the real server\",\"color\":\"green\"}"
-					response, _ := makeStatusResponse(motd, 42, 7, "", "1.21.4", 769)
+					response, _ := mcproto.MakeStatusResponse(motd, 42, 7, "", "1.21.4", 769)
 					conn.Write(response)
 				}
 				if echo != nil {
@@ -117,7 +118,7 @@ func TestMCAcceptsStatusAgainstARunningServer(t *testing.T) {
 	}
 
 	// It has to send a well formed handshake, not just open a socket.
-	handshake, err := parseHandshake(server.got())
+	handshake, err := mcproto.ParseHandshake(server.got())
 	if err != nil {
 		t.Fatalf("the probe sent something unparseable: %v", err)
 	}
@@ -184,10 +185,10 @@ func TestStatusPingIsProxiedWhenTheServerIsUp(t *testing.T) {
 	handler := NewHandler(cfg, waker)
 	client := serveOnce(t, handler)
 
-	if _, err := client.Write(buildHandshake(770, "watcher.local", 25565, 1)); err != nil {
+	if _, err := client.Write(mcproto.MakeHandshake(770, "watcher.local", 25565, 1)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Write(makeStatusRequest()); err != nil {
+	if _, err := client.Write(mcproto.MakeStatusRequest()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -214,7 +215,7 @@ func TestProxyForwardsTheHandshakeAndTheAnswer(t *testing.T) {
 	handler := NewHandler(cfg, waker)
 	client := serveOnce(t, handler)
 
-	handshake := buildHandshake(770, "watcher.local", 25565, 2)
+	handshake := mcproto.MakeHandshake(770, "watcher.local", 25565, 2)
 	if _, err := client.Write(handshake); err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +396,7 @@ func TestLearnServerInfoIgnoresEmptyVersion(t *testing.T) {
 	waker.info = nil
 	waker.infoMu.Unlock()
 
-	response, _ := makeStatusResponse("{\"text\":\"x\"}", 10, 0, "", "", 0)
+	response, _ := mcproto.MakeStatusResponse("{\"text\":\"x\"}", 10, 0, "", "", 0)
 	waker.learnServerInfo(statusBody(t, response))
 
 	if waker.CachedInfo() != nil {
@@ -420,7 +421,7 @@ func TestLearnServerInfoDoesNotUpdateWhenSame(t *testing.T) {
 	}
 
 	// Same version and same player slots as the fake server reported.
-	response, _ := makeStatusResponse("{\"text\":\"x\"}", 42, 0, "", "1.21.4", 769)
+	response, _ := mcproto.MakeStatusResponse("{\"text\":\"x\"}", 42, 0, "", "1.21.4", 769)
 	waker.learnServerInfo(statusBody(t, response))
 
 	cached := waker.CachedInfo()
@@ -443,7 +444,7 @@ func TestLearnServerInfoPicksUpChangedPlayerSlots(t *testing.T) {
 		t.Fatalf("max players = %d, want 42", got)
 	}
 
-	response, _ := makeStatusResponse("{\"text\":\"x\"}", 60, 0, "", "1.21.4", 769)
+	response, _ := mcproto.MakeStatusResponse("{\"text\":\"x\"}", 60, 0, "", "1.21.4", 769)
 	waker.learnServerInfo(statusBody(t, response))
 
 	if got := waker.CachedInfo().MaxPlayers; got != 60 {
@@ -485,7 +486,7 @@ func TestServerInfoCachesToFile(t *testing.T) {
 // learnServerInfo works on the packet body, the test helpers build whole frames.
 func statusBody(t *testing.T, frame []byte) []byte {
 	t.Helper()
-	body, err := readFramedPacket(bytes.NewReader(frame), maxStatusResponseBytes)
+	body, err := mcproto.ReadFramedPacket(bytes.NewReader(frame), mcproto.MaxStatusResponseBytes)
 	if err != nil {
 		t.Fatalf("readFramedPacket: %v", err)
 	}
@@ -518,7 +519,7 @@ func startFakeMCServerWithIcon(t *testing.T, favicon string) *fakeMCServer {
 				if _, err := conn.Read(buf); err != nil {
 					return
 				}
-				response, _ := makeStatusResponse(config.DefaultMOTDSleeping, 20, 0, favicon, "1.21.4", 769)
+				response, _ := mcproto.MakeStatusResponse(config.DefaultMOTDSleeping, 20, 0, favicon, "1.21.4", 769)
 				conn.Write(response)
 				conn.Read(buf)
 			}()

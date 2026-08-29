@@ -7,9 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"gopkg.in/yaml.v3"
 )
 
 const commentedConfig = `# The real config, with notes people wrote themselves.

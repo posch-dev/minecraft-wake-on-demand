@@ -13,12 +13,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
-
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
-
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 const sshPort = 22

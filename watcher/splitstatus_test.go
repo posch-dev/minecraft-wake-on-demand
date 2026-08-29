@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
 )
 
 // Answers only once it has both the handshake and the request, which is what a
@@ -42,11 +44,11 @@ func startPatientMCServer(t *testing.T, motd string) *fakeMCServer {
 					if err != nil {
 						return
 					}
-					hs, hsErr := parseHandshake(seen)
+					hs, hsErr := mcproto.ParseHandshake(seen)
 					if hsErr != nil || len(trailing(seen, hs.End)) == 0 {
 						continue
 					}
-					response, _ := makeStatusResponse(motd, 42, 7, "", "26.2", 776)
+					response, _ := mcproto.MakeStatusResponse(motd, 42, 7, "", "26.2", 776)
 					conn.Write(response)
 					conn.Read(buf)
 					return
@@ -68,12 +70,12 @@ func TestStatusPingIsProxiedWhenTheRequestArrivesSeparately(t *testing.T) {
 	handler := NewHandler(cfg, waker)
 	client := serveOnce(t, handler)
 
-	if _, err := client.Write(buildHandshake(770, "watcher.local", 25565, 1)); err != nil {
+	if _, err := client.Write(mcproto.MakeHandshake(770, "watcher.local", 25565, 1)); err != nil {
 		t.Fatal(err)
 	}
 	// The gap is what made the two arrive as separate reads.
 	time.Sleep(150 * time.Millisecond)
-	if _, err := client.Write(makeStatusRequest()); err != nil {
+	if _, err := client.Write(mcproto.MakeStatusRequest()); err != nil {
 		t.Fatal(err)
 	}
 

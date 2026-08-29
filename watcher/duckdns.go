@@ -9,9 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
-
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 const duckDNSEndpoint = "https://www.duckdns.org/update"

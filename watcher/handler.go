@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
-
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
 )
 
 const (
@@ -25,7 +25,6 @@ const (
 	loginDrainTimeout = 1 * time.Second
 	// A status response with a 64x64 icon is around 10 kB, the rest is headroom
 	// for large player samples.
-	maxStatusResponseBytes = 256 * 1024
 )
 
 type Handler struct {
@@ -103,7 +102,7 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 
 // TCP may split the handshake, so it is accumulated until it parses.
 // Returns a nil handshake when nothing usable arrived.
-func (h *Handler) readHandshake(conn net.Conn) ([]byte, *Handshake) {
+func (h *Handler) readHandshake(conn net.Conn) ([]byte, *mcproto.Handshake) {
 	conn.SetReadDeadline(time.Now().Add(handshakeTimeout))
 
 	buf := make([]byte, 0, readBufferSize)
@@ -112,13 +111,13 @@ func (h *Handler) readHandshake(conn net.Conn) ([]byte, *Handshake) {
 		n, err := conn.Read(chunk)
 		if n > 0 {
 			buf = append(buf, chunk[:n]...)
-			handshake, parseErr := parseHandshake(buf)
+			handshake, parseErr := mcproto.ParseHandshake(buf)
 			if parseErr == nil {
 				return buf, handshake
 			}
 			// Anything other than a short read is a packet that will not
 			// become valid by waiting for more of it.
-			if !errors.Is(parseErr, ErrIncompleteVarInt) && !errors.Is(parseErr, ErrShortPacket) {
+			if !errors.Is(parseErr, mcproto.ErrIncompleteVarInt) && !errors.Is(parseErr, mcproto.ErrShortPacket) {
 				return nil, nil
 			}
 		}
@@ -131,7 +130,7 @@ func (h *Handler) readHandshake(conn net.Conn) ([]byte, *Handshake) {
 
 // A live server answers for itself. If it does not, the watcher answers rather
 // than leaving the entry in the server list looking broken.
-func (h *Handler) handleStatus(ctx context.Context, conn net.Conn, initial []byte, hs *Handshake) {
+func (h *Handler) handleStatus(ctx context.Context, conn net.Conn, initial []byte, hs *mcproto.Handshake) {
 	// Clients can pack handshake, status request and ping into one segment or
 	// send them apart. Both paths below need the request, so it is read once
 	// here rather than by whichever path happens to run.
@@ -152,7 +151,7 @@ func (h *Handler) handleStatus(ctx context.Context, conn net.Conn, initial []byt
 	h.answerStatus(ctx, conn, rest, hs)
 }
 
-func (h *Handler) answerStatus(ctx context.Context, conn net.Conn, rest []byte, hs *Handshake) {
+func (h *Handler) answerStatus(ctx context.Context, conn net.Conn, rest []byte, hs *mcproto.Handshake) {
 	motd, icon := h.assets.MOTDSleeping(), h.assets.IconSleeping()
 	if h.waker.Booting() {
 		motd, icon = h.assets.MOTDStarting(), h.assets.IconStarting()
@@ -160,7 +159,7 @@ func (h *Handler) answerStatus(ctx context.Context, conn net.Conn, rest []byte, 
 
 	// Whatever follows the status request is the ping the client sent along.
 	var pingData []byte
-	if reqLen, off, err := readVarInt(rest, 0); err == nil {
+	if reqLen, off, err := mcproto.ReadVarInt(rest, 0); err == nil {
 		if end := off + int(reqLen); end >= 0 && end <= len(rest) {
 			pingData = rest[end:]
 		}
@@ -179,7 +178,7 @@ func (h *Handler) answerStatus(ctx context.Context, conn net.Conn, rest []byte, 
 		maxPlayers = info.MaxPlayers
 	}
 
-	response, err := makeStatusResponse(motd, maxPlayers, 0, icon, versionName, versionProtocol)
+	response, err := mcproto.MakeStatusResponse(motd, maxPlayers, 0, icon, versionName, versionProtocol)
 	if err != nil {
 		logging.Errorf("Cannot build status response: %v", err)
 		return
@@ -201,27 +200,27 @@ func (h *Handler) answerStatus(ctx context.Context, conn net.Conn, rest []byte, 
 	if len(pingData) < 10 {
 		return
 	}
-	_, off, err := readVarInt(pingData, 0)
+	_, off, err := mcproto.ReadVarInt(pingData, 0)
 	if err != nil {
 		return
 	}
-	_, off, err = readVarInt(pingData, off)
+	_, off, err = mcproto.ReadVarInt(pingData, off)
 	if err != nil || off+8 > len(pingData) {
 		return
 	}
 	payload := int64(binary.BigEndian.Uint64(pingData[off : off+8]))
 	conn.SetWriteDeadline(time.Now().Add(statusTimeout))
-	conn.Write(makePingResponse(payload))
+	conn.Write(mcproto.MakePingResponse(payload))
 }
 
-func (h *Handler) handleLogin(ctx context.Context, conn net.Conn, initial []byte, hs *Handshake, addr net.Addr, releaseStatusSlot func()) {
+func (h *Handler) handleLogin(ctx context.Context, conn net.Conn, initial []byte, hs *mcproto.Handshake, addr net.Addr, releaseStatusSlot func()) {
 	logging.Infof("Login attempt from %s", addr)
 
 	// A login holds its slot for the whole session, so it moves out of the short
 	// lived status pool into the one sized after the player slots.
 	if !h.loginConnections.Acquire(addr) {
 		conn.SetWriteDeadline(time.Now().Add(statusTimeout))
-		conn.Write(makeLoginDisconnect(h.cfg.MOTD.ServerFull))
+		conn.Write(mcproto.MakeLoginDisconnect(h.cfg.MOTD.ServerFull))
 		return
 	}
 	defer h.loginConnections.Release(addr)
@@ -237,7 +236,7 @@ func (h *Handler) handleLogin(ctx context.Context, conn net.Conn, initial []byte
 	if !h.waker.MCPortReachable(ctx, false) {
 		logging.Infof("Login from %s starts the server, sending the wait message", addr)
 		conn.SetWriteDeadline(time.Now().Add(statusTimeout))
-		conn.Write(makeLoginDisconnect(h.assets.MOTDLoginWait()))
+		conn.Write(mcproto.MakeLoginDisconnect(h.assets.MOTDLoginWait()))
 		drainBeforeClose(conn)
 		go h.bootInBackground(ctx, addr)
 		return
@@ -274,7 +273,7 @@ func (h *Handler) proxyStatus(ctx context.Context, conn net.Conn, initial, rest 
 			return false
 		}
 	}
-	body, err := readFramedPacket(server, maxStatusResponseBytes)
+	body, err := mcproto.ReadFramedPacket(server, mcproto.MaxStatusResponseBytes)
 	if err != nil {
 		logging.Warnf("Cannot read the status response from %s: %v", target, err)
 		return false
@@ -298,9 +297,9 @@ func (h *Handler) proxyStatus(ctx context.Context, conn net.Conn, initial, rest 
 func (h *Handler) dressStatusResponse(body []byte) ([]byte, error) {
 	motd, icon := h.assets.MOTDLive(), h.assets.IconLive()
 	if motd == "" && icon == "" {
-		return framePacket(body), nil
+		return mcproto.FramePacket(body), nil
 	}
-	return rewriteStatusResponse(body, motd, icon)
+	return mcproto.RewriteStatusResponse(body, motd, icon)
 }
 
 // The client's ping payload has to come back unchanged, so it is relayed rather
@@ -327,7 +326,7 @@ func (h *Handler) answerPing(client, server net.Conn) {
 }
 
 // Client receives a transfer packet, traffic skips the watcher.
-func (h *Handler) handleTransfer(ctx context.Context, conn net.Conn, initial []byte, hs *Handshake, addr net.Addr) {
+func (h *Handler) handleTransfer(ctx context.Context, conn net.Conn, initial []byte, hs *mcproto.Handshake, addr net.Addr) {
 	loginData := trailing(initial, hs.End)
 	if len(loginData) == 0 {
 		conn.SetReadDeadline(time.Now().Add(loginReadTimeout))
@@ -340,14 +339,14 @@ func (h *Handler) handleTransfer(ctx context.Context, conn net.Conn, initial []b
 		loginData = buf[:n]
 	}
 
-	name, uuid, err := parseLoginStart(loginData)
+	name, uuid, err := mcproto.ParseLoginStart(loginData)
 	if err != nil {
 		logging.Warnf("Failed to parse login start from %s: %v", addr, err)
 		return
 	}
 
 	conn.SetWriteDeadline(time.Now().Add(statusTimeout))
-	if _, err := conn.Write(makeLoginSuccess(uuid, name, hs.ProtocolVersion)); err != nil {
+	if _, err := conn.Write(mcproto.MakeLoginSuccess(uuid, name, hs.ProtocolVersion)); err != nil {
 		logging.Errorf("Transfer failed for %s: %v", addr, err)
 		return
 	}
@@ -367,7 +366,7 @@ func (h *Handler) handleTransfer(ctx context.Context, conn net.Conn, initial []b
 
 	logging.Infof("Transferring %s to %s:%d", logging.Sanitize(name, 64), targetHost, targetPort)
 	conn.SetWriteDeadline(time.Now().Add(statusTimeout))
-	conn.Write(makeTransferPacket(targetHost, targetPort))
+	conn.Write(mcproto.MakeTransferPacket(targetHost, targetPort))
 }
 
 // Closing while the login packet is still unread resets the connection, and the
@@ -449,7 +448,7 @@ func (h *Handler) isLocalClient(addr net.Addr) bool {
 }
 
 // Port scanners connect by raw IP, so only listed names get an answer at all.
-func (h *Handler) isAllowedHostname(hs *Handshake, addr net.Addr) bool {
+func (h *Handler) isAllowedHostname(hs *mcproto.Handshake, addr net.Addr) bool {
 	if len(h.cfg.Watcher.AllowedHostnames) == 0 {
 		return true
 	}

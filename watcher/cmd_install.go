@@ -9,11 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
-
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
-
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 //go:embed mcwod.service
