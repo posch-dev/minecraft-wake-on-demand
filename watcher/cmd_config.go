@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
 // Menu driven editing of an existing config.yml, reached as config, edit or
@@ -17,7 +17,7 @@ import (
 type configEditor struct {
 	cfg   *config.Config
 	doc   *yamlDocument
-	p     *prompter
+	p     *ui.Prompter
 	dirty bool
 }
 
@@ -34,13 +34,13 @@ func runConfigEdit() int {
 		return 1
 	}
 
-	editor := &configEditor{cfg: cfg, doc: doc, p: newPrompter()}
+	editor := &configEditor{cfg: cfg, doc: doc, p: ui.NewPrompter()}
 	fmt.Printf("Editing %s\n", cfg.Path)
 	fmt.Println("Press Enter to keep the value in brackets.")
 
 	for {
 		editor.printMenu()
-		switch strings.ToLower(strings.TrimSpace(editor.p.line("Choose", "q"))) {
+		switch strings.ToLower(strings.TrimSpace(editor.p.Line("Choose", "q"))) {
 		case "1":
 			editor.editServer()
 		case "2":
@@ -133,10 +133,10 @@ func (e *configEditor) set(value any, path ...string) {
 
 func (e *configEditor) editServer() {
 	c := e.cfg
-	c.Server.IP = e.p.validated("IP address or hostname of the server PC", c.Server.IP, validateHostOrIP)
+	c.Server.IP = e.p.Validated("IP address or hostname of the server PC", c.Server.IP, validateHostOrIP)
 	e.set(c.Server.IP, "server", "ip")
 
-	c.Server.SSHUser = e.p.validated("Which user the watcher logs in as", c.Server.SSHUser, func(v string) error {
+	c.Server.SSHUser = e.p.Validated("Which user the watcher logs in as", c.Server.SSHUser, func(v string) error {
 		if strings.TrimSpace(v) == "" {
 			return fmt.Errorf("this cannot be empty")
 		}
@@ -144,22 +144,22 @@ func (e *configEditor) editServer() {
 	})
 	e.set(c.Server.SSHUser, "server", "ssh_user")
 
-	c.Server.MAC = e.p.validated("MAC address of the server PC", c.Server.MAC, func(v string) error {
+	c.Server.MAC = e.p.Validated("MAC address of the server PC", c.Server.MAC, func(v string) error {
 		_, err := config.ParseMAC(v)
 		return err
 	})
 	e.set(c.Server.MAC, "server", "mac")
 
-	c.Server.ContainerName = e.p.validated("Name of the Minecraft container", c.Server.ContainerName, validateContainerName)
+	c.Server.ContainerName = e.p.Validated("Name of the Minecraft container", c.Server.ContainerName, validateContainerName)
 	e.set(c.Server.ContainerName, "server", "container_name")
 
-	c.Server.MCPort = e.p.validatedPort("Minecraft port on the server PC", c.Server.MCPort)
+	c.Server.MCPort = e.p.ValidatedPort("Minecraft port on the server PC", c.Server.MCPort)
 	e.set(c.Server.MCPort, "server", "mc_port")
 }
 
 func (e *configEditor) editNetwork() {
 	c := e.cfg
-	c.Watcher.ListenAddress = e.p.validated("Address the watcher listens on", c.Watcher.ListenAddress, func(v string) error {
+	c.Watcher.ListenAddress = e.p.Validated("Address the watcher listens on", c.Watcher.ListenAddress, func(v string) error {
 		if v == "0.0.0.0" || v == "::" {
 			return nil
 		}
@@ -167,10 +167,10 @@ func (e *configEditor) editNetwork() {
 	})
 	e.set(c.Watcher.ListenAddress, "watcher", "listen_address")
 
-	c.Watcher.ListenPort = e.p.validatedPort("Port the watcher listens on", c.Watcher.ListenPort)
+	c.Watcher.ListenPort = e.p.ValidatedPort("Port the watcher listens on", c.Watcher.ListenPort)
 	e.set(c.Watcher.ListenPort, "watcher", "listen_port")
 
-	c.WoL.BroadcastAddress = e.p.validated("Broadcast address for the wake packet", c.WoL.BroadcastAddress, func(v string) error {
+	c.WoL.BroadcastAddress = e.p.Validated("Broadcast address for the wake packet", c.WoL.BroadcastAddress, func(v string) error {
 		return validateHostOrIP(v)
 	})
 	e.set(c.WoL.BroadcastAddress, "wol", "broadcast_address")
@@ -178,20 +178,20 @@ func (e *configEditor) editNetwork() {
 	fmt.Println("\nHostnames players may connect through. Empty means no filtering.")
 	fmt.Println("A connection from outside your network using any other name is dropped.")
 	current := strings.Join(c.Watcher.AllowedHostnames, ", ")
-	answer := e.p.line("Allowed hostnames, comma separated", current)
+	answer := e.p.Line("Allowed hostnames, comma separated", current)
 	c.Watcher.AllowedHostnames = config.SplitList(answer)
 	e.set([]string(c.Watcher.AllowedHostnames), "watcher", "allowed_hostnames")
 }
 
 func (e *configEditor) editDuckDNS() {
 	c := e.cfg
-	c.DuckDNS.Enabled = e.p.yesNo("Use DuckDNS", c.DuckDNS.Enabled)
+	c.DuckDNS.Enabled = e.p.YesNo("Use DuckDNS", c.DuckDNS.Enabled)
 	e.set(c.DuckDNS.Enabled, "duckdns", "enabled")
 	if !c.DuckDNS.Enabled {
 		return
 	}
 
-	c.DuckDNS.Domain = e.p.validated("Your DuckDNS address", c.DuckDNSHost(), func(v string) error {
+	c.DuckDNS.Domain = e.p.Validated("Your DuckDNS address", c.DuckDNSHost(), func(v string) error {
 		if config.NormalizeDuckDNSDomain(v) == "" {
 			return fmt.Errorf("that is empty, it looks like yourname.duckdns.org")
 		}
@@ -200,8 +200,8 @@ func (e *configEditor) editDuckDNS() {
 	c.DuckDNS.Domain = config.NormalizeDuckDNSDomain(c.DuckDNS.Domain)
 	e.set(c.DuckDNS.Domain, "duckdns", "domain")
 
-	if e.p.yesNo("Replace the DuckDNS token", false) {
-		if token := e.p.secret("DuckDNS token"); token != "" {
+	if e.p.YesNo("Replace the DuckDNS token", false) {
+		if token := e.p.Secret("DuckDNS token"); token != "" {
 			c.DuckDNS.Token = token
 			e.set(token, "duckdns", "token")
 		}
@@ -214,7 +214,7 @@ func (e *configEditor) editTransfer() {
 	fmt.Println("On redirects players to the server after the wake up, which is faster")
 	fmt.Println("but needs a second port forwarded and hides sessions from auto-sleep.")
 
-	c.Transfer.Enabled = e.p.yesNo("Enable transfer mode", c.Transfer.Enabled)
+	c.Transfer.Enabled = e.p.YesNo("Enable transfer mode", c.Transfer.Enabled)
 	e.set(c.Transfer.Enabled, "transfer", "enabled")
 	if !c.Transfer.Enabled {
 		return
@@ -224,7 +224,7 @@ func (e *configEditor) editTransfer() {
 	if fallback == "" && c.DuckDNS.Enabled {
 		fallback = c.DuckDNSHost()
 	}
-	c.Transfer.Host = e.p.validated("Public hostname players are sent to", fallback, func(v string) error {
+	c.Transfer.Host = e.p.Validated("Public hostname players are sent to", fallback, func(v string) error {
 		if strings.TrimSpace(v) == "" {
 			return fmt.Errorf("this cannot be empty")
 		}
@@ -232,10 +232,10 @@ func (e *configEditor) editTransfer() {
 	})
 	e.set(c.Transfer.Host, "transfer", "host")
 
-	c.Transfer.Port = e.p.validatedPort("Port forwarded straight to the server PC", c.Transfer.Port)
+	c.Transfer.Port = e.p.ValidatedPort("Port forwarded straight to the server PC", c.Transfer.Port)
 	e.set(c.Transfer.Port, "transfer", "port")
 
-	printHint("A server MCWOD set up accepts transfers already. One set up by",
+	ui.PrintHint("A server MCWOD set up accepts transfers already. One set up by",
 		"hand needs accepts-transfers=true in its server.properties.")
 }
 
@@ -247,13 +247,13 @@ func (e *configEditor) editSleep() {
 		return
 	}
 
-	c.Sleep.Enabled = e.p.yesNo("Send the server PC to sleep when nobody plays", c.Sleep.Enabled)
+	c.Sleep.Enabled = e.p.YesNo("Send the server PC to sleep when nobody plays", c.Sleep.Enabled)
 	e.set(c.Sleep.Enabled, "sleep", "enabled")
 	if !c.Sleep.Enabled {
 		return
 	}
 
-	c.Sleep.Action = strings.ToLower(strings.TrimSpace(e.p.validated(
+	c.Sleep.Action = strings.ToLower(strings.TrimSpace(e.p.Validated(
 		"Which action, suspend, hibernate, shutdown or custom", c.Sleep.Action, func(v string) error {
 			if slices.Contains(config.SleepActions, strings.ToLower(strings.TrimSpace(v))) {
 				return nil
@@ -265,7 +265,7 @@ func (e *configEditor) editSleep() {
 	if c.Sleep.Action == "custom" {
 		fmt.Println("\nThe helper script on the server has to be reinstalled for a changed")
 		fmt.Println("command to take effect, run setup-ssh again afterwards.")
-		c.Sleep.Command = e.p.line("Command to run on the server", c.Sleep.Command)
+		c.Sleep.Command = e.p.Line("Command to run on the server", c.Sleep.Command)
 		e.set(c.Sleep.Command, "sleep", "command")
 	}
 
@@ -279,13 +279,13 @@ func (e *configEditor) editSleep() {
 		{"Seconds to wait before the confirming check", "confirm_delay", &c.Sleep.ConfirmDelay, 10},
 		{"Seconds after a wake in which sleeping is never allowed", "grace_period", &c.Sleep.GracePeriod, 60},
 	} {
-		*f.value = e.p.validatedInt(f.question, *f.value, f.min)
+		*f.value = e.p.ValidatedInt(f.question, *f.value, f.min)
 		e.set(*f.value, "sleep", f.key)
 	}
 
 	if c.Transfer.Enabled {
 		fmt.Println("\nTransfer mode hides sessions from the watcher, so it polls over SSH.")
-		c.Sleep.PollInterval = e.p.validatedInt("Seconds between those checks", c.Sleep.PollInterval, 30)
+		c.Sleep.PollInterval = e.p.ValidatedInt("Seconds between those checks", c.Sleep.PollInterval, 30)
 		e.set(c.Sleep.PollInterval, "sleep", "poll_interval")
 	}
 }
@@ -308,7 +308,7 @@ func (e *configEditor) showAssets() {
 func (e *configEditor) setUpContainer() {
 	fmt.Printf("\nLogging in as %s@%s.\n", e.cfg.Server.SSHUser, e.cfg.Server.IP)
 	fmt.Println("The password is used for this one login and is not stored anywhere.")
-	password := e.p.secret(fmt.Sprintf("Password for %s@%s", e.cfg.Server.SSHUser, e.cfg.Server.IP))
+	password := e.p.Secret(fmt.Sprintf("Password for %s@%s", e.cfg.Server.SSHUser, e.cfg.Server.IP))
 	if password == "" {
 		fmt.Println("No password given, nothing was changed.")
 		return
@@ -383,19 +383,4 @@ func (e *configEditor) save() int {
 		fmt.Println("  sudo systemctl restart mcwod")
 	}
 	return 0
-}
-
-func (p *prompter) validatedInt(question string, fallback, min int) int {
-	answer := p.validated(question, strconv.Itoa(fallback), func(v string) error {
-		parsed, err := strconv.Atoi(strings.TrimSpace(v))
-		if err != nil {
-			return fmt.Errorf("that is not a number")
-		}
-		if parsed < min {
-			return fmt.Errorf("it has to be at least %d", min)
-		}
-		return nil
-	})
-	parsed, _ := strconv.Atoi(strings.TrimSpace(answer))
-	return parsed
 }

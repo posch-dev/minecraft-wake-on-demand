@@ -14,6 +14,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
 const iconDataURIPrefix = "data:image/png;base64,"
@@ -23,17 +24,17 @@ const iconDataURIPrefix = "data:image/png;base64,"
 func runGetServerIcon() int {
 	cfg, err := config.Load()
 	if err != nil {
-		printError("Config error: " + err.Error())
+		ui.PrintError("Config error: " + err.Error())
 		fmt.Println("\nRun 'mcwod' first to set things up.")
 		return 1
 	}
 
-	p := newPrompter()
+	p := ui.NewPrompter()
 	target := filepath.Join(cfg.AssetsDir(), "server-icon.png")
 	existing := fsx.Exists(target)
 
 	fmt.Println("\nUse the picture from your server")
-	printHint("Your Minecraft server has its own picture, the small square people see",
+	ui.PrintHint("Your Minecraft server has its own picture, the small square people see",
 		"next to your server in their list. MCWOD can copy it, so the same picture",
 		"shows while your PC is asleep.",
 		"",
@@ -41,18 +42,18 @@ func runGetServerIcon() int {
 		target)
 	if existing {
 		fmt.Println("")
-		printWarning("There is already a picture there. Copying will replace it.")
+		ui.PrintWarning("There is already a picture there. Copying will replace it.")
 	}
 
 	fmt.Println("")
-	if !p.yesNo("Copy the picture from your server PC?", true) {
+	if !p.YesNo("Copy the picture from your server PC?", true) {
 		fmt.Println("Nothing was changed.")
 		return 0
 	}
 
 	keepOld := false
 	if existing {
-		keepOld = p.yesNo("Keep the picture that is there now?", true)
+		keepOld = p.YesNo("Keep the picture that is there now?", true)
 	}
 
 	fmt.Printf("\nAsking %s for its picture...\n", cfg.Server.ContainerName)
@@ -61,14 +62,14 @@ func runGetServerIcon() int {
 
 	payload, err := fetchServerStatus(ctx, cfg)
 	if err != nil {
-		printWarning("Your PC is asleep, so I cannot ask it for the picture.")
-		printHint("Join the server once to wake it up, then try again.")
+		ui.PrintWarning("Your PC is asleep, so I cannot ask it for the picture.")
+		ui.PrintHint("Join the server once to wake it up, then try again.")
 		return 1
 	}
 
 	if strings.TrimSpace(payload.Favicon) == "" {
-		printWarning("Your server does not have a picture of its own yet.")
-		printHint("You can give it one: put a 64x64 PNG called server-icon.png next to",
+		ui.PrintWarning("Your server does not have a picture of its own yet.")
+		ui.PrintHint("You can give it one: put a 64x64 PNG called server-icon.png next to",
 			"your world on the server PC. Or put your own here instead:",
 			target)
 		return 1
@@ -76,20 +77,20 @@ func runGetServerIcon() int {
 
 	decoded, err := decodeFaviconDataURI(payload.Favicon)
 	if err != nil {
-		printError("Your server sent something that is not a usable picture: " + err.Error())
+		ui.PrintError("Your server sent something that is not a usable picture: " + err.Error())
 		return 1
 	}
 	if _, err := decodeIconPNG("the server's picture", decoded); err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return 1
 	}
 
 	if err := writeServerIcon(target, decoded, keepOld); err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return 1
 	}
 	fmt.Println("  Done. It shows in all three states, plain while the server runs.")
-	printHint("A running watcher picks it up within a minute.")
+	ui.PrintHint("A running watcher picks it up within a minute.")
 	return 0
 }
 

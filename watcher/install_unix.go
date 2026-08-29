@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
 const (
@@ -85,8 +86,8 @@ func registerAutostart(dir, binary string) error {
 		name = owner.Username
 	}
 	if name == "root" {
-		printWarning("No SUDO_USER found, the watcher will run as root.")
-		printHint("Install it with sudo from your own account instead: sudo mcwod install")
+		ui.PrintWarning("No SUDO_USER found, the watcher will run as root.")
+		ui.PrintHint("Install it with sudo from your own account instead: sudo mcwod install")
 	}
 
 	if err := retireOlderService(); err != nil {
@@ -129,7 +130,7 @@ func retireOlderService() error {
 	if err := os.Rename(old, old+".replaced-by-mcwod"); err != nil {
 		return err
 	}
-	printHint("Its unit file is kept as " + old + ".replaced-by-mcwod")
+	ui.PrintHint("Its unit file is kept as " + old + ".replaced-by-mcwod")
 	return nil
 }
 

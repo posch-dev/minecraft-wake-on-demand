@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
 // Always asks first. An unattended service replacing its own binary without
@@ -50,8 +51,8 @@ func runUpdate() int {
 	}
 	target, _ = filepath.EvalSymlinks(target)
 
-	p := newPrompter()
-	if !p.yesNo(fmt.Sprintf("\nReplace %s with %s", target, release.Tag), false) {
+	p := ui.NewPrompter()
+	if !p.YesNo(fmt.Sprintf("\nReplace %s with %s", target, release.Tag), false) {
 		fmt.Println("Nothing was changed.")
 		return 0
 	}

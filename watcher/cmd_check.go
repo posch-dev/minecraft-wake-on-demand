@@ -11,6 +11,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -29,20 +30,20 @@ func (c *checker) ok(format string, args ...any) {
 
 func (c *checker) fail(format string, args ...any) {
 	c.failures++
-	printError("  FAIL  " + fmt.Sprintf(format, args...))
+	ui.PrintError("  FAIL  " + fmt.Sprintf(format, args...))
 }
 
 func (c *checker) warn(format string, args ...any) {
 	c.warnings++
-	printWarning("  warn  " + fmt.Sprintf(format, args...))
+	ui.PrintWarning("  warn  " + fmt.Sprintf(format, args...))
 }
 
 func (c *checker) info(format string, args ...any) {
-	fmt.Println(hint("  ..    " + fmt.Sprintf(format, args...)))
+	fmt.Println(ui.Hint("  ..    " + fmt.Sprintf(format, args...)))
 }
 
 func (c *checker) hint(format string, args ...any) {
-	fmt.Println(hint("        " + fmt.Sprintf(format, args...)))
+	fmt.Println(ui.Hint("        " + fmt.Sprintf(format, args...)))
 }
 
 // Walks the setup in the order things depend on each other and stops digging

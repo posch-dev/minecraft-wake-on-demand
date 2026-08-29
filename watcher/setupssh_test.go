@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
@@ -42,7 +43,7 @@ func TestSetupSSHAsksBeforeTrustingAnUnknownHost(t *testing.T) {
 	defer cancel()
 
 	// Answering no has to abort and leave known_hosts empty.
-	refuse := newPrompterFrom(strings.NewReader("n\n"))
+	refuse := ui.NewPrompterFrom(strings.NewReader("n\n"))
 	if _, err := DialServerSession(ctx, runner, "correct-horse", refuse); err == nil {
 		t.Fatal("a refused host key must abort the setup")
 	}
@@ -51,7 +52,7 @@ func TestSetupSSHAsksBeforeTrustingAnUnknownHost(t *testing.T) {
 	}
 
 	// Answering yes has to accept it and remember the key.
-	accept := newPrompterFrom(strings.NewReader("y\n"))
+	accept := ui.NewPrompterFrom(strings.NewReader("y\n"))
 	session, err := DialServerSession(ctx, runner, "correct-horse", accept)
 	if err != nil {
 		t.Fatalf("accepting the host key should succeed: %v", err)
@@ -84,7 +85,7 @@ func TestSetupSSHDoesNotAskForAKnownHost(t *testing.T) {
 	defer cancel()
 
 	// An empty prompter would block or refuse if a question were asked.
-	silent := newPrompterFrom(strings.NewReader(""))
+	silent := ui.NewPrompterFrom(strings.NewReader(""))
 	session, err := DialServerSession(ctx, runner, "correct-horse", silent)
 	if err != nil {
 		t.Fatalf("a known host should not be questioned: %v", err)
@@ -114,7 +115,7 @@ func TestSetupSSHRefusesAChangedHostKey(t *testing.T) {
 	defer cancel()
 
 	// Answering yes must not help here.
-	eager := newPrompterFrom(strings.NewReader("y\ny\ny\n"))
+	eager := ui.NewPrompterFrom(strings.NewReader("y\ny\ny\n"))
 	_, err := DialServerSession(ctx, runner, "correct-horse", eager)
 	if err == nil {
 		t.Fatal("a changed host key must abort even when confirmed")
@@ -139,7 +140,7 @@ func TestSetupSSHRefusesAWrongPassword(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	p := newPrompterFrom(strings.NewReader(""))
+	p := ui.NewPrompterFrom(strings.NewReader(""))
 	_, err := DialServerSession(ctx, runner, "wrong-password", p)
 	if err == nil {
 		t.Fatal("a wrong password must not install the key")

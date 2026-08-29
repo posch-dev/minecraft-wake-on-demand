@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"gopkg.in/yaml.v3"
 )
 
@@ -132,10 +133,10 @@ func splitNames(value string) []string {
 
 // Ten seconds and a way out, because somebody may be mid game and the person at
 // the keyboard is not necessarily the one playing.
-func countdownBeforeRestart(p *prompter) bool {
+func countdownBeforeRestart(p *ui.Prompter) bool {
 	fmt.Println("")
-	printWarning("Server will shut down in 10s for the changes to take effect.")
-	printHint("Press Ctrl+C to abort.")
+	ui.PrintWarning("Server will shut down in 10s for the changes to take effect.")
+	ui.PrintHint("Press Ctrl+C to abort.")
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)

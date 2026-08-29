@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
@@ -449,7 +450,7 @@ func TestInstallAuthorizedKeyIsIdempotent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	p := newPrompterFrom(strings.NewReader(""))
+	p := ui.NewPrompterFrom(strings.NewReader(""))
 	session, err := DialServerSession(ctx, runner, "correct-horse", p)
 	if err != nil {
 		t.Fatalf("DialServerSession: %v", err)

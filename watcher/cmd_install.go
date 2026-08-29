@@ -12,6 +12,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
 //go:embed mcwod.service
@@ -30,21 +31,21 @@ const installedBinaryName = "mcwod" + exeSuffix
 func runInstall() int {
 	dir := installDir()
 	if err := checkInstallPermission(); err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return 1
 	}
 
 	fmt.Printf("Installing to %s\n", dir)
 	binary, err := placeBinary(dir)
 	if err != nil {
-		printError("Cannot install the binary: " + err.Error())
+		ui.PrintError("Cannot install the binary: " + err.Error())
 		return 1
 	}
 	if err := writeExampleAssets(dir); err != nil {
 		logging.Warnf("Cannot write the example assets: %v", err)
 	}
 	if err := registerAutostart(dir, binary); err != nil {
-		printError("Cannot set up the autostart: " + err.Error())
+		ui.PrintError("Cannot set up the autostart: " + err.Error())
 		return 1
 	}
 	// Last, so everything written above belongs to the account that runs it.
@@ -55,7 +56,7 @@ func runInstall() int {
 	configPath := filepath.Join(dir, "config.yml")
 	if !fsx.Exists(configPath) {
 		if err := runWizard(binary, configPath); err != nil {
-			printWarning("The setup questions did not finish: " + err.Error())
+			ui.PrintWarning("The setup questions did not finish: " + err.Error())
 		}
 	}
 	if !fsx.Exists(configPath) {
@@ -64,7 +65,7 @@ func runInstall() int {
 	}
 
 	if err := startWatcher(); err != nil {
-		printError("Cannot start the watcher: " + err.Error())
+		ui.PrintError("Cannot start the watcher: " + err.Error())
 		return 1
 	}
 	fmt.Println("\n=== Installation complete ===")
@@ -184,13 +185,13 @@ func printRemainingSteps(binary string) {
 	}
 	fmt.Println("")
 	fmt.Println("Then run the install again, or start it yourself:")
-	printHint("  " + startCommandHint())
+	ui.PrintHint("  " + startCommandHint())
 }
 
 func printFollowUp(binary, configPath string) {
 	fmt.Printf("Check the setup: %s check\n", quoteForShell(binary))
-	printHint("  " + logCommandHint())
-	printHint("  Config: " + configPath)
+	ui.PrintHint("  " + logCommandHint())
+	ui.PrintHint("  Config: " + configPath)
 }
 
 // Only the shape a path with spaces needs, not general shell quoting.

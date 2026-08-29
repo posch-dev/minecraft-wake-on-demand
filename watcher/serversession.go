@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -52,7 +53,7 @@ func passwordAuth(password string) []ssh.AuthMethod {
 	}
 }
 
-func DialServerSession(ctx context.Context, runner *SSHRunner, password string, p *prompter) (*ServerSession, error) {
+func DialServerSession(ctx context.Context, runner *SSHRunner, password string, p *ui.Prompter) (*ServerSession, error) {
 	callback, err := interactiveHostKeyCallback(runner, p)
 	if err != nil {
 		return nil, err

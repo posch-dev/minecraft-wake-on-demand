@@ -8,26 +8,27 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
 // Where a world can actually be lost, so the backup runs before anything else
 // and is not something to decline.
-func changeWorldVersion(p *prompter, cfg *config.Config, doc *yamlDocument) int {
+func changeWorldVersion(p *ui.Prompter, cfg *config.Config, doc *yamlDocument) int {
 	worlds := cfg.WorldList()
 	world, picked := pickWorld(p, worlds, "Which world?")
 	if !picked {
 		return 0
 	}
 	if world.Dir == "" {
-		printWarning("MCWOD did not set " + world.Name + " up, so it cannot change it.")
+		ui.PrintWarning("MCWOD did not set " + world.Name + " up, so it cannot change it.")
 		return 0
 	}
 
 	fmt.Printf("\n  %s is %s\n", world.Name, describeWorld(world))
-	version := strings.TrimSpace(p.line("\nWhich Minecraft version?", world.Version))
+	version := strings.TrimSpace(p.Line("\nWhich Minecraft version?", world.Version))
 	serverType := askServerType(p, world.Type)
 	if version == world.Version && serverType == world.Type {
-		printHint("Nothing changed.")
+		ui.PrintHint("Nothing changed.")
 		return 0
 	}
 
@@ -47,13 +48,13 @@ func changeWorldVersion(p *prompter, cfg *config.Config, doc *yamlDocument) int 
 
 // Refused moves are still offered, but only after the backup has been made and
 // only once somebody has said out loud that they want it.
-func decideAboutTheWorld(p *prompter, world config.World, serverType, version string) (bool, bool) {
+func decideAboutTheWorld(p *ui.Prompter, world config.World, serverType, version string) (bool, bool) {
 	problem := worldMoveProblem(world.Type, serverType, world.Version, version)
 	if problem == "" {
 		fmt.Println("")
 		fmt.Println("  1) Keep the world and upgrade it")
 		fmt.Println("  2) Start a fresh world, the old one is moved aside")
-		answer := p.validated("What should happen to the world?", "1", func(v string) error {
+		answer := p.Validated("What should happen to the world?", "1", func(v string) error {
 			if v == "1" || v == "2" {
 				return nil
 			}
@@ -63,14 +64,14 @@ func decideAboutTheWorld(p *prompter, world config.World, serverType, version st
 	}
 
 	fmt.Println("")
-	printWarning(problem)
+	ui.PrintWarning(problem)
 	fmt.Println("")
 	fmt.Println("  1) Start a fresh world, the current one is moved aside")
 	fmt.Println("  2) Restore a backup from before the upgrade")
 	fmt.Println("  3) Do it anyway with the world as it is")
 	fmt.Println("  4) Cancel")
 
-	answer := p.validated("What would you like to do?", "4", func(v string) error {
+	answer := p.Validated("What would you like to do?", "4", func(v string) error {
 		if index, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && index >= 1 && index <= 4 {
 			return nil
 		}
@@ -81,23 +82,23 @@ func decideAboutTheWorld(p *prompter, world config.World, serverType, version st
 	case "1":
 		return false, true
 	case "2":
-		printHint("Your backups are in " + world.Dir + "/backups.")
-		printHint("Unpack the one you want over the world folder, then try again.")
+		ui.PrintHint("Your backups are in " + world.Dir + "/backups.")
+		ui.PrintHint("Unpack the one you want over the world folder, then try again.")
 		return false, false
 	case "3":
-		printHint("A backup is made first either way, so there is a way back.")
-		printWarning("The server will very likely refuse to start.")
-		return p.yesNo("Go ahead?", false), true
+		ui.PrintHint("A backup is made first either way, so there is a way back.")
+		ui.PrintWarning("The server will very likely refuse to start.")
+		return p.YesNo("Go ahead?", false), true
 	}
 	return false, false
 }
 
-func applyWorldChange(p *prompter, s *ServerSession, cfg *config.Config, doc *yamlDocument,
+func applyWorldChange(p *ui.Prompter, s *ServerSession, cfg *config.Config, doc *yamlDocument,
 	world config.World, serverType, version string, keepWorld bool) int {
 
 	target := inspectComposeTarget(s, world.Dir)
 	if !target.Exists() {
-		printError("No server settings in " + world.Dir)
+		ui.PrintError("No server settings in " + world.Dir)
 		return 1
 	}
 
@@ -105,13 +106,13 @@ func applyWorldChange(p *prompter, s *ServerSession, cfg *config.Config, doc *ya
 		return 1
 	}
 	if !countdownBeforeRestart(p) {
-		printHint("Left as it was. The backup is kept.")
+		ui.PrintHint("Left as it was. The backup is kept.")
 		return 0
 	}
 
 	fmt.Printf("Stopping %s...\n", world.Container)
 	if _, err := s.Run(composeInvocation(s, target, "stop")); err != nil {
-		printWarning("It did not stop cleanly.")
+		ui.PrintWarning("It did not stop cleanly.")
 	}
 	if !keepWorld && !moveWorldAside(s, world, version) {
 		return 1
@@ -119,32 +120,32 @@ func applyWorldChange(p *prompter, s *ServerSession, cfg *config.Config, doc *ya
 
 	updated, err := setWorldEnvironment(target.Existing, world.Container, serverType, version)
 	if err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return 1
 	}
 	if _, err := backupComposeFile(s, target); err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return 1
 	}
 	if err := writeRemoteFile(s, target.File, updated); err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return 1
 	}
 	if err := validateComposeFile(s, target); err != nil {
-		printError("The new settings were rejected: " + err.Error())
-		printHint("Put the old ones back with: mcwod restore-compose")
+		ui.PrintError("The new settings were rejected: " + err.Error())
+		ui.PrintHint("Put the old ones back with: mcwod restore-compose")
 		return 1
 	}
 
 	if err := recordWorldChange(doc, cfg, world.Name, serverType, version); err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return 1
 	}
 
 	fmt.Printf("Starting %s on %s %s...\n", world.Container, version, prettyServerType(serverType))
 	if out, err := composeUp(s, target); err != nil {
-		printError("It did not start: " + logging.Sanitize(out, 300))
-		printHint("Restore the backup in " + world.Dir + "/backups if it stays down.")
+		ui.PrintError("It did not start: " + logging.Sanitize(out, 300))
+		ui.PrintHint("Restore the backup in " + world.Dir + "/backups if it stays down.")
 		return 1
 	}
 	fmt.Printf("%s is now %s %s.\n", world.Name, version, prettyServerType(serverType))
@@ -156,13 +157,13 @@ func applyWorldChange(p *prompter, s *ServerSession, cfg *config.Config, doc *ya
 func backUpWorld(s *ServerSession, world config.World, version string) bool {
 	name := "before-" + version + ".tar.gz"
 	fmt.Println("")
-	printHint("Once a world has been opened in a newer version it cannot go back.",
+	ui.PrintHint("Once a world has been opened in a newer version it cannot go back.",
 		"A backup is made first, and it is the only way back.")
 	fmt.Printf("Backing up %s...\n", world.Name)
 
 	command := backupWorldCommand(s, world.Dir, name)
 	if out, err := s.Run(command); err != nil {
-		printError("The backup failed, so nothing was changed: " + logging.Sanitize(out, 300))
+		ui.PrintError("The backup failed, so nothing was changed: " + logging.Sanitize(out, 300))
 		return false
 	}
 	fmt.Printf("  Backup written to %s\n", joinRemote(s, world.Dir, "backups/"+name))
@@ -192,7 +193,7 @@ func moveWorldAside(s *ServerSession, world config.World, version string) bool {
 		command = "cd " + shellQuote(world.Dir) + " && mv data " + shellQuote(aside)
 	}
 	if out, err := s.Run(command); err != nil {
-		printError("Could not move the old world aside: " + logging.Sanitize(out, 200))
+		ui.PrintError("Could not move the old world aside: " + logging.Sanitize(out, 200))
 		return false
 	}
 	fmt.Printf("  The old world is now %s\n", joinRemote(s, world.Dir, aside))

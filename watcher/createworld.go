@@ -6,20 +6,21 @@ import (
 	"strings"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
 // A world of its own, in its own folder, so a broken one is one broken world
 // and restore-compose stays unambiguous.
-func createWorld(p *prompter, s *ServerSession, cfg *config.Config, facts ServerFacts) (config.World, bool) {
+func createWorld(p *ui.Prompter, s *ServerSession, cfg *config.Config, facts ServerFacts) (config.World, bool) {
 	if !facts.Platform.HasDocker {
-		printWarning("Docker is not installed on that PC, so there is nothing to set up.")
+		ui.PrintWarning("Docker is not installed on that PC, so there is nothing to set up.")
 		return config.World{}, false
 	}
 
 	spec := defaultComposeSpec("survival", cfg.NextFreeWorldPort())
-	spec.ServiceName = p.validated("\nWhat should this world be called?", spec.ServiceName, validateContainerName)
+	spec.ServiceName = p.Validated("\nWhat should this world be called?", spec.ServiceName, validateContainerName)
 	if _, taken := cfg.FindWorld(spec.ServiceName); taken {
-		printWarning("There is already a world called " + spec.ServiceName + ".")
+		ui.PrintWarning("There is already a world called " + spec.ServiceName + ".")
 		return config.World{}, false
 	}
 	spec.BackupName = spec.ServiceName + "-backup"
@@ -27,13 +28,13 @@ func createWorld(p *prompter, s *ServerSession, cfg *config.Config, facts Server
 	dir := worldDirectory(s, cfg, spec.ServiceName)
 	target := inspectComposeTarget(s, dir)
 	if target.Command == "" {
-		printWarning("Docker Compose does not work on that PC.")
-		printHint("Install the compose plugin there, then try again.")
+		ui.PrintWarning("Docker Compose does not work on that PC.")
+		ui.PrintHint("Install the compose plugin there, then try again.")
 		return config.World{}, false
 	}
 	if target.Exists() {
-		printWarning("There is already a server set up in " + dir + ".")
-		printHint("Pick another name, or remove what is there first.")
+		ui.PrintWarning("There is already a server set up in " + dir + ".")
+		ui.PrintHint("Pick another name, or remove what is there first.")
 		return config.World{}, false
 	}
 	if !acceptEULAOnce(p, cfg) {
@@ -46,26 +47,26 @@ func createWorld(p *prompter, s *ServerSession, cfg *config.Config, facts Server
 	spec.Admin = askAdmin(p)
 	spec.Whitelist = askWhitelist(p, spec.Admin)
 
-	spec.Backups = p.yesNo("Make a backup of your world automatically?", true)
+	spec.Backups = p.YesNo("Make a backup of your world automatically?", true)
 	if spec.Backups {
-		spec.BackupInterval = p.line("How often?", spec.BackupInterval)
-		spec.KeepBackupDays = p.validatedInt("How many days of backups should be kept?", spec.KeepBackupDays, 1)
+		spec.BackupInterval = p.Line("How often?", spec.BackupInterval)
+		spec.KeepBackupDays = p.ValidatedInt("How many days of backups should be kept?", spec.KeepBackupDays, 1)
 	}
 
 	fmt.Printf("\nThis world will live in %s\n", dir)
-	if !p.yesNo("Create it?", true) {
+	if !p.YesNo("Create it?", true) {
 		fmt.Println("Nothing was created.")
 		return config.World{}, false
 	}
 
 	password, err := prepareRCONPassword(s, target)
 	if err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return config.World{}, false
 	}
 	content, err := newComposeFile(spec)
 	if err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return config.World{}, false
 	}
 	if !writeComposeFiles(p, s, target, spec, content, password) {
@@ -107,7 +108,7 @@ func parentDirectory(s *ServerSession, dir string) string {
 }
 
 // Asked once and remembered, nobody wants to accept the same licence per world.
-func acceptEULAOnce(p *prompter, cfg *config.Config) bool {
+func acceptEULAOnce(p *ui.Prompter, cfg *config.Config) bool {
 	if cfg.EULAAccepted {
 		return true
 	}

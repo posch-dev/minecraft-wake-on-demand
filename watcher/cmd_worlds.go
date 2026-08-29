@@ -8,25 +8,26 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
 func runWorlds() int {
 	cfg, err := config.Load()
 	if err != nil {
-		printError("Config error: " + err.Error())
+		ui.PrintError("Config error: " + err.Error())
 		return 1
 	}
 	doc, err := loadYAMLDocument(cfg.Path)
 	if err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return 1
 	}
 
-	p := newPrompter()
+	p := ui.NewPrompter()
 	for {
 		printWorlds(cfg)
 
-		switch strings.ToLower(strings.TrimSpace(p.line("Choose", "q"))) {
+		switch strings.ToLower(strings.TrimSpace(p.Line("Choose", "q"))) {
 		case "1":
 			if switchWorld(p, cfg, doc) != 0 {
 				return 1
@@ -46,12 +47,12 @@ func runWorlds() int {
 		case "q", "quit", "exit", "":
 			return 0
 		default:
-			printError("Pick one of the numbers, or q to go back.")
+			ui.PrintError("Pick one of the numbers, or q to go back.")
 		}
 
 		reloaded, err := config.Load()
 		if err != nil {
-			printError(err.Error())
+			ui.PrintError(err.Error())
 			return 1
 		}
 		cfg = reloaded
@@ -68,7 +69,7 @@ func printWorlds(cfg *config.Config) {
 		if world.Name == active || active == "" {
 			marker = " > "
 		}
-		fmt.Printf("%s%-12s %s\n", marker, world.Name, hint(describeWorld(world)))
+		fmt.Printf("%s%-12s %s\n", marker, world.Name, ui.Hint(describeWorld(world)))
 	}
 
 	fmt.Println("")
@@ -102,10 +103,10 @@ func prettyServerType(name string) string {
 	return strings.ToUpper(name[:1]) + name[1:]
 }
 
-func switchWorld(p *prompter, cfg *config.Config, doc *yamlDocument) int {
+func switchWorld(p *ui.Prompter, cfg *config.Config, doc *yamlDocument) int {
 	worlds := cfg.WorldList()
 	if len(worlds) < 2 {
-		printHint("There is only one world, so there is nothing to switch to.")
+		ui.PrintHint("There is only one world, so there is nothing to switch to.")
 		return 0
 	}
 	target, picked := pickWorld(p, worlds, "Which world do you want to play?")
@@ -123,17 +124,17 @@ func switchWorld(p *prompter, cfg *config.Config, doc *yamlDocument) int {
 		return 0
 	}
 	if !countdownBeforeRestart(p) {
-		printHint("Left as it was.")
+		ui.PrintHint("Left as it was.")
 		return 0
 	}
 
 	stopActiveWorld(cfg, session)
 	if err := doc.Set([]string{"worlds", "active"}, target.Name); err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return 1
 	}
 	if err := doc.Save(); err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return 1
 	}
 	fmt.Printf("%s is ready. Joining will wake it up.\n", target.Name)
@@ -150,18 +151,18 @@ func stopActiveWorld(cfg *config.Config, session *ServerSession) {
 	fmt.Printf("Stopping %s...\n", active.Container)
 	target := inspectComposeTarget(session, active.Dir)
 	if _, err := session.Run(composeInvocation(session, target, "stop")); err != nil {
-		printWarning("It did not stop cleanly, the new world may fail to start.")
+		ui.PrintWarning("It did not stop cleanly, the new world may fail to start.")
 	}
 }
 
-func confirmPlayersWillDrop(p *prompter, cfg *config.Config, session *ServerSession) bool {
+func confirmPlayersWillDrop(p *ui.Prompter, cfg *config.Config, session *ServerSession) bool {
 	online, ok := onlinePlayers(cfg, session)
 	if !ok || online == 0 {
 		return true
 	}
-	printWarning(fmt.Sprintf("%d player(s) are on %s right now. They will be disconnected.",
+	ui.PrintWarning(fmt.Sprintf("%d player(s) are on %s right now. They will be disconnected.",
 		online, cfg.ActiveWorldName()))
-	return p.yesNo("Continue?", false)
+	return p.YesNo("Continue?", false)
 }
 
 func onlinePlayers(cfg *config.Config, session *ServerSession) (int, bool) {
@@ -176,7 +177,7 @@ func onlinePlayers(cfg *config.Config, session *ServerSession) (int, bool) {
 	return parsePlayerCount(out)
 }
 
-func makeWorld(p *prompter, cfg *config.Config, doc *yamlDocument) int {
+func makeWorld(p *ui.Prompter, cfg *config.Config, doc *yamlDocument) int {
 	session, code := openServerSession(p, cfg)
 	if code != 0 {
 		return code
@@ -191,28 +192,28 @@ func makeWorld(p *prompter, cfg *config.Config, doc *yamlDocument) int {
 		return 0
 	}
 	if err := appendWorld(doc, cfg, world); err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return 1
 	}
 
-	if p.yesNo("Make "+world.Name+" the world people reach now?", false) {
+	if p.YesNo("Make "+world.Name+" the world people reach now?", false) {
 		if err := doc.Set([]string{"worlds", "active"}, world.Name); err != nil {
-			printError(err.Error())
+			ui.PrintError(err.Error())
 			return 1
 		}
 	}
 	if err := doc.Save(); err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return 1
 	}
 	fmt.Println("Added. Switch to it any time with: mcwod worlds")
 	return 0
 }
 
-func removeWorld(p *prompter, cfg *config.Config, doc *yamlDocument) int {
+func removeWorld(p *ui.Prompter, cfg *config.Config, doc *yamlDocument) int {
 	worlds := cfg.WorldList()
 	if len(worlds) < 2 {
-		printHint("There is only one world, so removing it would leave nothing.")
+		ui.PrintHint("There is only one world, so removing it would leave nothing.")
 		return 0
 	}
 	target, picked := pickWorld(p, worlds, "Which one should be removed from the list?")
@@ -220,15 +221,15 @@ func removeWorld(p *prompter, cfg *config.Config, doc *yamlDocument) int {
 		return 0
 	}
 	if target.Name == cfg.ActiveWorldName() {
-		printWarning("That is the world people reach right now.")
-		printHint("Switch to another one first, then remove this.")
+		ui.PrintWarning("That is the world people reach right now.")
+		ui.PrintHint("Switch to another one first, then remove this.")
 		return 0
 	}
 
 	fmt.Println("")
-	printHint("This only removes "+target.Name+" from MCWOD's list.",
+	ui.PrintHint("This only removes "+target.Name+" from MCWOD's list.",
 		"The world in "+target.Dir+" stays where it is.")
-	if !p.yesNo("Remove "+target.Name+"?", false) {
+	if !p.YesNo("Remove "+target.Name+"?", false) {
 		return 0
 	}
 
@@ -239,15 +240,15 @@ func removeWorld(p *prompter, cfg *config.Config, doc *yamlDocument) int {
 		}
 	}
 	if err := doc.Set([]string{"worlds", "list"}, kept); err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return 1
 	}
 	if err := doc.Save(); err != nil {
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return 1
 	}
 	fmt.Println("Removed.")
-	printHint("Add it back any time by making a world in the same folder.")
+	ui.PrintHint("Add it back any time by making a world in the same folder.")
 	return 0
 }
 
@@ -262,12 +263,12 @@ func appendWorld(doc *yamlDocument, cfg *config.Config, world config.World) erro
 	return nil
 }
 
-func pickWorld(p *prompter, worlds []config.World, question string) (config.World, bool) {
+func pickWorld(p *ui.Prompter, worlds []config.World, question string) (config.World, bool) {
 	fmt.Println("")
 	for i, world := range worlds {
-		fmt.Printf("  %d) %-12s %s\n", i+1, world.Name, hint(describeWorld(world)))
+		fmt.Printf("  %d) %-12s %s\n", i+1, world.Name, ui.Hint(describeWorld(world)))
 	}
-	answer := p.validated(question, "1", func(v string) error {
+	answer := p.Validated(question, "1", func(v string) error {
 		index, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil || index < 1 || index > len(worlds) {
 			return fmt.Errorf("pick a number from 1 to %d", len(worlds))
@@ -280,10 +281,10 @@ func pickWorld(p *prompter, worlds []config.World, question string) (config.Worl
 
 // Every one of these needs to write files on the server, which the restricted
 // key cannot do, so they all start the same way.
-func openServerSession(p *prompter, cfg *config.Config) (*ServerSession, int) {
+func openServerSession(p *ui.Prompter, cfg *config.Config) (*ServerSession, int) {
 	fmt.Printf("\nLogging in to %s.\n", cfg.Server.IP)
-	printHint("Your password is used for this one login and is never saved.")
-	password := p.secret(fmt.Sprintf("Password for %s@%s", cfg.Server.SSHUser, cfg.Server.IP))
+	ui.PrintHint("Your password is used for this one login and is never saved.")
+	password := p.Secret(fmt.Sprintf("Password for %s@%s", cfg.Server.SSHUser, cfg.Server.IP))
 	if password == "" {
 		fmt.Println("Nothing was changed.")
 		return nil, 1
@@ -293,7 +294,7 @@ func openServerSession(p *prompter, cfg *config.Config) (*ServerSession, int) {
 	session, err := DialServerSession(ctx, NewSSHRunner(cfg), password, p)
 	if err != nil {
 		cancel()
-		printError(err.Error())
+		ui.PrintError(err.Error())
 		return nil, 1
 	}
 	session.detach = cancel

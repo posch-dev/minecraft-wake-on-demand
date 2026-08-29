@@ -16,6 +16,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
@@ -39,16 +40,16 @@ func runSetupSSH() int {
 	publicKey := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
 	fmt.Printf("Public key: %s\n", ssh.FingerprintSHA256(signer.PublicKey()))
 
-	p := newPrompter()
+	p := ui.NewPrompter()
 
 	fmt.Println("\nThe watcher can also put the server PC back to sleep once nobody is")
 	fmt.Println("playing. That needs a small helper script on the server and, on Linux,")
 	fmt.Println("one sudoers line. Without it the key can only start the container.")
-	wantSleep := p.yesNo("Allow the watcher to send the server PC to sleep", false)
+	wantSleep := p.YesNo("Allow the watcher to send the server PC to sleep", false)
 
 	sleepAction := ""
 	if wantSleep {
-		sleepAction = strings.ToLower(strings.TrimSpace(p.validated(
+		sleepAction = strings.ToLower(strings.TrimSpace(p.Validated(
 			"Which action, suspend, hibernate or shutdown", "suspend",
 			func(v string) error {
 				if !slices.Contains(installableSleepActions, strings.ToLower(strings.TrimSpace(v))) {
@@ -65,7 +66,7 @@ func runSetupSSH() int {
 
 	fmt.Printf("\nLogging in as %s@%s to install the key.\n", cfg.Server.SSHUser, cfg.Server.IP)
 	fmt.Println("This password is used once and is not stored anywhere.")
-	password := p.secret(fmt.Sprintf("Password for %s@%s", cfg.Server.SSHUser, cfg.Server.IP))
+	password := p.Secret(fmt.Sprintf("Password for %s@%s", cfg.Server.SSHUser, cfg.Server.IP))
 	if password == "" {
 		fmt.Println("\nNo password given, nothing was changed.")
 		return 1
@@ -119,7 +120,7 @@ func runSetupSSH() int {
 		entry = remoteHelperKeyEntryUnix(publicKey)
 		helperInstalled = true
 	} else {
-		restrict := p.yesNo("Restrict the key so it can only start the container (recommended)", true)
+		restrict := p.YesNo("Restrict the key so it can only start the container (recommended)", true)
 		entry = authorizedKeyEntry(publicKey, cfg.Server.ContainerName, cfg.Server.ComposeDir, restrict)
 	}
 
@@ -264,7 +265,7 @@ func shellSafe(value string) string {
 
 // Always asks, whatever ssh_strict_host_key says. Someone is sitting here,
 // so the fingerprint gets shown instead of silently trusted.
-func interactiveHostKeyCallback(runner *SSHRunner, p *prompter) (ssh.HostKeyCallback, error) {
+func interactiveHostKeyCallback(runner *SSHRunner, p *ui.Prompter) (ssh.HostKeyCallback, error) {
 	path := runner.cfg.ResolvedKnownHostsPath()
 	if err := ensureKnownHostsFile(path); err != nil {
 		return nil, err
@@ -293,7 +294,7 @@ func interactiveHostKeyCallback(runner *SSHRunner, p *prompter) (ssh.HostKeyCall
 		fmt.Printf("\nThe server %s presents this host key:\n", hostname)
 		fmt.Printf("  type        %s\n", key.Type())
 		fmt.Printf("  fingerprint %s\n", ssh.FingerprintSHA256(key))
-		if !p.yesNo("Is that the right server", false) {
+		if !p.YesNo("Is that the right server", false) {
 			return fmt.Errorf("host key rejected")
 		}
 		return runner.appendKnownHost(path, hostname, key)

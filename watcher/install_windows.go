@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
 const (
@@ -42,7 +44,7 @@ func registerAutostart(dir, binary string) error {
 		return err
 	}
 	fmt.Printf("Autostart set up in %s\n", script)
-	printHint("A proper Windows service is coming, this starts with your session.")
+	ui.PrintHint("A proper Windows service is coming, this starts with your session.")
 	return nil
 }
 

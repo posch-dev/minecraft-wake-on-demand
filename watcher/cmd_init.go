@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -14,105 +12,16 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
 
-type prompter struct {
-	in *bufio.Reader
-	// Input runs out when the wizard is piped something or has no terminal.
-	// Asking again would then spin, so every loop below gives up on it.
-	exhausted bool
-}
-
-func newPrompter() *prompter {
-	return &prompter{in: bufio.NewReader(os.Stdin)}
-}
-
 // Lets the tests drive the wizard without a terminal.
-func newPrompterFrom(r io.Reader) *prompter {
-	return &prompter{in: bufio.NewReader(r)}
-}
-
-func (p *prompter) line(question, fallback string) string {
-	if fallback != "" {
-		fmt.Printf("%s %s: ", question, hint("["+fallback+"]"))
-	} else {
-		fmt.Printf("%s: ", question)
-	}
-	beginInputColor()
-	text, err := p.in.ReadString('\n')
-	endInputColor()
-	if err != nil {
-		p.exhausted = true
-		if text == "" {
-			return fallback
-		}
-	}
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return fallback
-	}
-	return text
-}
 
 // Keeps asking until the answer passes, so a typo does not end the wizard.
-func (p *prompter) validated(question, fallback string, check func(string) error) string {
-	for {
-		answer := p.line(question, fallback)
-		if err := check(answer); err != nil {
-			printError("  " + err.Error())
-			if p.exhausted {
-				return answer
-			}
-			continue
-		}
-		return answer
-	}
-}
-
-func (p *prompter) yesNo(question string, fallback bool) bool {
-	choices := "y/N"
-	if fallback {
-		choices = "Y/n"
-	}
-	for {
-		fmt.Printf("%s %s: ", question, hint("["+choices+"]"))
-		beginInputColor()
-		text, err := p.in.ReadString('\n')
-		endInputColor()
-		if err != nil {
-			p.exhausted = true
-		}
-		switch strings.ToLower(strings.TrimSpace(text)) {
-		case "":
-			return fallback
-		case "y", "yes", "j", "ja":
-			return true
-		case "n", "no", "nein":
-			return false
-		}
-		if p.exhausted {
-			return fallback
-		}
-	}
-}
 
 // Reads without echoing when stdin is a terminal, so tokens stay off the screen.
-func (p *prompter) secret(question string) string {
-	fmt.Printf("%s: ", question)
-	fd := int(os.Stdin.Fd())
-	if term.IsTerminal(fd) {
-		data, err := term.ReadPassword(fd)
-		fmt.Println()
-		if err == nil {
-			return strings.TrimSpace(string(data))
-		}
-	}
-	text, _ := p.in.ReadString('\n')
-	return strings.TrimSpace(text)
-}
 
 func runInit() int {
 	target := configTargetPath()
@@ -123,18 +32,18 @@ func runInit() int {
 	}
 	fmt.Println("Press Enter to accept the value in brackets.")
 
-	p := newPrompter()
+	p := ui.NewPrompter()
 	cfg := config.Default()
 
 	fmt.Println("\nNothing is set up yet, so let's do that now.")
-	printHint("You can change all of this later.")
+	ui.PrintHint("You can change all of this later.")
 
 	fmt.Println("")
-	printHint("Look it up in the network settings on that PC, or in your router.")
-	cfg.Server.IP = p.validated("Enter the IP address of the PC that will run Minecraft (192.168.178.xxx)",
+	ui.PrintHint("Look it up in the network settings on that PC, or in your router.")
+	cfg.Server.IP = p.Validated("Enter the IP address of the PC that will run Minecraft (192.168.178.xxx)",
 		"", validateHostOrIP)
 
-	cfg.Server.SSHUser = p.validated("\nWhat is your username on that PC?", currentUserName(), func(v string) error {
+	cfg.Server.SSHUser = p.Validated("\nWhat is your username on that PC?", currentUserName(), func(v string) error {
 		if strings.TrimSpace(v) == "" {
 			return fmt.Errorf("this cannot be empty")
 		}
@@ -142,9 +51,9 @@ func runInit() int {
 	})
 
 	fmt.Println("\nI can log in to that PC once and set everything up for you.")
-	printHint("Your password is used for this one login and is never saved.")
+	ui.PrintHint("Your password is used for this one login and is never saved.")
 	provisioned := false
-	if p.yesNo("Let me do that?", true) {
+	if p.YesNo("Let me do that?", true) {
 		signer, err := ensureKeyPair(cfg.ResolvedSSHKeyPath())
 		if err != nil {
 			fmt.Printf("\nCannot prepare the SSH key: %v\n", err)
@@ -160,8 +69,8 @@ func runInit() int {
 	if !provisioned {
 		cfg.Server.MAC = askMAC(p, cfg.Server.IP)
 		fmt.Println("")
-		printHint("That is the name of its Docker container.")
-		cfg.Server.ContainerName = p.validated("What is your Minecraft server called on that PC?",
+		ui.PrintHint("That is the name of its Docker container.")
+		cfg.Server.ContainerName = p.Validated("What is your Minecraft server called on that PC?",
 			"minecraft", validateContainerName)
 	}
 
@@ -173,7 +82,7 @@ func runInit() int {
 	if cfg.WoL.BroadcastAddress == "255.255.255.255" {
 		fmt.Println("\nThat PC does not look like it is in the same network as this one.")
 		fmt.Println("Waking it needs the broadcast address of its network.")
-		cfg.WoL.BroadcastAddress = p.validated("Broadcast address", "255.255.255.255", func(v string) error {
+		cfg.WoL.BroadcastAddress = p.Validated("Broadcast address", "255.255.255.255", func(v string) error {
 			if net.ParseIP(v) == nil {
 				return fmt.Errorf("that is not an IP address")
 			}
@@ -183,20 +92,20 @@ func runInit() int {
 
 	fmt.Println("\nYour home internet address changes every few days, so your friends need")
 	fmt.Println("a name that follows it. DuckDNS gives you one for free.")
-	printHint("Skip this if only people on your own network are going to join.")
-	cfg.DuckDNS.Enabled = p.yesNo("Use DuckDNS?", true)
+	ui.PrintHint("Skip this if only people on your own network are going to join.")
+	cfg.DuckDNS.Enabled = p.YesNo("Use DuckDNS?", true)
 	if cfg.DuckDNS.Enabled {
-		cfg.DuckDNS.Domain = p.validated("Your DuckDNS address", "", func(v string) error {
+		cfg.DuckDNS.Domain = p.Validated("Your DuckDNS address", "", func(v string) error {
 			if config.NormalizeDuckDNSDomain(v) == "" {
 				return fmt.Errorf("that is empty, it looks like yourname.duckdns.org")
 			}
 			return nil
 		})
 		cfg.DuckDNS.Domain = config.NormalizeDuckDNSDomain(cfg.DuckDNS.Domain)
-		printHint("It stays visible here so you can check it, and it goes into",
+		ui.PrintHint("It stays visible here so you can check it, and it goes into",
 			"config.yml, which only your user can read.")
-		for cfg.DuckDNS.Token == "" && !p.exhausted {
-			cfg.DuckDNS.Token = strings.TrimSpace(p.line("Your DuckDNS token", ""))
+		for cfg.DuckDNS.Token == "" && !p.Exhausted {
+			cfg.DuckDNS.Token = strings.TrimSpace(p.Line("Your DuckDNS token", ""))
 		}
 	}
 
@@ -230,21 +139,9 @@ func runInit() int {
 	return 0
 }
 
-func (p *prompter) validatedPort(question string, fallback int) int {
-	answer := p.validated(question, strconv.Itoa(fallback), func(v string) error {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 || n > 65535 {
-			return fmt.Errorf("that is not a port number between 1 and 65535")
-		}
-		return nil
-	})
-	n, _ := strconv.Atoi(answer)
-	return n
-}
-
 // The MAC is the value people are least likely to know, so it is read off the
 // network instead of asked for whenever the PC is currently reachable.
-func askMAC(p *prompter, ip string) string {
+func askMAC(p *ui.Prompter, ip string) string {
 	fmt.Printf("Looking up the MAC address of %s...\n", ip)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -257,7 +154,7 @@ func askMAC(p *prompter, ip string) string {
 		fmt.Printf("  found %s\n", detected)
 	}
 
-	return p.validated("MAC address of the server PC", detected, func(v string) error {
+	return p.Validated("MAC address of the server PC", detected, func(v string) error {
 		if _, err := config.ParseMAC(v); err != nil {
 			return fmt.Errorf("that is not a MAC address, it looks like AA:BB:CC:DD:EE:FF")
 		}
@@ -369,7 +266,7 @@ func giveToInvokingUser(path string) {
 
 // Only worth offering to someone whose friends come in from outside, everyone
 // else has nothing to forward and nothing to gain.
-func askTransferMode(p *prompter, cfg *config.Config) {
+func askTransferMode(p *ui.Prompter, cfg *config.Config) {
 	if !cfg.DuckDNS.Enabled {
 		return
 	}
@@ -377,18 +274,18 @@ func askTransferMode(p *prompter, cfg *config.Config) {
 	fmt.Println("\nOnce the server is awake, players can either keep going through this PC")
 	fmt.Println("or be sent straight to it. Straight to it is faster and takes the load")
 	fmt.Println("off this machine.")
-	printHint("It needs a second port forwarded to the server PC, and the watcher",
+	ui.PrintHint("It needs a second port forwarded to the server PC, and the watcher",
 		"then no longer sees who is playing, which auto-sleep relies on.")
-	if !p.yesNo("Send players straight to the server?", false) {
+	if !p.YesNo("Send players straight to the server?", false) {
 		return
 	}
 
 	cfg.Transfer.Enabled = true
 	cfg.Transfer.Host = cfg.DuckDNSHost()
 	fmt.Println("")
-	printHint("Forward this port on your router to " + cfg.Server.IP + ".")
-	cfg.Transfer.Port = p.validatedPort("Which port goes straight to the server PC?", cfg.Server.MCPort)
-	printHint("A server MCWOD set up accepts transfers already. One set up by",
+	ui.PrintHint("Forward this port on your router to " + cfg.Server.IP + ".")
+	cfg.Transfer.Port = p.ValidatedPort("Which port goes straight to the server PC?", cfg.Server.MCPort)
+	ui.PrintHint("A server MCWOD set up accepts transfers already. One set up by",
 		"hand needs accepts-transfers=true in its server.properties.")
 }
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
 // What running mcwod with no argument does at a terminal. Nothing set up yet
@@ -19,13 +20,13 @@ func runHome() int {
 		return runInit()
 	}
 
-	p := newPrompter()
+	p := ui.NewPrompter()
 	for {
 		printHomeStatus(cfg)
 		printUpdateHint(cfg)
 		printHomeMenu()
 
-		switch strings.ToLower(strings.TrimSpace(p.line("Choose", "q"))) {
+		switch strings.ToLower(strings.TrimSpace(p.Line("Choose", "q"))) {
 		case "1":
 			runCheck()
 		case "2":
@@ -41,7 +42,7 @@ func runHome() int {
 		case "q", "quit", "exit", "":
 			return 0
 		default:
-			printError("Pick one of the numbers, or q to leave.")
+			ui.PrintError("Pick one of the numbers, or q to leave.")
 		}
 
 		reloaded, err := config.Load()

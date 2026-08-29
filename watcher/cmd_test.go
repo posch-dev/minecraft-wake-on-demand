@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
 func TestGuessBroadcast(t *testing.T) {
@@ -139,22 +140,22 @@ func TestWrittenConfigIsNotWorldReadable(t *testing.T) {
 }
 
 func TestPrompterUsesFallbackOnEmptyInput(t *testing.T) {
-	p := newPrompterFrom(strings.NewReader("\n\n\n"))
-	if got := p.line("q", "default"); got != "default" {
+	p := ui.NewPrompterFrom(strings.NewReader("\n\n\n"))
+	if got := p.Line("q", "default"); got != "default" {
 		t.Errorf("got %q, want the fallback", got)
 	}
-	if !p.yesNo("q", true) {
+	if !p.YesNo("q", true) {
 		t.Error("empty answer should take the true fallback")
 	}
-	if p.yesNo("q", false) {
+	if p.YesNo("q", false) {
 		t.Error("empty answer should take the false fallback")
 	}
 }
 
 func TestPrompterYesNoAcceptsGermanAndEnglish(t *testing.T) {
-	p := newPrompterFrom(strings.NewReader("yes\nja\nn\nnein\n"))
+	p := ui.NewPrompterFrom(strings.NewReader("yes\nja\nn\nnein\n"))
 	for i, want := range []bool{true, true, false, false} {
-		if got := p.yesNo("q", !want); got != want {
+		if got := p.YesNo("q", !want); got != want {
 			t.Errorf("answer %d = %v, want %v", i, got, want)
 		}
 	}
@@ -162,8 +163,8 @@ func TestPrompterYesNoAcceptsGermanAndEnglish(t *testing.T) {
 
 // The wizard must not give up on a typo, it asks again.
 func TestPrompterRetriesUntilValid(t *testing.T) {
-	p := newPrompterFrom(strings.NewReader("nonsense\n999.999.1.1\n192.168.1.50\n"))
-	got := p.validated("ip", "", func(v string) error {
+	p := ui.NewPrompterFrom(strings.NewReader("nonsense\n999.999.1.1\n192.168.1.50\n"))
+	got := p.Validated("ip", "", func(v string) error {
 		if guessBroadcast(v) == "255.255.255.255" {
 			return errNotAnIP
 		}

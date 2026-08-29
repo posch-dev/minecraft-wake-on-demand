@@ -8,14 +8,15 @@ import (
 	"strings"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
 // One password login that fills in the config, arms the network card and
 // installs the key, so the only things asked for are the address and the user.
-func provisionServer(ctx context.Context, p *prompter, cfg *config.Config, publicKey string) bool {
+func provisionServer(ctx context.Context, p *ui.Prompter, cfg *config.Config, publicKey string) bool {
 	fmt.Printf("\nLogging in as %s@%s.\n", cfg.Server.SSHUser, cfg.Server.IP)
 	fmt.Println("The password is used for this one login and is not stored anywhere.")
-	password := p.secret(fmt.Sprintf("Password for %s@%s", cfg.Server.SSHUser, cfg.Server.IP))
+	password := p.Secret(fmt.Sprintf("Password for %s@%s", cfg.Server.SSHUser, cfg.Server.IP))
 	if password == "" {
 		fmt.Println("No password given, falling back to the questions.")
 		return false
@@ -80,7 +81,7 @@ func provisionServer(ctx context.Context, p *prompter, cfg *config.Config, publi
 }
 
 // Everything found is shown and confirmed, never applied behind the user's back.
-func applyFacts(p *prompter, session *ServerSession, cfg *config.Config, facts ServerFacts) {
+func applyFacts(p *ui.Prompter, session *ServerSession, cfg *config.Config, facts ServerFacts) {
 	fmt.Println("\n--- What the server told us ---")
 
 	if facts.MAC != "" {
@@ -134,9 +135,9 @@ func reportDockerState(facts ServerFacts) {
 	fmt.Println("\nNo docker on the server. Install it before running check.")
 }
 
-func pickContainer(p *prompter, facts ServerFacts) string {
+func pickContainer(p *ui.Prompter, facts ServerFacts) string {
 	if len(facts.Containers) == 0 {
-		return p.validated("Name of the Minecraft container", "minecraft", validateContainerName)
+		return p.Validated("Name of the Minecraft container", "minecraft", validateContainerName)
 	}
 	if len(facts.Containers) == 1 {
 		fmt.Printf("One container on the server: %s\n", facts.Containers[0])
@@ -147,7 +148,7 @@ func pickContainer(p *prompter, facts ServerFacts) string {
 	for i, name := range facts.Containers {
 		fmt.Printf("  %d) %s\n", i+1, name)
 	}
-	return p.validated("Which one runs Minecraft", facts.Containers[0], func(v string) error {
+	return p.Validated("Which one runs Minecraft", facts.Containers[0], func(v string) error {
 		if slices.Contains(facts.Containers, strings.TrimSpace(v)) {
 			return nil
 		}
@@ -163,7 +164,7 @@ func validateContainerName(v string) error {
 }
 
 // The single most common reason this project appears to do nothing at all.
-func offerWakeOnLANFix(p *prompter, session *ServerSession, facts ServerFacts) {
+func offerWakeOnLANFix(p *ui.Prompter, session *ServerSession, facts ServerFacts) {
 	switch facts.WakeOnLAN {
 	case wolEnabled:
 		fmt.Println("Wake-on-LAN is already armed in the network driver.")
@@ -177,7 +178,7 @@ func offerWakeOnLANFix(p *prompter, session *ServerSession, facts ServerFacts) {
 	fmt.Println("\nWake-on-LAN is switched OFF in the network driver.")
 	fmt.Println("The magic packet would arrive and the card would ignore it, so nothing")
 	fmt.Println("in this project can work until it is on.")
-	if !p.yesNo("Turn it on now, and again on every boot", true) {
+	if !p.YesNo("Turn it on now, and again on every boot", true) {
 		fmt.Printf("Left alone. Turn it on with: sudo ethtool -s %s wol g\n", facts.Interface)
 		return
 	}
@@ -191,21 +192,21 @@ func offerWakeOnLANFix(p *prompter, session *ServerSession, facts ServerFacts) {
 }
 
 // Returns the chosen action, empty when the watcher should not sleep the PC.
-func offerSleep(p *prompter, facts ServerFacts) string {
+func offerSleep(p *ui.Prompter, facts ServerFacts) string {
 	fmt.Println("\nWhen the last player leaves, Minecraft pauses itself. Your PC stays on though.")
 	fmt.Println("")
-	if !p.yesNo("Should the PC switch itself off as well when nobody plays?", false) {
+	if !p.YesNo("Should the PC switch itself off as well when nobody plays?", false) {
 		return ""
 	}
-	printHint("Your PC's own power settings cannot do this reliably: they only watch",
+	ui.PrintHint("Your PC's own power settings cannot do this reliably: they only watch",
 		"for mouse and keyboard, not for players, so they tend to switch off in",
 		"the middle of a game. Turn any automatic sleep off there.")
 
 	fmt.Println("\nHow should it switch off?")
 	for i, choice := range sleepChoices {
-		fmt.Printf("  %d) %-10s %s\n", i+1, choice.label, hint(choice.what))
+		fmt.Printf("  %d) %-10s %s\n", i+1, choice.label, ui.Hint(choice.what))
 	}
-	answer := p.validated("Pick one", "1", func(v string) error {
+	answer := p.Validated("Pick one", "1", func(v string) error {
 		if _, ok := sleepActionByChoice(v); ok {
 			return nil
 		}
@@ -214,16 +215,16 @@ func offerSleep(p *prompter, facts ServerFacts) string {
 	action, _ := sleepActionByChoice(answer)
 
 	if action == "suspend" && !facts.CanSuspend && facts.CanHibernate {
-		printWarning("That PC cannot sleep to RAM, only hibernate. Using hibernate.")
+		ui.PrintWarning("That PC cannot sleep to RAM, only hibernate. Using hibernate.")
 		action = "hibernate"
 	}
 	if action == "suspend" && facts.Platform.Windows {
-		printWarning("On Windows, sleep over a remote connection is unreliable.")
-		printHint("If waking misbehaves, switch to hibernate in mcwod config.")
+		ui.PrintWarning("On Windows, sleep over a remote connection is unreliable.")
+		ui.PrintHint("If waking misbehaves, switch to hibernate in mcwod config.")
 	}
 	if !facts.Platform.Windows && facts.Platform.SystemctlPath == "" {
-		printWarning("That PC has no systemctl, so there is no standard way to switch it off.")
-		printHint("Set sleep.action to custom and sleep.command in config.yml instead.")
+		ui.PrintWarning("That PC has no systemctl, so there is no standard way to switch it off.")
+		ui.PrintHint("Set sleep.action to custom and sleep.command in config.yml instead.")
 		return ""
 	}
 	return action

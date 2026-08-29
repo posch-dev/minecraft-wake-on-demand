@@ -10,29 +10,30 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
 const eulaURL = "https://aka.ms/MinecraftEULA"
 
 // Sets the Minecraft and backup containers up on the server, either as a fresh
 // compose file or as two services added to one that is already there.
-func offerContainerSetup(p *prompter, s *ServerSession, cfg *config.Config, facts ServerFacts) bool {
+func offerContainerSetup(p *ui.Prompter, s *ServerSession, cfg *config.Config, facts ServerFacts) bool {
 	fmt.Println("\nYour Minecraft server")
 	if !facts.Platform.HasDocker {
-		printWarning("Docker is not installed on that PC, so there is nothing to set up yet.")
-		printHint("Install Docker there, then run mcwod and pick this again.")
+		ui.PrintWarning("Docker is not installed on that PC, so there is nothing to set up yet.")
+		ui.PrintHint("Install Docker there, then run mcwod and pick this again.")
 		return false
 	}
 	if len(facts.Containers) > 0 {
-		printHint("That PC already runs " + cfg.Server.ContainerName + ".")
-		if !p.yesNo("Set up another server anyway?", false) {
+		ui.PrintHint("That PC already runs " + cfg.Server.ContainerName + ".")
+		if !p.YesNo("Set up another server anyway?", false) {
 			return false
 		}
 	}
 
-	printHint("MCWOD can set the whole server up for you, so you never have to",
+	ui.PrintHint("MCWOD can set the whole server up for you, so you never have to",
 		"open a terminal on that PC yourself.")
-	if !p.yesNo("Set up a Minecraft server on that PC now?", len(facts.Containers) == 0) {
+	if !p.YesNo("Set up a Minecraft server on that PC now?", len(facts.Containers) == 0) {
 		return false
 	}
 
@@ -40,11 +41,11 @@ func offerContainerSetup(p *prompter, s *ServerSession, cfg *config.Config, fact
 		return false
 	}
 
-	dir := p.line("Where should the server live on that PC?", defaultComposeDir(s, cfg))
+	dir := p.Line("Where should the server live on that PC?", defaultComposeDir(s, cfg))
 	target := inspectComposeTarget(s, dir)
 	if target.Command == "" {
-		printWarning("Docker Compose does not work on that PC.")
-		printHint("Install the compose plugin there, then try again.")
+		ui.PrintWarning("Docker Compose does not work on that PC.")
+		ui.PrintHint("Install the compose plugin there, then try again.")
 		return false
 	}
 
@@ -89,10 +90,10 @@ func rememberFirstWorld(cfg *config.Config, spec ComposeSpec, dir string) {
 }
 
 // Default yes, but never silently: the text says what saying yes means.
-func acceptEULA(p *prompter) bool {
+func acceptEULA(p *ui.Prompter) bool {
 	fmt.Println("\nMinecraft needs you to accept Mojang's rules, the EULA.")
-	printHint(eulaURL, "Saying yes here accepts them in your name.")
-	return p.yesNo("Do you accept them?", true)
+	ui.PrintHint(eulaURL, "Saying yes here accepts them in your name.")
+	return p.YesNo("Do you accept them?", true)
 }
 
 func defaultComposeDir(s *ServerSession, cfg *config.Config) string {
@@ -102,10 +103,10 @@ func defaultComposeDir(s *ServerSession, cfg *config.Config) string {
 	return "/home/" + cfg.Server.SSHUser + "/minecraft"
 }
 
-func askComposeSpec(p *prompter, cfg *config.Config, facts ServerFacts) ComposeSpec {
+func askComposeSpec(p *ui.Prompter, cfg *config.Config, facts ServerFacts) ComposeSpec {
 	spec := defaultComposeSpec(cfg.Server.ContainerName, cfg.Server.MCPort)
 
-	spec.ServiceName = p.validated("What should this world be called?", spec.ServiceName, validateContainerName)
+	spec.ServiceName = p.Validated("What should this world be called?", spec.ServiceName, validateContainerName)
 	spec.BackupName = spec.ServiceName + "-backup"
 	spec.ServerType = askServerType(p, spec.ServerType)
 	spec.MCVersion = askMCVersion(p, spec.MCVersion)
@@ -113,23 +114,23 @@ func askComposeSpec(p *prompter, cfg *config.Config, facts ServerFacts) ComposeS
 	spec.Admin = askAdmin(p)
 	spec.Whitelist = askWhitelist(p, spec.Admin)
 
-	spec.Backups = p.yesNo("Make a backup of your world automatically?", true)
+	spec.Backups = p.YesNo("Make a backup of your world automatically?", true)
 	if spec.Backups {
-		spec.BackupInterval = p.line("How often?", spec.BackupInterval)
-		spec.KeepBackupDays = p.validatedInt("How many days of backups should be kept?", spec.KeepBackupDays, 1)
+		spec.BackupInterval = p.Line("How often?", spec.BackupInterval)
+		spec.KeepBackupDays = p.ValidatedInt("How many days of backups should be kept?", spec.KeepBackupDays, 1)
 	}
 	return spec
 }
 
 // Numbered, because a wrong word means retyping and these people are reading a
 // terminal for the first time.
-func askServerType(p *prompter, fallback string) string {
+func askServerType(p *ui.Prompter, fallback string) string {
 	fmt.Println("\nWhich kind of server?")
 	for i, choice := range serverTypeChoices {
-		fmt.Printf("  %d) %-9s %s\n", i+1, choice.name, hint(choice.what))
+		fmt.Printf("  %d) %-9s %s\n", i+1, choice.name, ui.Hint(choice.what))
 	}
 
-	answer := p.validated("Pick one", "1", func(v string) error {
+	answer := p.Validated("Pick one", "1", func(v string) error {
 		if _, ok := serverTypeByChoice(v); ok {
 			return nil
 		}
@@ -158,14 +159,14 @@ func serverTypeByChoice(answer string) (string, bool) {
 // server has. The first name given also becomes the operator.
 // Asked in two steps, so somebody who does not want one answers once and moves
 // on instead of facing an empty list they have to understand.
-func askWhitelist(p *prompter, admin string) []string {
+func askWhitelist(p *ui.Prompter, admin string) []string {
 	fmt.Println("")
-	if !p.yesNo("Do you want a whitelist, so only people you name can join?", false) {
-		printHint("Anyone who knows your address can join.")
+	if !p.YesNo("Do you want a whitelist, so only people you name can join?", false) {
+		ui.PrintHint("Anyone who knows your address can join.")
 		return nil
 	}
 
-	answer := p.line("Which names may join? Separate them with commas", admin)
+	answer := p.Line("Which names may join? Separate them with commas", admin)
 	names := []string{}
 	for _, name := range config.SplitList(answer) {
 		if trimmed := strings.TrimSpace(name); trimmed != "" {
@@ -174,36 +175,36 @@ func askWhitelist(p *prompter, admin string) []string {
 	}
 	if admin != "" && !slices.Contains(names, admin) {
 		names = append(names, admin)
-		printHint(admin + " was added too, an admin who cannot join is no use.")
+		ui.PrintHint(admin + " was added too, an admin who cannot join is no use.")
 	}
 	return names
 }
 
 // A concrete version by default. LATEST moves the server under the world
 // whenever the image is pulled again.
-func askMCVersion(p *prompter, fallback string) string {
-	answer := strings.TrimSpace(p.line("\nWhich Minecraft version?", fallback))
+func askMCVersion(p *ui.Prompter, fallback string) string {
+	answer := strings.TrimSpace(p.Line("\nWhich Minecraft version?", fallback))
 	if strings.EqualFold(answer, "LATEST") {
-		printHint("Your server can then update itself to a new version on its own,",
+		ui.PrintHint("Your server can then update itself to a new version on its own,",
 			"and a world cannot go back to an older one afterwards.")
 	}
 	return answer
 }
 
 // A quarter of the machine, which is the number people are told to use anyway.
-func askMemory(p *prompter, totalGB int, fallback string) string {
+func askMemory(p *ui.Prompter, totalGB int, fallback string) string {
 	if totalGB > 0 {
 		fmt.Printf("\nThat PC has %d GB of RAM.\n", totalGB)
 		fallback = suggestedMemory(totalGB)
 	}
-	return strings.TrimSpace(p.line("How much should Minecraft get?", fallback))
+	return strings.TrimSpace(p.Line("How much should Minecraft get?", fallback))
 }
 
 // Without one nobody can run a command in the game, not even the owner.
-func askAdmin(p *prompter) string {
-	name := strings.TrimSpace(p.line("\nWho should be the admin? Enter their Minecraft name", ""))
+func askAdmin(p *ui.Prompter) string {
+	name := strings.TrimSpace(p.Line("\nWho should be the admin? Enter their Minecraft name", ""))
 	if name != "" {
-		printHint(name + " is now a Minecraft admin.")
+		ui.PrintHint(name + " is now a Minecraft admin.")
 	}
 	return name
 }
@@ -230,10 +231,10 @@ func buildComposeContent(target ComposeTarget, spec ComposeSpec) (string, error)
 	return newComposeFile(spec)
 }
 
-func writeComposeFiles(p *prompter, s *ServerSession, target ComposeTarget,
+func writeComposeFiles(p *ui.Prompter, s *ServerSession, target ComposeTarget,
 	spec ComposeSpec, content, password string) bool {
 
-	if target.Exists() && !p.yesNo("Write the changed "+target.File, true) {
+	if target.Exists() && !p.YesNo("Write the changed "+target.File, true) {
 		fmt.Println("Nothing was written.")
 		return false
 	}
@@ -281,7 +282,7 @@ func writeComposeFiles(p *prompter, s *ServerSession, target ComposeTarget,
 	}
 	fmt.Printf("Written to %s, compose accepts it.\n", target.File)
 
-	if !p.yesNo("Start the containers now?", true) {
+	if !p.YesNo("Start the containers now?", true) {
 		fmt.Printf("Start them yourself with: cd %s && %s up -d\n", target.Dir, target.Command)
 		return true
 	}
@@ -314,10 +315,10 @@ func runRestoreCompose() int {
 		return 1
 	}
 
-	p := newPrompter()
+	p := ui.NewPrompter()
 	fmt.Printf("Logging in as %s@%s to look for backups.\n", cfg.Server.SSHUser, cfg.Server.IP)
 	fmt.Println("The password is used for this one login and is not stored anywhere.")
-	password := p.secret(fmt.Sprintf("Password for %s@%s", cfg.Server.SSHUser, cfg.Server.IP))
+	password := p.Secret(fmt.Sprintf("Password for %s@%s", cfg.Server.SSHUser, cfg.Server.IP))
 	if password == "" {
 		fmt.Println("\nNo password given, nothing was changed.")
 		return 1
@@ -336,7 +337,7 @@ func runRestoreCompose() int {
 
 	dir := cfg.Server.ComposeDir
 	if dir == "" {
-		dir = p.line("Where does your server live on that PC?", defaultComposeDir(session, cfg))
+		dir = p.Line("Where does your server live on that PC?", defaultComposeDir(session, cfg))
 	}
 	backups, _ := listComposeBackups(session, dir)
 	if len(backups) == 0 {
@@ -348,7 +349,7 @@ func runRestoreCompose() int {
 	for i, name := range backups {
 		fmt.Printf("  %d) %s\n", i+1, name)
 	}
-	choice := p.validated("Which one to restore", "1", func(v string) error {
+	choice := p.Validated("Which one to restore", "1", func(v string) error {
 		index, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil || index < 1 || index > len(backups) {
 			return fmt.Errorf("pick a number between 1 and %d", len(backups))

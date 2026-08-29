@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"strings"
@@ -17,7 +17,7 @@ func withColor(t *testing.T, on bool) {
 func TestNothingIsPaintedWhenColorIsOff(t *testing.T) {
 	withColor(t, false)
 
-	for _, got := range []string{hint("a"), warn("b"), bad("c")} {
+	for _, got := range []string{Hint("a"), Warn("b"), bad("c")} {
 		if strings.Contains(got, "\x1b") {
 			t.Errorf("%q carries an escape with colour off", got)
 		}
@@ -27,7 +27,7 @@ func TestNothingIsPaintedWhenColorIsOff(t *testing.T) {
 func TestPaintedTextAlwaysResets(t *testing.T) {
 	withColor(t, true)
 
-	for name, got := range map[string]string{"hint": hint("a"), "warn": warn("b"), "bad": bad("c")} {
+	for name, got := range map[string]string{"hint": Hint("a"), "warn": Warn("b"), "bad": bad("c")} {
 		if !strings.HasSuffix(got, ansiReset) {
 			t.Errorf("%s produced %q, which would bleed into the next line", name, got)
 		}
@@ -40,10 +40,10 @@ func TestPaintedTextAlwaysResets(t *testing.T) {
 func TestPaintingLeavesTheTextAlone(t *testing.T) {
 	withColor(t, true)
 
-	if got := stripANSI(hint("the message")); got != "the message" {
+	if got := stripANSI(Hint("the message")); got != "the message" {
 		t.Errorf("stripped = %q, want the original text", got)
 	}
-	if got := hint(""); got != "" {
+	if got := Hint(""); got != "" {
 		t.Errorf("empty text = %q, want nothing at all", got)
 	}
 }

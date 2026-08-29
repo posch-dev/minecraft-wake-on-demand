@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"fmt"
@@ -41,26 +41,26 @@ func paint(code, text string) string {
 }
 
 // Side information somebody can skip and still get through the question.
-func hint(text string) string { return paint(ansiGrey, text) }
+func Hint(text string) string { return paint(ansiGrey, text) }
 
-func warn(text string) string { return paint(ansiAmber, text) }
+func Warn(text string) string { return paint(ansiAmber, text) }
 
 func bad(text string) string { return paint(ansiRed, text) }
 
 // Indented under the question it belongs to, one line at a time.
-func printHint(lines ...string) {
+func PrintHint(lines ...string) {
 	for _, line := range lines {
-		fmt.Println(hint("  " + line))
+		fmt.Println(Hint("  " + line))
 	}
 }
 
-func printWarning(lines ...string) {
+func PrintWarning(lines ...string) {
 	for _, line := range lines {
-		fmt.Println(warn(line))
+		fmt.Println(Warn(line))
 	}
 }
 
-func printError(lines ...string) {
+func PrintError(lines ...string) {
 	for _, line := range lines {
 		fmt.Println(bad(line))
 	}

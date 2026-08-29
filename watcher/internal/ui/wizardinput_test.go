@@ -1,6 +1,7 @@
-package main
+package ui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -11,9 +12,9 @@ import (
 func TestQuestionsGiveUpWhenTheAnswersRunOut(t *testing.T) {
 	done := make(chan string, 1)
 	go func() {
-		p := newPrompterFrom(strings.NewReader("192.168.0.5\n"))
-		p.validated("First", "", validateHostOrIP)
-		done <- p.validated("Second", "", validateHostOrIP)
+		p := NewPrompterFrom(strings.NewReader("192.168.0.5\n"))
+		p.Validated("First", "", mustNotBeEmpty)
+		done <- p.Validated("Second", "", mustNotBeEmpty)
 	}()
 
 	select {
@@ -26,8 +27,8 @@ func TestQuestionsGiveUpWhenTheAnswersRunOut(t *testing.T) {
 func TestYesNoGivesUpWhenTheAnswersRunOut(t *testing.T) {
 	done := make(chan bool, 1)
 	go func() {
-		p := newPrompterFrom(strings.NewReader("maybe\n"))
-		done <- p.yesNo("Well?", true)
+		p := NewPrompterFrom(strings.NewReader("maybe\n"))
+		done <- p.YesNo("Well?", true)
 	}()
 
 	select {
@@ -38,4 +39,11 @@ func TestYesNoGivesUpWhenTheAnswersRunOut(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("yesNo kept asking after its input ended")
 	}
+}
+
+func mustNotBeEmpty(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return errors.New("this cannot be empty")
+	}
+	return nil
 }
