@@ -15,6 +15,8 @@ import (
 	"golang.org/x/term"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // Set via ldflags in the release build.
@@ -109,7 +111,7 @@ or one directory above it.
 }
 
 func runProxy() int {
-	cfg, err := LoadConfig()
+	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Config error: %v\n", err)
 		return 1
@@ -185,7 +187,7 @@ func runProxy() int {
 	return 0
 }
 
-func logStartup(cfg *Config) {
+func logStartup(cfg *config.Config) {
 	logging.Infof("Minecraft Wake-on-Demand Proxy %s listening on %s:%d",
 		version, cfg.Watcher.ListenAddress, cfg.Watcher.ListenPort)
 	logging.Infof("Server: %s (%s) port %d, container '%s'",

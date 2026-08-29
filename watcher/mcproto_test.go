@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"testing/iotest"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 func TestVarIntRoundTrip(t *testing.T) {
@@ -444,7 +446,7 @@ func TestStatusResponseEchoesClientProtocol(t *testing.T) {
 // server that had an icon, because the response spans segments.
 func TestReadFramedPacketReassemblesASplitResponse(t *testing.T) {
 	icon := "data:image/png;base64," + strings.Repeat("A", 12000)
-	frame, err := makeStatusResponse(defaultMOTDSleeping, 20, 3, icon, "1.21.4", 769)
+	frame, err := makeStatusResponse(config.DefaultMOTDSleeping, 20, 3, icon, "1.21.4", 769)
 	if err != nil {
 		t.Fatal(err)
 	}

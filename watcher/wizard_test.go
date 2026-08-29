@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"slices"
+)
 
 // Numbers, because a wrong word means retyping and these people are reading a
 // terminal for the first time.
@@ -89,7 +93,7 @@ func TestMemoryIsReadFromWhatTheServerReports(t *testing.T) {
 // Every choice offered has to be a type the compose file can actually use.
 func TestOfferedServerTypesAreAllKnown(t *testing.T) {
 	for _, choice := range serverTypeChoices {
-		if !contains(serverTypes, choice.name) {
+		if !slices.Contains(serverTypes, choice.name) {
 			t.Errorf("%q is offered but not a known server type", choice.name)
 		}
 		if choice.what == "" {
@@ -100,7 +104,7 @@ func TestOfferedServerTypesAreAllKnown(t *testing.T) {
 
 func TestOfferedSleepActionsAreAllInstallable(t *testing.T) {
 	for _, choice := range sleepChoices {
-		if !contains(installableSleepActions, choice.action) {
+		if !slices.Contains(installableSleepActions, choice.action) {
 			t.Errorf("%q is offered but setup-ssh cannot install it", choice.action)
 		}
 	}

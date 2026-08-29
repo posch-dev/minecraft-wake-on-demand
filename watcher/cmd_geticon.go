@@ -10,6 +10,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 const iconDataURIPrefix = "data:image/png;base64,"
@@ -17,7 +21,7 @@ const iconDataURIPrefix = "data:image/png;base64,"
 // A command, not something the proxy learns: answering an unauthenticated
 // status ping must never write to disk.
 func runGetServerIcon() int {
-	cfg, err := LoadConfig()
+	cfg, err := config.Load()
 	if err != nil {
 		printError("Config error: " + err.Error())
 		fmt.Println("\nRun 'mcwod' first to set things up.")
@@ -26,7 +30,7 @@ func runGetServerIcon() int {
 
 	p := newPrompter()
 	target := filepath.Join(cfg.AssetsDir(), "server-icon.png")
-	existing := fileExists(target)
+	existing := fsx.Exists(target)
 
 	fmt.Println("\nUse the picture from your server")
 	printHint("Your Minecraft server has its own picture, the small square people see",
@@ -89,7 +93,7 @@ func runGetServerIcon() int {
 	return 0
 }
 
-func fetchServerStatus(ctx context.Context, cfg *Config) (*statusPayload, error) {
+func fetchServerStatus(ctx context.Context, cfg *config.Config) (*statusPayload, error) {
 	address := net.JoinHostPort(cfg.Server.IP, strconv.Itoa(cfg.Server.MCPort))
 
 	dialer := net.Dialer{Timeout: 5 * time.Second}
@@ -138,7 +142,7 @@ func writeServerIcon(target string, data []byte, keepOld bool) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return fmt.Errorf("cannot create %s: %w", filepath.Dir(target), err)
 	}
-	if keepOld && fileExists(target) {
+	if keepOld && fsx.Exists(target) {
 		kept, err := keepOldIcon(target)
 		if err != nil {
 			return err
@@ -159,7 +163,7 @@ func keepOldIcon(target string) (string, error) {
 		if i > 0 {
 			candidate = fmt.Sprintf("%s-%d.png", base, i+1)
 		}
-		if !fileExists(candidate) {
+		if !fsx.Exists(candidate) {
 			return candidate, os.Rename(target, candidate)
 		}
 	}

@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // Overridable so the update path can be tested without publishing a release,
@@ -39,7 +41,7 @@ type releaseInfo struct {
 }
 
 func envOr(key, fallback string) string {
-	if value := renamedEnv(key); value != "" {
+	if value := config.RenamedEnv(key); value != "" {
 		return value
 	}
 	return fallback
@@ -47,7 +49,7 @@ func envOr(key, fallback string) string {
 
 // One line after init, config and check when something newer exists. Never acts
 // on it, an unattended service must not replace its own binary.
-func printUpdateHint(cfg *Config) {
+func printUpdateHint(cfg *config.Config) {
 	if cfg != nil && !cfg.Update.Check {
 		return
 	}
@@ -69,7 +71,7 @@ func fetchLatestReleaseNow() (*releaseInfo, error) {
 	return fetchLatestRelease(ctx)
 }
 
-func cachedLatestRelease(cfg *Config) (*releaseInfo, error) {
+func cachedLatestRelease(cfg *config.Config) (*releaseInfo, error) {
 	path := updateCachePath(cfg)
 	if cached := readUpdateCache(path); cached != nil {
 		return cached, nil
@@ -108,7 +110,7 @@ func writeUpdateCache(path string, release *releaseInfo) {
 	}
 }
 
-func updateCachePath(cfg *Config) string {
+func updateCachePath(cfg *config.Config) string {
 	const name = ".update-check.json"
 	if cfg != nil && cfg.Path != "" {
 		if abs, err := filepath.Abs(cfg.Path); err == nil {

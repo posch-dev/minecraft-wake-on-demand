@@ -6,10 +6,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 func runWorlds() int {
-	cfg, err := LoadConfig()
+	cfg, err := config.Load()
 	if err != nil {
 		printError("Config error: " + err.Error())
 		return 1
@@ -47,7 +49,7 @@ func runWorlds() int {
 			printError("Pick one of the numbers, or q to go back.")
 		}
 
-		reloaded, err := LoadConfig()
+		reloaded, err := config.Load()
 		if err != nil {
 			printError(err.Error())
 			return 1
@@ -56,12 +58,12 @@ func runWorlds() int {
 	}
 }
 
-func printWorlds(cfg *Config) {
+func printWorlds(cfg *config.Config) {
 	fmt.Println("")
 	fmt.Println("Your worlds")
 	fmt.Println("")
 	active := cfg.ActiveWorldName()
-	for _, world := range cfg.worldsOrSingle() {
+	for _, world := range cfg.WorldList() {
 		marker := "   "
 		if world.Name == active || active == "" {
 			marker = " > "
@@ -77,7 +79,7 @@ func printWorlds(cfg *Config) {
 	fmt.Println("  q) Back")
 }
 
-func describeWorld(world World) string {
+func describeWorld(world config.World) string {
 	parts := []string{}
 	if world.Version != "" {
 		parts = append(parts, world.Version)
@@ -100,8 +102,8 @@ func prettyServerType(name string) string {
 	return strings.ToUpper(name[:1]) + name[1:]
 }
 
-func switchWorld(p *prompter, cfg *Config, doc *yamlDocument) int {
-	worlds := cfg.worldsOrSingle()
+func switchWorld(p *prompter, cfg *config.Config, doc *yamlDocument) int {
+	worlds := cfg.WorldList()
 	if len(worlds) < 2 {
 		printHint("There is only one world, so there is nothing to switch to.")
 		return 0
@@ -140,7 +142,7 @@ func switchWorld(p *prompter, cfg *Config, doc *yamlDocument) int {
 
 // Only one world may hold the Minecraft port, and docker keeps it for a moment
 // after the container stops.
-func stopActiveWorld(cfg *Config, session *ServerSession) {
+func stopActiveWorld(cfg *config.Config, session *ServerSession) {
 	active, ok := cfg.ActiveWorld()
 	if !ok {
 		return
@@ -152,7 +154,7 @@ func stopActiveWorld(cfg *Config, session *ServerSession) {
 	}
 }
 
-func confirmPlayersWillDrop(p *prompter, cfg *Config, session *ServerSession) bool {
+func confirmPlayersWillDrop(p *prompter, cfg *config.Config, session *ServerSession) bool {
 	online, ok := onlinePlayers(cfg, session)
 	if !ok || online == 0 {
 		return true
@@ -162,7 +164,7 @@ func confirmPlayersWillDrop(p *prompter, cfg *Config, session *ServerSession) bo
 	return p.yesNo("Continue?", false)
 }
 
-func onlinePlayers(cfg *Config, session *ServerSession) (int, bool) {
+func onlinePlayers(cfg *config.Config, session *ServerSession) (int, bool) {
 	active, ok := cfg.ActiveWorld()
 	if !ok {
 		return 0, false
@@ -174,7 +176,7 @@ func onlinePlayers(cfg *Config, session *ServerSession) (int, bool) {
 	return parsePlayerCount(out)
 }
 
-func makeWorld(p *prompter, cfg *Config, doc *yamlDocument) int {
+func makeWorld(p *prompter, cfg *config.Config, doc *yamlDocument) int {
 	session, code := openServerSession(p, cfg)
 	if code != 0 {
 		return code
@@ -207,8 +209,8 @@ func makeWorld(p *prompter, cfg *Config, doc *yamlDocument) int {
 	return 0
 }
 
-func removeWorld(p *prompter, cfg *Config, doc *yamlDocument) int {
-	worlds := cfg.worldsOrSingle()
+func removeWorld(p *prompter, cfg *config.Config, doc *yamlDocument) int {
+	worlds := cfg.WorldList()
 	if len(worlds) < 2 {
 		printHint("There is only one world, so removing it would leave nothing.")
 		return 0
@@ -230,7 +232,7 @@ func removeWorld(p *prompter, cfg *Config, doc *yamlDocument) int {
 		return 0
 	}
 
-	kept := []World{}
+	kept := []config.World{}
 	for _, world := range worlds {
 		if !strings.EqualFold(world.Name, target.Name) {
 			kept = append(kept, world)
@@ -249,8 +251,8 @@ func removeWorld(p *prompter, cfg *Config, doc *yamlDocument) int {
 	return 0
 }
 
-func appendWorld(doc *yamlDocument, cfg *Config, world World) error {
-	list := append(cfg.worldsOrSingle(), world)
+func appendWorld(doc *yamlDocument, cfg *config.Config, world config.World) error {
+	list := append(cfg.WorldList(), world)
 	if err := doc.Set([]string{"worlds", "list"}, list); err != nil {
 		return err
 	}
@@ -260,7 +262,7 @@ func appendWorld(doc *yamlDocument, cfg *Config, world World) error {
 	return nil
 }
 
-func pickWorld(p *prompter, worlds []World, question string) (World, bool) {
+func pickWorld(p *prompter, worlds []config.World, question string) (config.World, bool) {
 	fmt.Println("")
 	for i, world := range worlds {
 		fmt.Printf("  %d) %-12s %s\n", i+1, world.Name, hint(describeWorld(world)))
@@ -278,7 +280,7 @@ func pickWorld(p *prompter, worlds []World, question string) (World, bool) {
 
 // Every one of these needs to write files on the server, which the restricted
 // key cannot do, so they all start the same way.
-func openServerSession(p *prompter, cfg *Config) (*ServerSession, int) {
+func openServerSession(p *prompter, cfg *config.Config) (*ServerSession, int) {
 	fmt.Printf("\nLogging in to %s.\n", cfg.Server.IP)
 	printHint("Your password is used for this one login and is never saved.")
 	password := p.secret(fmt.Sprintf("Password for %s@%s", cfg.Server.SSHUser, cfg.Server.IP))

@@ -19,6 +19,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // A real SSH server in the test process, so the host key policy is exercised
@@ -166,7 +168,7 @@ func TestAcceptNewLearnsTheHostKey(t *testing.T) {
 	keyPath, publicKey := writeTestKey(t, dir)
 	server := startTestSSHServer(t, hostKey, publicKey, "")
 
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 	cfg.Server.IP = "127.0.0.1"
 	cfg.Server.SSHUser = "tester"
@@ -216,7 +218,7 @@ func TestStrictYesRefusesAnUnknownHost(t *testing.T) {
 	keyPath, publicKey := writeTestKey(t, dir)
 	server := startTestSSHServer(t, hostKey, publicKey, "")
 
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 	cfg.Server.IP = "127.0.0.1"
 	cfg.Server.SSHUser = "tester"
@@ -260,7 +262,7 @@ func TestChangedHostKeyIsRejected(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			cfg := defaultConfig()
+			cfg := config.Default()
 			cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 			cfg.Server.IP = "127.0.0.1"
 			cfg.Server.SSHUser = "tester"
@@ -291,7 +293,7 @@ func TestStartContainerSendsDockerStart(t *testing.T) {
 	keyPath, publicKey := writeTestKey(t, dir)
 	server := startTestSSHServer(t, hostKey, publicKey, "")
 
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 	cfg.Server.IP = "127.0.0.1"
 	cfg.Server.SSHUser = "tester"
@@ -322,7 +324,7 @@ func TestWrongKeyIsRefused(t *testing.T) {
 	_, otherPublic := writeTestKey(t, t.TempDir())
 	server := startTestSSHServer(t, hostKey, otherPublic, "")
 
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 	cfg.Server.IP = "127.0.0.1"
 	cfg.Server.SSHUser = "tester"
@@ -426,7 +428,7 @@ func TestInstallAuthorizedKeyIsIdempotent(t *testing.T) {
 	keyPath, publicKey := writeTestKey(t, dir)
 	server := startTestSSHServer(t, hostKey, publicKey, "correct-horse")
 
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 	cfg.Server.IP = "127.0.0.1"
 	cfg.Server.SSHUser = "tester"

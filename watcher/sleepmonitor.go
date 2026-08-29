@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // A client that connects and goes quiet would hold the counter above zero forever.
@@ -16,7 +18,7 @@ const maxCounterTrust = time.Hour
 const proxyTickInterval = 30 * time.Second
 
 type SleepMonitor struct {
-	cfg   *Config
+	cfg   *config.Config
 	waker *Waker
 
 	// Fields, not methods, so tests can drive the machine without a server.
@@ -33,7 +35,7 @@ type SleepMonitor struct {
 	counterDistrusted bool
 }
 
-func NewSleepMonitor(cfg *Config, waker *Waker) *SleepMonitor {
+func NewSleepMonitor(cfg *config.Config, waker *Waker) *SleepMonitor {
 	runner := NewSSHRunner(cfg)
 	return &SleepMonitor{
 		cfg:             cfg,
@@ -46,7 +48,7 @@ func NewSleepMonitor(cfg *Config, waker *Waker) *SleepMonitor {
 	}
 }
 
-func runSleepMonitor(ctx context.Context, cfg *Config, waker *Waker) {
+func runSleepMonitor(ctx context.Context, cfg *config.Config, waker *Waker) {
 	monitor := NewSleepMonitor(cfg, waker)
 	logging.Infof("Sleep monitor active, %s after %ds without players",
 		cfg.Sleep.Action, cfg.Sleep.IdleAfter)

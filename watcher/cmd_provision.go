@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"slices"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // One password login that fills in the config, arms the network card and
 // installs the key, so the only things asked for are the address and the user.
-func provisionServer(ctx context.Context, p *prompter, cfg *Config, publicKey string) bool {
+func provisionServer(ctx context.Context, p *prompter, cfg *config.Config, publicKey string) bool {
 	fmt.Printf("\nLogging in as %s@%s.\n", cfg.Server.SSHUser, cfg.Server.IP)
 	fmt.Println("The password is used for this one login and is not stored anywhere.")
 	password := p.secret(fmt.Sprintf("Password for %s@%s", cfg.Server.SSHUser, cfg.Server.IP))
@@ -77,7 +81,7 @@ func provisionServer(ctx context.Context, p *prompter, cfg *Config, publicKey st
 }
 
 // Everything found is shown and confirmed, never applied behind the user's back.
-func applyFacts(p *prompter, session *ServerSession, cfg *Config, facts ServerFacts) {
+func applyFacts(p *prompter, session *ServerSession, cfg *config.Config, facts ServerFacts) {
 	fmt.Println("\n--- What the server told us ---")
 
 	if facts.MAC != "" {
@@ -145,7 +149,7 @@ func pickContainer(p *prompter, facts ServerFacts) string {
 		fmt.Printf("  %d) %s\n", i+1, name)
 	}
 	return p.validated("Which one runs Minecraft", facts.Containers[0], func(v string) error {
-		if contains(facts.Containers, strings.TrimSpace(v)) {
+		if slices.Contains(facts.Containers, strings.TrimSpace(v)) {
 			return nil
 		}
 		return validateContainerName(v)
@@ -153,7 +157,7 @@ func pickContainer(p *prompter, facts ServerFacts) string {
 }
 
 func validateContainerName(v string) error {
-	if !containerNamePattern.MatchString(strings.TrimSpace(v)) {
+	if !config.ContainerNamePattern.MatchString(strings.TrimSpace(v)) {
 		return fmt.Errorf("use letters, digits, underscore, dot or dash")
 	}
 	return nil
@@ -242,7 +246,7 @@ func sleepActionByChoice(answer string) (string, bool) {
 		}
 		return "", false
 	}
-	if contains(installableSleepActions, answer) {
+	if slices.Contains(installableSleepActions, answer) {
 		return answer, true
 	}
 	return "", false

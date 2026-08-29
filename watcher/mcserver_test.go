@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // Stands in for the real Minecraft server so the paths that only run when the
@@ -53,7 +55,7 @@ func startFakeMCServer(t *testing.T, answerStatus bool, echo []byte) *fakeMCServ
 				// no client sends. A real server answers it, so this one does.
 				hs, hsErr := parseHandshake(buf[:n])
 				if echo != nil && hsErr == nil && hs.ProtocolVersion == -1 {
-					probe, _ := makeStatusResponse(defaultMOTDSleeping, 42, 0, "", "1.21.4", 769)
+					probe, _ := makeStatusResponse(config.DefaultMOTDSleeping, 42, 0, "", "1.21.4", 769)
 					conn.Write(probe)
 					conn.Read(buf)
 					return
@@ -92,8 +94,8 @@ func (s *fakeMCServer) got() []byte {
 	return append([]byte{}, s.received...)
 }
 
-func wakerFor(server *fakeMCServer) (*Config, *Waker) {
-	cfg := defaultConfig()
+func wakerFor(server *fakeMCServer) (*config.Config, *Waker) {
+	cfg := config.Default()
 	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 	cfg.Server.IP = "127.0.0.1"
 	cfg.Server.MCPort = server.port
@@ -247,7 +249,7 @@ func readFull(conn net.Conn, buf []byte) (int, error) {
 
 func TestSaveAndLoadServerInfoRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Path = filepath.Join(dir, "config.yml")
 
 	waker := NewWaker(&cfg)
@@ -267,9 +269,9 @@ func TestSaveAndLoadServerInfoRoundTrip(t *testing.T) {
 // Two worlds run two Minecraft versions, so one must not answer for the other.
 func TestServerInfoIsKeptPerWorld(t *testing.T) {
 	dir := t.TempDir()
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Path = filepath.Join(dir, "config.yml")
-	cfg.Worlds.List = []World{{Name: "survival"}, {Name: "creative"}}
+	cfg.Worlds.List = []config.World{{Name: "survival"}, {Name: "creative"}}
 
 	cfg.Worlds.Active = "survival"
 	NewWaker(&cfg).saveServerInfo(&ServerInfo{Name: "1.21.4", Protocol: 769})
@@ -290,9 +292,9 @@ func TestServerInfoIsKeptPerWorld(t *testing.T) {
 // world keeps its entry.
 func TestForgetServerInfoDropsOnlyOneWorld(t *testing.T) {
 	dir := t.TempDir()
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Path = filepath.Join(dir, "config.yml")
-	cfg.Worlds.List = []World{{Name: "survival"}, {Name: "creative"}}
+	cfg.Worlds.List = []config.World{{Name: "survival"}, {Name: "creative"}}
 
 	cfg.Worlds.Active = "survival"
 	NewWaker(&cfg).saveServerInfo(&ServerInfo{Name: "1.21.4", Protocol: 769})
@@ -314,7 +316,7 @@ func TestForgetServerInfoDropsOnlyOneWorld(t *testing.T) {
 // A cache written before worlds is not read, it is replaced by learning again.
 func TestServerInfoFromAnOlderVersionIsIgnored(t *testing.T) {
 	dir := t.TempDir()
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Path = filepath.Join(dir, "config.yml")
 	old := []byte(`{"name":"1.21.4","protocol":769,"max_players":20}`)
 	if err := os.WriteFile(cfg.ServerInfoPath(), old, 0o600); err != nil {
@@ -333,7 +335,7 @@ func TestServerInfoFromAnOlderVersionIsIgnored(t *testing.T) {
 
 func TestLoadServerInfoNoFile(t *testing.T) {
 	dir := t.TempDir()
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Path = filepath.Join(dir, "config.yml")
 
 	waker := NewWaker(&cfg)
@@ -349,7 +351,7 @@ func TestLoadServerInfoCorruptFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Path = filepath.Join(dir, "config.yml")
 
 	waker := NewWaker(&cfg)
@@ -452,7 +454,7 @@ func TestLearnServerInfoPicksUpChangedPlayerSlots(t *testing.T) {
 func TestServerInfoCachesToFile(t *testing.T) {
 	dir := t.TempDir()
 	server := startFakeMCServer(t, true, nil)
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 	cfg.Server.IP = "127.0.0.1"
 	cfg.Server.MCPort = server.port
@@ -516,7 +518,7 @@ func startFakeMCServerWithIcon(t *testing.T, favicon string) *fakeMCServer {
 				if _, err := conn.Read(buf); err != nil {
 					return
 				}
-				response, _ := makeStatusResponse(defaultMOTDSleeping, 20, 0, favicon, "1.21.4", 769)
+				response, _ := makeStatusResponse(config.DefaultMOTDSleeping, 20, 0, favicon, "1.21.4", 769)
 				conn.Write(response)
 				conn.Read(buf)
 			}()

@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 func TestGuessBroadcast(t *testing.T) {
@@ -71,7 +73,7 @@ func TestNullMACIsRejected(t *testing.T) {
 // A config written by init has to be readable by the watcher, otherwise the
 // wizard hands people a file that fails on the next start.
 func TestWrittenConfigLoadsBack(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 	cfg.Server.IP = "192.168.1.100"
 	cfg.Server.SSHUser = "someone"
@@ -83,7 +85,7 @@ func TestWrittenConfigLoadsBack(t *testing.T) {
 	cfg.Transfer.Enabled = true
 	cfg.Transfer.Host = "mine.duckdns.org"
 	cfg.Transfer.Port = 25566
-	cfg.Transfer.LocalNetworks = StringList{"192.168.1.0/24"}
+	cfg.Transfer.LocalNetworks = config.StringList{"192.168.1.0/24"}
 
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("the config the wizard builds is invalid: %v", err)
@@ -95,7 +97,7 @@ func TestWrittenConfigLoadsBack(t *testing.T) {
 	}
 
 	t.Setenv("MCWOD_CONFIG", path)
-	loaded, err := LoadConfig()
+	loaded, err := config.Load()
 	if err != nil {
 		t.Fatalf("the written config does not load: %v", err)
 	}
@@ -114,7 +116,7 @@ func TestWrittenConfigLoadsBack(t *testing.T) {
 }
 
 func TestWrittenConfigIsNotWorldReadable(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 	cfg.Server.IP = "192.168.1.100"
 	cfg.Server.SSHUser = "someone"

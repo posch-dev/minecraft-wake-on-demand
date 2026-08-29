@@ -17,10 +17,14 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"slices"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 func runSetupSSH() int {
-	cfg, err := LoadConfig()
+	cfg, err := config.Load()
 	if err != nil {
 		fmt.Printf("Config error: %v\n", err)
 		fmt.Println("\nRun 'mcwod init' first.")
@@ -50,7 +54,7 @@ func runSetupSSH() int {
 		sleepAction = strings.ToLower(strings.TrimSpace(p.validated(
 			"Which action, suspend, hibernate or shutdown", "suspend",
 			func(v string) error {
-				if !contains(installableSleepActions, strings.ToLower(strings.TrimSpace(v))) {
+				if !slices.Contains(installableSleepActions, strings.ToLower(strings.TrimSpace(v))) {
 					return fmt.Errorf("pick suspend, hibernate or shutdown")
 				}
 				return nil
@@ -299,7 +303,7 @@ func interactiveHostKeyCallback(runner *SSHRunner, p *prompter) (ssh.HostKeyCall
 	}, nil
 }
 
-func printManualInstructions(cfg *Config, publicKey string) {
+func printManualInstructions(cfg *config.Config, publicKey string) {
 	fmt.Println("\nOn a Windows server, add this to authorized_keys by hand.")
 	fmt.Printf("The file lives in C:\\Users\\%s\\.ssh\\authorized_keys\n\n", cfg.Server.SSHUser)
 	fmt.Printf("command=\"C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe start %s\","+

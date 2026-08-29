@@ -1,84 +1,15 @@
 package main
 
-import "testing"
+import (
+	"testing"
 
-func configWithWorlds(active string, worlds ...World) *Config {
-	cfg := defaultConfig()
-	cfg.Worlds = WorldsConfig{Active: active, List: worlds}
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+)
+
+func configWithWorlds(active string, worlds ...config.World) *config.Config {
+	cfg := config.Default()
+	cfg.Worlds = config.WorldsConfig{Active: active, List: worlds}
 	return &cfg
-}
-
-// A config written before worlds existed describes exactly one, so it has to
-// keep working without anybody editing it.
-func TestOldConfigReadsAsASingleWorld(t *testing.T) {
-	cfg := defaultConfig()
-	cfg.Server.ContainerName = "minecraft"
-	cfg.Server.MCPort = 25565
-	cfg.Server.ComposeDir = "/home/eliah/minecraft"
-
-	worlds := cfg.worldsOrSingle()
-	if len(worlds) != 1 {
-		t.Fatalf("got %d worlds, want the one it describes", len(worlds))
-	}
-	if worlds[0].Container != "minecraft" || worlds[0].Dir != "/home/eliah/minecraft" {
-		t.Errorf("world = %+v", worlds[0])
-	}
-	// Nothing should look for a per world folder that was never created.
-	if cfg.ActiveWorldName() != "" {
-		t.Errorf("active name = %q, want empty for an implied world", cfg.ActiveWorldName())
-	}
-}
-
-func TestActiveWorldDrivesWhatTheWatcherTalksTo(t *testing.T) {
-	cfg := configWithWorlds("creative",
-		World{Name: "survival", Container: "mc-survival", Port: 25565, Dir: "/srv/survival"},
-		World{Name: "creative", Container: "mc-creative", Port: 25564, Dir: "/srv/creative"})
-
-	cfg.applyActiveWorld()
-
-	if cfg.Server.ContainerName != "mc-creative" {
-		t.Errorf("container = %q", cfg.Server.ContainerName)
-	}
-	if cfg.Server.MCPort != 25564 {
-		t.Errorf("port = %d", cfg.Server.MCPort)
-	}
-	if cfg.Server.ComposeDir != "/srv/creative" {
-		t.Errorf("dir = %q", cfg.Server.ComposeDir)
-	}
-}
-
-// A name that is not in the list would otherwise leave the watcher pointing at
-// nothing at all.
-func TestUnknownActiveFallsBackToTheFirstWorld(t *testing.T) {
-	cfg := configWithWorlds("deleted",
-		World{Name: "survival", Container: "mc-survival", Port: 25565})
-
-	world, ok := cfg.ActiveWorld()
-	if !ok || world.Name != "survival" {
-		t.Errorf("world = %+v, ok = %v", world, ok)
-	}
-}
-
-// Downward, because transfer mode publishes the port directly above the
-// Minecraft one and a second world there would collide with it.
-func TestPortsAreHandedOutDownwards(t *testing.T) {
-	cfg := configWithWorlds("survival",
-		World{Name: "survival", Port: 25565},
-		World{Name: "creative", Port: 25564})
-
-	if got := cfg.nextFreeWorldPort(); got != 25563 {
-		t.Errorf("next port = %d, want 25563", got)
-	}
-}
-
-func TestTransferPortIsNeverHandedOut(t *testing.T) {
-	cfg := configWithWorlds("survival", World{Name: "survival", Port: 25565})
-	cfg.Transfer.Enabled = true
-	cfg.Transfer.Port = 25564
-
-	if got := cfg.nextFreeWorldPort(); got != 25563 {
-		t.Errorf("next port = %d, it must not take the transfer port", got)
-	}
 }
 
 // Vanilla to mods is fine, mods back to vanilla is not, and neither is going
@@ -147,20 +78,9 @@ func TestServerTypeTiers(t *testing.T) {
 	}
 }
 
-func TestFindWorldIgnoresCase(t *testing.T) {
-	cfg := configWithWorlds("survival", World{Name: "Survival"})
-
-	if _, ok := cfg.findWorld("survival"); !ok {
-		t.Error("names should match regardless of case")
-	}
-	if _, ok := cfg.findWorld("creative"); ok {
-		t.Error("a world that is not there must not be found")
-	}
-}
-
 // A world MCWOD created itself must not show up as one it knows nothing about.
 func TestInitRecordsTheWorldItCreated(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := config.Default()
 	spec := ComposeSpec{ServiceName: "survival", MCPort: 25565, MCVersion: "LATEST", ServerType: "FABRIC"}
 
 	rememberFirstWorld(&cfg, spec, "/srv/survival")
@@ -179,8 +99,8 @@ func TestInitRecordsTheWorldItCreated(t *testing.T) {
 
 // A second world does not steal the active one.
 func TestRememberingAWorldKeepsTheActiveOne(t *testing.T) {
-	cfg := defaultConfig()
-	cfg.Worlds.List = []World{{Name: "creative"}}
+	cfg := config.Default()
+	cfg.Worlds.List = []config.World{{Name: "creative"}}
 	cfg.Worlds.Active = "creative"
 
 	rememberFirstWorld(&cfg, ComposeSpec{ServiceName: "survival"}, "/srv/survival")

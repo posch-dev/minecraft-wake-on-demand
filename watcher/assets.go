@@ -20,6 +20,10 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // Unauthenticated and answered to anyone, so an uncapped icon is an amplifier.
@@ -51,7 +55,7 @@ var errNotAPNG = errors.New("not a PNG image")
 // Assets are read per request, so editing a MOTD takes effect without a restart.
 type Assets struct {
 	dir string
-	cfg *Config
+	cfg *config.Config
 
 	iconMu    sync.Mutex
 	iconCache map[string]cachedIcon
@@ -64,7 +68,7 @@ type cachedIcon struct {
 	dataURI string
 }
 
-func NewAssets(cfg *Config) *Assets {
+func NewAssets(cfg *config.Config) *Assets {
 	assets := &Assets{dir: cfg.AssetsDir(), cfg: cfg, iconCache: map[string]cachedIcon{}}
 	assets.warm()
 	return assets
@@ -265,7 +269,7 @@ func (a *Assets) iconFile(path string) string {
 func (a *Assets) firstExisting(name string) string {
 	paths := a.search(name)
 	for _, path := range paths {
-		if fileExists(path) {
+		if fsx.Exists(path) {
 			return path
 		}
 	}

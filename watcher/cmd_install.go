@@ -10,6 +10,10 @@ import (
 	"strings"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 //go:embed mcwod.service
@@ -51,12 +55,12 @@ func runInstall() int {
 	}
 
 	configPath := filepath.Join(dir, "config.yml")
-	if !fileExists(configPath) {
+	if !fsx.Exists(configPath) {
 		if err := runWizard(binary, configPath); err != nil {
 			printWarning("The setup questions did not finish: " + err.Error())
 		}
 	}
-	if !fileExists(configPath) {
+	if !fsx.Exists(configPath) {
 		printRemainingSteps(binary)
 		return 0
 	}
@@ -71,7 +75,7 @@ func runInstall() int {
 }
 
 func installDir() string {
-	if env := renamedEnv("MCWOD_INSTALL_DIR"); env != "" {
+	if env := config.RenamedEnv("MCWOD_INSTALL_DIR"); env != "" {
 		return env
 	}
 	return defaultInstallDir()
@@ -159,7 +163,7 @@ func writeExampleAssets(dir string) error {
 			continue
 		}
 		path := filepath.Join(target, entry.Name())
-		if fileExists(path) {
+		if fsx.Exists(path) {
 			continue
 		}
 		data, err := exampleAssets.ReadFile("assets/examples/" + entry.Name())

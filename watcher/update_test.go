@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 func TestIsNewerVersionComparesNumbersNotText(t *testing.T) {
@@ -153,7 +155,7 @@ func TestFetchLatestReleaseReadsTheTag(t *testing.T) {
 
 func TestUpdateCacheIsReusedThenExpires(t *testing.T) {
 	dir := t.TempDir()
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Path = filepath.Join(dir, "config.yml")
 	path := updateCachePath(&cfg)
 
@@ -176,7 +178,7 @@ func TestUpdateCacheIsReusedThenExpires(t *testing.T) {
 // still work without a network.
 func TestUpdateHintStaysQuietWhenTheAPIIsUnreachable(t *testing.T) {
 	dir := t.TempDir()
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Path = filepath.Join(dir, "config.yml")
 
 	oldAPI := updateAPIBase
@@ -192,7 +194,7 @@ func TestUpdateHintStaysQuietWhenTheAPIIsUnreachable(t *testing.T) {
 }
 
 func TestUpdateCheckCanBeTurnedOff(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := config.Default()
 	if !cfg.Update.Check {
 		t.Error("the check should be on by default")
 	}

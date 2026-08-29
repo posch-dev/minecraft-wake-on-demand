@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 const commentedConfig = `# The real config, with notes people wrote themselves.
@@ -84,7 +86,7 @@ func TestEditingKeepsUntouchedKeys(t *testing.T) {
 	}
 	out := saved(t, doc, path)
 
-	var parsed Config
+	var parsed config.Config
 	if err := yaml.Unmarshal([]byte(out), &parsed); err != nil {
 		t.Fatalf("the saved file no longer parses: %v", err)
 	}
@@ -111,7 +113,7 @@ func TestSettingCreatesAMissingSection(t *testing.T) {
 	}
 	out := saved(t, doc, path)
 
-	var parsed Config
+	var parsed config.Config
 	if err := yaml.Unmarshal([]byte(out), &parsed); err != nil {
 		t.Fatalf("the saved file no longer parses: %v", err)
 	}
@@ -142,7 +144,7 @@ func TestSettingAListWritesAYAMLSequence(t *testing.T) {
 	}
 	out := saved(t, doc, path)
 
-	var parsed Config
+	var parsed config.Config
 	if err := yaml.Unmarshal([]byte(out), &parsed); err != nil {
 		t.Fatalf("the saved file no longer parses: %v", err)
 	}
@@ -159,7 +161,7 @@ func TestSettingAnEmptyListClearsIt(t *testing.T) {
 	}
 	out := saved(t, doc, path)
 
-	var parsed Config
+	var parsed config.Config
 	if err := yaml.Unmarshal([]byte(out), &parsed); err != nil {
 		t.Fatalf("the saved file no longer parses: %v", err)
 	}

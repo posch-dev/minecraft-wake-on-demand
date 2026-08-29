@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // The watcher sends one of these words and nothing else, the helper maps them.
@@ -55,7 +57,7 @@ const (
 )
 
 // Used when no helper is installed. Sleep is absent, it needs the sudoers line.
-func directCommand(cfg *Config, verb string) (string, error) {
+func directCommand(cfg *config.Config, verb string) (string, error) {
 	container := cfg.Server.ContainerName
 	switch verb {
 	case remoteVerbStart:
@@ -78,7 +80,7 @@ func directCommand(cfg *Config, verb string) (string, error) {
 // The backup container belongs to the same project, and docker start would
 // leave it behind. Without a known compose directory there is only the one
 // container to work with.
-func composeCommandUnix(cfg *Config, subcommand, fallback string) string {
+func composeCommandUnix(cfg *config.Config, subcommand, fallback string) string {
 	dir := strings.TrimSpace(cfg.Server.ComposeDir)
 	if dir == "" {
 		return fallback

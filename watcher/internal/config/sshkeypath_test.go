@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"os"
@@ -26,9 +26,9 @@ func homeWith(t *testing.T, names ...string) string {
 // with everywhere else.
 func TestFreshInstallGetsItsOwnKey(t *testing.T) {
 	home := homeWith(t)
-	cfg := defaultConfig()
+	cfg := Default()
 
-	want := filepath.Join(home, ".ssh", watcherKeyName)
+	want := filepath.Join(home, ".ssh", WatcherKeyName)
 	if got := cfg.ResolvedSSHKeyPath(); got != want {
 		t.Errorf("key path = %q, want %q", got, want)
 	}
@@ -38,10 +38,10 @@ func TestFreshInstallGetsItsOwnKey(t *testing.T) {
 }
 
 func TestOwnKeyWinsOverTheSharedOne(t *testing.T) {
-	home := homeWith(t, watcherKeyName, sharedKeyName)
-	cfg := defaultConfig()
+	home := homeWith(t, WatcherKeyName, SharedKeyName)
+	cfg := Default()
 
-	want := filepath.Join(home, ".ssh", watcherKeyName)
+	want := filepath.Join(home, ".ssh", WatcherKeyName)
 	if got := cfg.ResolvedSSHKeyPath(); got != want {
 		t.Errorf("key path = %q, want the watcher's own key", got)
 	}
@@ -50,10 +50,10 @@ func TestOwnKeyWinsOverTheSharedOne(t *testing.T) {
 // A personal key lying at the default path is not adopted, not even when the
 // watcher has no key of its own yet.
 func TestSharedKeyIsNeverPickedUp(t *testing.T) {
-	home := homeWith(t, sharedKeyName)
-	cfg := defaultConfig()
+	home := homeWith(t, SharedKeyName)
+	cfg := Default()
 
-	want := filepath.Join(home, ".ssh", watcherKeyName)
+	want := filepath.Join(home, ".ssh", WatcherKeyName)
 	if got := cfg.ResolvedSSHKeyPath(); got != want {
 		t.Errorf("key path = %q, want %q", got, want)
 	}
@@ -63,8 +63,8 @@ func TestSharedKeyIsNeverPickedUp(t *testing.T) {
 }
 
 func TestConfiguredPathAlwaysWins(t *testing.T) {
-	homeWith(t, sharedKeyName, watcherKeyName)
-	cfg := defaultConfig()
+	homeWith(t, SharedKeyName, WatcherKeyName)
+	cfg := Default()
 	cfg.Server.SSHKeyPath = filepath.Join(t.TempDir(), "somewhere-else")
 
 	if got := cfg.ResolvedSSHKeyPath(); got != cfg.Server.SSHKeyPath {
@@ -77,9 +77,9 @@ func TestConfiguredPathAlwaysWins(t *testing.T) {
 
 // Writing the path in by hand is allowed, check warns about it.
 func TestConfiguredSharedKeyStillWarns(t *testing.T) {
-	home := homeWith(t, sharedKeyName)
-	cfg := defaultConfig()
-	cfg.Server.SSHKeyPath = filepath.Join(home, ".ssh", sharedKeyName)
+	home := homeWith(t, SharedKeyName)
+	cfg := Default()
+	cfg.Server.SSHKeyPath = filepath.Join(home, ".ssh", SharedKeyName)
 
 	if !cfg.UsesSharedSSHKey() {
 		t.Error("check has to be able to warn about this case")

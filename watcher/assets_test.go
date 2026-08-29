@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 func writePNG(t *testing.T, path string, width, height int, fill color.Color) {
@@ -33,7 +35,7 @@ func writePNG(t *testing.T, path string, width, height int, fill color.Color) {
 func assetsIn(t *testing.T) (*Assets, string) {
 	t.Helper()
 	dir := t.TempDir()
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Path = filepath.Join(dir, "config.yml")
 	assets := NewAssets(&cfg)
 	assets.dir = dir
@@ -316,7 +318,7 @@ func TestIconsAreComposedBeforeTheFirstRequest(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Path = filepath.Join(home, "config.yml")
 	writePNG(t, filepath.Join(dir, "server-icon.png"), 64, 64, color.NRGBA{1, 2, 3, 255})
 

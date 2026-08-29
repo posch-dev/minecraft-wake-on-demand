@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
 )
 
 const (
@@ -92,7 +94,7 @@ func registerAutostart(dir, binary string) error {
 	}
 	// The unit keeps the home read only, so known_hosts cannot live in ~/.ssh.
 	knownHosts := filepath.Join(dir, "known_hosts")
-	if !fileExists(knownHosts) {
+	if !fsx.Exists(knownHosts) {
 		if err := os.WriteFile(knownHosts, nil, 0o600); err != nil {
 			return err
 		}
@@ -118,7 +120,7 @@ func renderSystemdUnit(dir, runUser string) string {
 // so the one this replaces is stopped rather than left running.
 func retireOlderService() error {
 	const old = "/etc/systemd/system/mc-wol-proxy.service"
-	if !fileExists(old) {
+	if !fsx.Exists(old) {
 		return nil
 	}
 	fmt.Println("Found the older mc-wol-proxy service. Stopping it, mcwod replaces it.")

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 const duckDNSEndpoint = "https://www.duckdns.org/update"
@@ -17,7 +19,7 @@ const duckDNSEndpoint = "https://www.duckdns.org/update"
 var duckDNSClient = &http.Client{Timeout: 10 * time.Second}
 
 // The empty ip parameter tells DuckDNS to use the address the request came from.
-func duckDNSURL(cfg *Config) string {
+func duckDNSURL(cfg *config.Config) string {
 	params := url.Values{}
 	params.Set("domains", cfg.DuckDNS.Domain)
 	params.Set("token", cfg.DuckDNS.Token)
@@ -25,7 +27,7 @@ func duckDNSURL(cfg *Config) string {
 	return duckDNSEndpoint + "?" + params.Encode()
 }
 
-func updateDuckDNS(ctx context.Context, cfg *Config) error {
+func updateDuckDNS(ctx context.Context, cfg *config.Config) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, duckDNSURL(cfg), nil)
 	if err != nil {
 		return err
@@ -52,7 +54,7 @@ func updateDuckDNS(ctx context.Context, cfg *Config) error {
 	return fmt.Errorf("DuckDNS answered %q instead of OK", logging.Sanitize(answer, 64))
 }
 
-func runDuckDNSUpdater(ctx context.Context, cfg *Config) {
+func runDuckDNSUpdater(ctx context.Context, cfg *config.Config) {
 	interval := time.Duration(cfg.DuckDNS.UpdateIntervalHours) * time.Hour
 	for {
 		updateDuckDNS(ctx, cfg)

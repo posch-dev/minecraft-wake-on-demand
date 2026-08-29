@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // A burst of connections shares one probe instead of hammering the server.
@@ -31,7 +33,7 @@ type ServerInfo struct {
 }
 
 type Waker struct {
-	cfg    *Config
+	cfg    *config.Config
 	pinger *Pinger
 	ssh    *SSHRunner
 
@@ -61,7 +63,7 @@ type Waker struct {
 	info   *ServerInfo
 }
 
-func NewWaker(cfg *Config) *Waker {
+func NewWaker(cfg *config.Config) *Waker {
 	w := &Waker{
 		cfg:     cfg,
 		wolPort: wolPort,
@@ -126,7 +128,7 @@ func writeServerInfoCache(path string, cache map[string]*ServerInfo) {
 
 // A world that changed its Minecraft version would otherwise keep claiming the
 // old one until someone connects.
-func forgetServerInfo(cfg *Config, world string) {
+func forgetServerInfo(cfg *config.Config, world string) {
 	path := cfg.ServerInfoPath()
 	cache := readServerInfoCache(path)
 	if _, ok := cache[world]; !ok {
@@ -154,7 +156,7 @@ func (w *Waker) Booting() bool {
 
 // Six 0xFF bytes followed by the MAC sixteen times, 102 bytes in total.
 func buildMagicPacket(mac string) ([]byte, error) {
-	parsed, err := ParseMAC(mac)
+	parsed, err := config.ParseMAC(mac)
 	if err != nil {
 		return nil, err
 	}

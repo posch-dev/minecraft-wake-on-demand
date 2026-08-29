@@ -12,6 +12,8 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 type checker struct {
@@ -48,7 +50,7 @@ func (c *checker) hint(format string, args ...any) {
 // Walks the setup in the order things depend on each other and stops digging
 // once a step fails, so the first FAIL is the one worth fixing.
 func runCheck() int {
-	cfg, err := LoadConfig()
+	cfg, err := config.Load()
 
 	c := &checker{}
 	fmt.Println("Checking the Minecraft Wake-on-Demand setup")
@@ -96,7 +98,7 @@ func runCheck() int {
 	return code
 }
 
-func checkAssets(c *checker, cfg *Config) {
+func checkAssets(c *checker, cfg *config.Config) {
 	c.section("MOTD and icon")
 	dir := cfg.AssetsDir()
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
@@ -123,7 +125,7 @@ func checkAssets(c *checker, cfg *Config) {
 	}
 }
 
-func reportMOTDSource(c *checker, cfg *Config, assets *Assets, state string) {
+func reportMOTDSource(c *checker, cfg *config.Config, assets *Assets, state string) {
 	fromFile := map[string]func() string{
 		stateSleeping: assets.MOTDSleeping,
 		stateStarting: assets.MOTDStarting,
@@ -145,7 +147,7 @@ func reportMOTDSource(c *checker, cfg *Config, assets *Assets, state string) {
 	}
 }
 
-func checkListenPort(c *checker, cfg *Config) {
+func checkListenPort(c *checker, cfg *config.Config) {
 	c.section("Listen port")
 	address := net.JoinHostPort(cfg.Watcher.ListenAddress, strconv.Itoa(cfg.Watcher.ListenPort))
 	listener, err := net.Listen("tcp", address)
@@ -159,7 +161,7 @@ func checkListenPort(c *checker, cfg *Config) {
 	c.ok("%s is free", address)
 }
 
-func checkSSHKey(c *checker, cfg *Config) bool {
+func checkSSHKey(c *checker, cfg *config.Config) bool {
 	c.section("SSH key")
 	path := cfg.ResolvedSSHKeyPath()
 	signer, err := loadPrivateKey(path)
@@ -191,7 +193,7 @@ func checkSSHKey(c *checker, cfg *Config) bool {
 	return true
 }
 
-func checkServer(c *checker, cfg *Config, ctx context.Context) bool {
+func checkServer(c *checker, cfg *config.Config, ctx context.Context) bool {
 	c.section("Server PC")
 	pinger := &Pinger{}
 	c.info("reachability checks use %s", pinger.Mode())
@@ -214,7 +216,7 @@ func checkServer(c *checker, cfg *Config, ctx context.Context) bool {
 	return true
 }
 
-func checkSSHLogin(c *checker, cfg *Config, ctx context.Context) {
+func checkSSHLogin(c *checker, cfg *config.Config, ctx context.Context) {
 	c.section("SSH login and container")
 	runner := NewSSHRunner(cfg)
 
@@ -246,7 +248,7 @@ func checkSSHLogin(c *checker, cfg *Config, ctx context.Context) {
 
 // With the helper installed, check can ask real questions instead of guessing
 // from a refused command.
-func checkRemoteHelper(c *checker, cfg *Config, runner *SSHRunner, ctx context.Context) {
+func checkRemoteHelper(c *checker, cfg *config.Config, runner *SSHRunner, ctx context.Context) {
 	out, err := runner.Run(ctx, remoteVerbHello)
 	if err != nil {
 		if isAuthFailure(err) {
@@ -313,7 +315,7 @@ func checkWakeOnLANDriver(c *checker, runner *SSHRunner, ctx context.Context) {
 
 // The sleep monitor counts players through this, so a container without RCON
 // would leave it unable to tell an empty server from a busy one.
-func checkPlayerQuery(c *checker, cfg *Config, runner *SSHRunner, ctx context.Context) {
+func checkPlayerQuery(c *checker, cfg *config.Config, runner *SSHRunner, ctx context.Context) {
 	out, err := runner.RunVerb(ctx, remoteVerbPlayers)
 	if err != nil {
 		if !cfg.Sleep.Enabled {
@@ -334,7 +336,7 @@ func checkPlayerQuery(c *checker, cfg *Config, runner *SSHRunner, ctx context.Co
 	c.ok("player count works, %d online right now", online)
 }
 
-func checkSleepAction(c *checker, cfg *Config) {
+func checkSleepAction(c *checker, cfg *config.Config) {
 	c.section("Sleep")
 	if !cfg.Sleep.Enabled {
 		c.info("disabled in config.yml, the server PC is never sent to sleep")
@@ -369,7 +371,7 @@ var dockerContainerStates = map[string]bool{
 	"removing": true, "paused": true, "exited": true, "dead": true,
 }
 
-func reportContainerState(c *checker, cfg *Config, state string) {
+func reportContainerState(c *checker, cfg *config.Config, state string) {
 	answer := strings.TrimSpace(state)
 	switch {
 	case answer == "":
@@ -389,7 +391,7 @@ func isAuthFailure(err error) bool {
 	return strings.Contains(err.Error(), "handshake") || strings.Contains(err.Error(), "unable to authenticate")
 }
 
-func checkDuckDNS(c *checker, cfg *Config, ctx context.Context) {
+func checkDuckDNS(c *checker, cfg *config.Config, ctx context.Context) {
 	c.section("DuckDNS")
 	if !cfg.DuckDNS.Enabled {
 		c.info("disabled in config.yml")

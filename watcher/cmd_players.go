@@ -8,6 +8,10 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"slices"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // Who may join and who may run commands, both read from and written back to the
@@ -20,7 +24,7 @@ type playerList struct {
 }
 
 func runPlayers() int {
-	cfg, err := LoadConfig()
+	cfg, err := config.Load()
 	if err != nil {
 		printError("Config error: " + err.Error())
 		return 1
@@ -101,7 +105,7 @@ func printPlayerList(list *playerList, world string) {
 		}
 	}
 	for _, name := range list.whitelist {
-		if contains(list.admins, name) {
+		if slices.Contains(list.admins, name) {
 			fmt.Printf("  %-16s %s\n", name, hint("admin"))
 			continue
 		}
@@ -127,7 +131,7 @@ func letSomeoneIn(p *prompter, list *playerList) bool {
 	if name == "" {
 		return false
 	}
-	if contains(list.whitelist, name) {
+	if slices.Contains(list.whitelist, name) {
 		printHint(name + " is already allowed in.")
 		return false
 	}
@@ -177,7 +181,7 @@ func toggleAdmin(p *prompter, list *playerList) bool {
 	if !picked {
 		return false
 	}
-	if !contains(list.admins, name) {
+	if !slices.Contains(list.admins, name) {
 		list.admins = append(list.admins, name)
 		fmt.Printf("  %s is now an admin.\n", name)
 		return true
@@ -222,7 +226,7 @@ func withoutName(names []string, drop string) []string {
 	return kept
 }
 
-func applyPlayerList(p *prompter, s *ServerSession, cfg *Config, target ComposeTarget, list playerList) int {
+func applyPlayerList(p *prompter, s *ServerSession, cfg *config.Config, target ComposeTarget, list playerList) int {
 	updated, err := writePlayerList(target.Existing, cfg.Server.ContainerName, list)
 	if err != nil {
 		printError(err.Error())

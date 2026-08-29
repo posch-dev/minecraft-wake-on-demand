@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // Where a world can actually be lost, so the backup runs before anything else
 // and is not something to decline.
-func changeWorldVersion(p *prompter, cfg *Config, doc *yamlDocument) int {
-	worlds := cfg.worldsOrSingle()
+func changeWorldVersion(p *prompter, cfg *config.Config, doc *yamlDocument) int {
+	worlds := cfg.WorldList()
 	world, picked := pickWorld(p, worlds, "Which world?")
 	if !picked {
 		return 0
@@ -46,7 +48,7 @@ func changeWorldVersion(p *prompter, cfg *Config, doc *yamlDocument) int {
 
 // Refused moves are still offered, but only after the backup has been made and
 // only once somebody has said out loud that they want it.
-func decideAboutTheWorld(p *prompter, world World, serverType, version string) (bool, bool) {
+func decideAboutTheWorld(p *prompter, world config.World, serverType, version string) (bool, bool) {
 	problem := worldMoveProblem(world.Type, serverType, world.Version, version)
 	if problem == "" {
 		fmt.Println("")
@@ -91,8 +93,8 @@ func decideAboutTheWorld(p *prompter, world World, serverType, version string) (
 	return false, false
 }
 
-func applyWorldChange(p *prompter, s *ServerSession, cfg *Config, doc *yamlDocument,
-	world World, serverType, version string, keepWorld bool) int {
+func applyWorldChange(p *prompter, s *ServerSession, cfg *config.Config, doc *yamlDocument,
+	world config.World, serverType, version string, keepWorld bool) int {
 
 	target := inspectComposeTarget(s, world.Dir)
 	if !target.Exists() {
@@ -152,7 +154,7 @@ func applyWorldChange(p *prompter, s *ServerSession, cfg *Config, doc *yamlDocum
 
 // Runs on the server, so a large world does not travel over the SSH connection
 // only to be written back again.
-func backUpWorld(s *ServerSession, world World, version string) bool {
+func backUpWorld(s *ServerSession, world config.World, version string) bool {
 	name := "before-" + version + ".tar.gz"
 	fmt.Println("")
 	printHint("Once a world has been opened in a newer version it cannot go back.",
@@ -180,7 +182,7 @@ func backupWorldCommand(s *ServerSession, dir, name string) string {
 
 // Moved, never deleted, because somebody who picked a fresh world may still
 // want what was there.
-func moveWorldAside(s *ServerSession, world World, version string) bool {
+func moveWorldAside(s *ServerSession, world config.World, version string) bool {
 	aside := "data.before-" + version + "-" + time.Now().UTC().Format("20060102-150405")
 
 	var command string
@@ -198,8 +200,8 @@ func moveWorldAside(s *ServerSession, world World, version string) bool {
 	return true
 }
 
-func recordWorldChange(doc *yamlDocument, cfg *Config, name, serverType, version string) error {
-	worlds := cfg.worldsOrSingle()
+func recordWorldChange(doc *yamlDocument, cfg *config.Config, name, serverType, version string) error {
+	worlds := cfg.WorldList()
 	for i := range worlds {
 		if strings.EqualFold(worlds[i].Name, name) {
 			worlds[i].Type = serverType

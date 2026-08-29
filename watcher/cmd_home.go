@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // What running mcwod with no argument does at a terminal. Nothing set up yet
 // leads into the wizard, otherwise it asks what you came to do.
 func runHome() int {
-	cfg, err := LoadConfig()
+	cfg, err := config.Load()
 	if err != nil {
 		fmt.Println("Minecraft Wake-on-Demand")
 		fmt.Println("")
@@ -42,7 +44,7 @@ func runHome() int {
 			printError("Pick one of the numbers, or q to leave.")
 		}
 
-		reloaded, err := LoadConfig()
+		reloaded, err := config.Load()
 		if err != nil {
 			return 0
 		}
@@ -61,7 +63,7 @@ func printHomeMenu() {
 	fmt.Println("  q) Quit")
 }
 
-func printHomeStatus(cfg *Config) {
+func printHomeStatus(cfg *config.Config) {
 	fmt.Println("\nMinecraft Wake-on-Demand")
 	fmt.Println("")
 	fmt.Printf("  Server PC:  %s\n", describeServerState(cfg))
@@ -74,7 +76,7 @@ func printHomeStatus(cfg *Config) {
 }
 
 // One quick ping, because a menu that takes seconds to appear feels broken.
-func describeServerState(cfg *Config) string {
+func describeServerState(cfg *config.Config) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 

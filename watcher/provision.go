@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // What one password login can find out about the server PC, so init can fill
@@ -48,7 +50,7 @@ func discoverUnix(s *ServerSession, facts *ServerFacts) {
 	}
 
 	if out, err := s.Run("cat /sys/class/net/" + shellQuote(facts.Interface) + "/address"); err == nil {
-		if _, parseErr := ParseMAC(firstLine(out)); parseErr == nil {
+		if _, parseErr := config.ParseMAC(firstLine(out)); parseErr == nil {
 			facts.MAC = firstLine(out)
 		}
 	}
@@ -85,7 +87,7 @@ func discoverWindows(s *ServerSession, facts *ServerFacts) {
 	}
 
 	if out, err := s.Run("(Get-NetAdapter -Name '" + facts.Interface + "').MacAddress"); err == nil {
-		if _, parseErr := ParseMAC(firstLine(out)); parseErr == nil {
+		if _, parseErr := config.ParseMAC(firstLine(out)); parseErr == nil {
 			facts.MAC = firstLine(out)
 		}
 	}
@@ -108,7 +110,7 @@ func discoverContainers(s *ServerSession, facts *ServerFacts) {
 		return
 	}
 	for _, name := range strings.Fields(out) {
-		if containerNamePattern.MatchString(name) {
+		if config.ContainerNamePattern.MatchString(name) {
 			facts.Containers = append(facts.Containers, name)
 		}
 	}

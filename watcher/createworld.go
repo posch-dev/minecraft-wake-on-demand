@@ -4,21 +4,23 @@ import (
 	"fmt"
 	"path"
 	"strings"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // A world of its own, in its own folder, so a broken one is one broken world
 // and restore-compose stays unambiguous.
-func createWorld(p *prompter, s *ServerSession, cfg *Config, facts ServerFacts) (World, bool) {
+func createWorld(p *prompter, s *ServerSession, cfg *config.Config, facts ServerFacts) (config.World, bool) {
 	if !facts.Platform.HasDocker {
 		printWarning("Docker is not installed on that PC, so there is nothing to set up.")
-		return World{}, false
+		return config.World{}, false
 	}
 
-	spec := defaultComposeSpec("survival", cfg.nextFreeWorldPort())
+	spec := defaultComposeSpec("survival", cfg.NextFreeWorldPort())
 	spec.ServiceName = p.validated("\nWhat should this world be called?", spec.ServiceName, validateContainerName)
-	if _, taken := cfg.findWorld(spec.ServiceName); taken {
+	if _, taken := cfg.FindWorld(spec.ServiceName); taken {
 		printWarning("There is already a world called " + spec.ServiceName + ".")
-		return World{}, false
+		return config.World{}, false
 	}
 	spec.BackupName = spec.ServiceName + "-backup"
 
@@ -27,15 +29,15 @@ func createWorld(p *prompter, s *ServerSession, cfg *Config, facts ServerFacts) 
 	if target.Command == "" {
 		printWarning("Docker Compose does not work on that PC.")
 		printHint("Install the compose plugin there, then try again.")
-		return World{}, false
+		return config.World{}, false
 	}
 	if target.Exists() {
 		printWarning("There is already a server set up in " + dir + ".")
 		printHint("Pick another name, or remove what is there first.")
-		return World{}, false
+		return config.World{}, false
 	}
 	if !acceptEULAOnce(p, cfg) {
-		return World{}, false
+		return config.World{}, false
 	}
 
 	spec.ServerType = askServerType(p, spec.ServerType)
@@ -53,24 +55,24 @@ func createWorld(p *prompter, s *ServerSession, cfg *Config, facts ServerFacts) 
 	fmt.Printf("\nThis world will live in %s\n", dir)
 	if !p.yesNo("Create it?", true) {
 		fmt.Println("Nothing was created.")
-		return World{}, false
+		return config.World{}, false
 	}
 
 	password, err := prepareRCONPassword(s, target)
 	if err != nil {
 		printError(err.Error())
-		return World{}, false
+		return config.World{}, false
 	}
 	content, err := newComposeFile(spec)
 	if err != nil {
 		printError(err.Error())
-		return World{}, false
+		return config.World{}, false
 	}
 	if !writeComposeFiles(p, s, target, spec, content, password) {
-		return World{}, false
+		return config.World{}, false
 	}
 
-	return World{
+	return config.World{
 		Name:      spec.ServiceName,
 		Container: spec.ServiceName,
 		Port:      spec.MCPort,
@@ -82,7 +84,7 @@ func createWorld(p *prompter, s *ServerSession, cfg *Config, facts ServerFacts) 
 
 // Next to the worlds that already exist, so they end up together rather than
 // scattered wherever somebody happened to be.
-func worldDirectory(s *ServerSession, cfg *Config, name string) string {
+func worldDirectory(s *ServerSession, cfg *config.Config, name string) string {
 	base := ""
 	if world, ok := cfg.ActiveWorld(); ok && world.Dir != "" {
 		base = parentDirectory(s, world.Dir)
@@ -105,7 +107,7 @@ func parentDirectory(s *ServerSession, dir string) string {
 }
 
 // Asked once and remembered, nobody wants to accept the same licence per world.
-func acceptEULAOnce(p *prompter, cfg *Config) bool {
+func acceptEULAOnce(p *prompter, cfg *config.Config) bool {
 	if cfg.EULAAccepted {
 		return true
 	}

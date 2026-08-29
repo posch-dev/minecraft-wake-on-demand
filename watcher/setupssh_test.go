@@ -9,12 +9,14 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh/knownhosts"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 func setupSSHConfig(t *testing.T, server *testSSHServer, keyPath string) (*SSHRunner, string) {
 	t.Helper()
 	dir := filepath.Dir(keyPath)
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 	cfg.Server.IP = "127.0.0.1"
 	cfg.Server.SSHUser = "tester"

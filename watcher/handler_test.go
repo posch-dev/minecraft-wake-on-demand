@@ -8,10 +8,12 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 ) // Port 1 on loopback refuses instantly, which is the sleeping server case
 // without waiting for a timeout.
-func sleepingConfig() *Config {
-	cfg := defaultConfig()
+func sleepingConfig() *config.Config {
+	cfg := config.Default()
 	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 	cfg.Server.IP = "127.0.0.1"
 	cfg.Server.MCPort = 1
@@ -102,7 +104,7 @@ func TestStatusPingWhileSleeping(t *testing.T) {
 	if payload.Players.Max != cfg.MOTD.MaxPlayers {
 		t.Errorf("max players = %d, want %d", payload.Players.Max, cfg.MOTD.MaxPlayers)
 	}
-	if string(payload.Description) != defaultMOTDSleeping {
+	if string(payload.Description) != config.DefaultMOTDSleeping {
 		t.Errorf("description = %s, want the sleeping MOTD", payload.Description)
 	}
 }
@@ -120,7 +122,7 @@ func TestStatusPingInOneSegment(t *testing.T) {
 	}
 
 	payload := decodeStatus(t, readFrame(t, client))
-	if string(payload.Description) != defaultMOTDSleeping {
+	if string(payload.Description) != config.DefaultMOTDSleeping {
 		t.Errorf("description = %s", payload.Description)
 	}
 
@@ -163,7 +165,7 @@ func TestLoginWhileSleepingSendsWaitMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(frame[off : off+int(strLen)]); got != defaultMOTDLoginWait {
+	if got := string(frame[off : off+int(strLen)]); got != config.DefaultMOTDLoginWait {
 		t.Errorf("reason = %s", got)
 	}
 }
@@ -222,7 +224,7 @@ func TestIsLocalClient(t *testing.T) {
 
 func TestIsLocalClientHonoursConfiguredNetworks(t *testing.T) {
 	cfg := sleepingConfig()
-	cfg.Transfer.LocalNetworks = StringList{"192.168.1.0/24"}
+	cfg.Transfer.LocalNetworks = config.StringList{"192.168.1.0/24"}
 	h := NewHandler(cfg, NewWaker(cfg))
 
 	inside, _ := net.ResolveTCPAddr("tcp", "192.168.1.50:5000")
@@ -253,7 +255,7 @@ func TestHandshakeSplitAcrossReads(t *testing.T) {
 	}
 
 	payload := decodeStatus(t, readFrame(t, client))
-	if string(payload.Description) != defaultMOTDSleeping {
+	if string(payload.Description) != config.DefaultMOTDSleeping {
 		t.Errorf("description = %s, want the sleeping MOTD", payload.Description)
 	}
 }
@@ -277,7 +279,7 @@ func TestHandshakeSplitAtEveryOffset(t *testing.T) {
 		}
 
 		payload := decodeStatus(t, readFrame(t, client))
-		if string(payload.Description) != defaultMOTDSleeping {
+		if string(payload.Description) != config.DefaultMOTDSleeping {
 			t.Errorf("split %d: description = %s", split, payload.Description)
 		}
 		client.Close()
@@ -297,7 +299,7 @@ func TestAllowedHostnamesEmptyPermitsAll(t *testing.T) {
 
 func TestAllowedHostnamesBlocksUnknownRemote(t *testing.T) {
 	cfg := sleepingConfig()
-	cfg.Watcher.AllowedHostnames = StringList{"mc.example.org"}
+	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org"}
 	h := NewHandler(cfg, NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
@@ -309,7 +311,7 @@ func TestAllowedHostnamesBlocksUnknownRemote(t *testing.T) {
 
 func TestAllowedHostnamesAllowsMatchingRemote(t *testing.T) {
 	cfg := sleepingConfig()
-	cfg.Watcher.AllowedHostnames = StringList{"mc.example.org", "192.168.1.100"}
+	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org", "192.168.1.100"}
 	h := NewHandler(cfg, NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
@@ -321,7 +323,7 @@ func TestAllowedHostnamesAllowsMatchingRemote(t *testing.T) {
 
 func TestAllowedHostnamesLocalBypassesCheck(t *testing.T) {
 	cfg := sleepingConfig()
-	cfg.Watcher.AllowedHostnames = StringList{"mc.example.org"}
+	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org"}
 	h := NewHandler(cfg, NewWaker(cfg))
 
 	loopback, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:5000")
@@ -333,7 +335,7 @@ func TestAllowedHostnamesLocalBypassesCheck(t *testing.T) {
 
 func TestAllowedHostnamesMatchIsCaseInsensitive(t *testing.T) {
 	cfg := sleepingConfig()
-	cfg.Watcher.AllowedHostnames = StringList{"MC.Example.Org"}
+	cfg.Watcher.AllowedHostnames = config.StringList{"MC.Example.Org"}
 	h := NewHandler(cfg, NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
@@ -368,7 +370,7 @@ func TestAllowedHostnamesAutoPopulatedFromDuckDNS(t *testing.T) {
 
 func TestAllowedHostnamesIgnoreForgeMarker(t *testing.T) {
 	cfg := sleepingConfig()
-	cfg.Watcher.AllowedHostnames = StringList{"mc.example.org"}
+	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org"}
 	h := NewHandler(cfg, NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
@@ -387,7 +389,7 @@ func TestAllowedHostnamesIgnoreForgeMarker(t *testing.T) {
 
 func TestAllowedHostnamesStillBlockOtherNames(t *testing.T) {
 	cfg := sleepingConfig()
-	cfg.Watcher.AllowedHostnames = StringList{"mc.example.org"}
+	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org"}
 	h := NewHandler(cfg, NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")

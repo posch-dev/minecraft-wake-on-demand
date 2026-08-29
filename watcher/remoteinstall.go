@@ -5,11 +5,13 @@ import (
 	"strings"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // Staged as the user, then moved by one sudo call, so only the password
 // goes to sudo over stdin.
-func installRemoteHelperUnix(s *ServerSession, cfg *Config) error {
+func installRemoteHelperUnix(s *ServerSession, cfg *config.Config) error {
 	sleepCommand := ""
 	if cfg.Sleep.Action != "" {
 		command, err := sleepCommandUnix(cfg.Sleep.Action, cfg.Sleep.Command, s.platform.SystemctlPath)
@@ -81,7 +83,7 @@ func lastLine(value string) string {
 
 // Windows has no unattended way to gain administrator rights over SSH, so the
 // script is printed for the user to place themselves.
-func windowsHelperInstructions(cfg *Config, publicKey string) string {
+func windowsHelperInstructions(cfg *config.Config, publicKey string) string {
 	sleepCommand, err := sleepCommandWindows(cfg.Sleep.Action, cfg.Sleep.Command)
 	if err != nil {
 		sleepCommand = ""

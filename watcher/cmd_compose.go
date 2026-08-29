@@ -8,13 +8,17 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"slices"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 const eulaURL = "https://aka.ms/MinecraftEULA"
 
 // Sets the Minecraft and backup containers up on the server, either as a fresh
 // compose file or as two services added to one that is already there.
-func offerContainerSetup(p *prompter, s *ServerSession, cfg *Config, facts ServerFacts) bool {
+func offerContainerSetup(p *prompter, s *ServerSession, cfg *config.Config, facts ServerFacts) bool {
 	fmt.Println("\nYour Minecraft server")
 	if !facts.Platform.HasDocker {
 		printWarning("Docker is not installed on that PC, so there is nothing to set up yet.")
@@ -72,8 +76,8 @@ func offerContainerSetup(p *prompter, s *ServerSession, cfg *Config, facts Serve
 
 // Without this the list stays empty and 'worlds' says the server was set up
 // before MCWOD kept track, about a world MCWOD just created itself.
-func rememberFirstWorld(cfg *Config, spec ComposeSpec, dir string) {
-	cfg.Worlds.List = append(cfg.Worlds.List, World{
+func rememberFirstWorld(cfg *config.Config, spec ComposeSpec, dir string) {
+	cfg.Worlds.List = append(cfg.Worlds.List, config.World{
 		Name:      spec.ServiceName,
 		Container: spec.ServiceName,
 		Port:      spec.MCPort,
@@ -93,14 +97,14 @@ func acceptEULA(p *prompter) bool {
 	return p.yesNo("Do you accept them?", true)
 }
 
-func defaultComposeDir(s *ServerSession, cfg *Config) string {
+func defaultComposeDir(s *ServerSession, cfg *config.Config) string {
 	if s.Platform().Windows {
 		return `C:\Users\` + cfg.Server.SSHUser + `\minecraft`
 	}
 	return "/home/" + cfg.Server.SSHUser + "/minecraft"
 }
 
-func askComposeSpec(p *prompter, cfg *Config, facts ServerFacts) ComposeSpec {
+func askComposeSpec(p *prompter, cfg *config.Config, facts ServerFacts) ComposeSpec {
 	spec := defaultComposeSpec(cfg.Server.ContainerName, cfg.Server.MCPort)
 
 	spec.ServiceName = p.validated("What should this world be called?", spec.ServiceName, validateContainerName)
@@ -146,7 +150,7 @@ func serverTypeByChoice(answer string) (string, bool) {
 		}
 		return "", false
 	}
-	if contains(serverTypes, answer) {
+	if slices.Contains(serverTypes, answer) {
 		return answer, true
 	}
 	return "", false
@@ -165,12 +169,12 @@ func askWhitelist(p *prompter, admin string) []string {
 
 	answer := p.line("Which names may join? Separate them with commas", admin)
 	names := []string{}
-	for _, name := range splitList(answer) {
+	for _, name := range config.SplitList(answer) {
 		if trimmed := strings.TrimSpace(name); trimmed != "" {
 			names = append(names, trimmed)
 		}
 	}
-	if admin != "" && !contains(names, admin) {
+	if admin != "" && !slices.Contains(names, admin) {
 		names = append(names, admin)
 		printHint(admin + " was added too, an admin who cannot join is no use.")
 	}
@@ -306,7 +310,7 @@ func makeDirCommand(s *ServerSession, dir string) string {
 // Puts a compose file the watcher replaced back, and keeps the current one so
 // the restore itself can be undone.
 func runRestoreCompose() int {
-	cfg, err := LoadConfig()
+	cfg, err := config.Load()
 	if err != nil {
 		fmt.Printf("Config error: %v\n", err)
 		return 1

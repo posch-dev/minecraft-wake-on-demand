@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"slices"
 )
 
 const foreignCompose = `# Someone else's stack, do not break it.
@@ -321,7 +323,7 @@ func TestDefaultSpecPinsAConcreteVersion(t *testing.T) {
 	if strings.EqualFold(spec.MCVersion, "LATEST") {
 		t.Error("the default version must be concrete, LATEST moves on its own")
 	}
-	if !contains(serverTypes, spec.ServerType) {
+	if !slices.Contains(serverTypes, spec.ServerType) {
 		t.Errorf("default server type %q is not one of the known types", spec.ServerType)
 	}
 }

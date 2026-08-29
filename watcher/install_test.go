@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
 )
 
 func TestInstallDirFollowsTheEnvironment(t *testing.T) {
@@ -27,11 +29,11 @@ func TestExampleAssetsAreWrittenWithoutACheckout(t *testing.T) {
 	}
 
 	for _, name := range []string{"motd-sleeping.json", "motd-login-wait.json", "server-icon.png"} {
-		if !fileExists(filepath.Join(dir, "assets", "examples", name)) {
+		if !fsx.Exists(filepath.Join(dir, "assets", "examples", name)) {
 			t.Errorf("%s was not written", name)
 		}
 	}
-	if !fileExists(filepath.Join(dir, "assets")) {
+	if !fsx.Exists(filepath.Join(dir, "assets")) {
 		t.Error("assets/ was not created")
 	}
 }
@@ -77,7 +79,7 @@ func TestCopyFileLeavesNoHalfBinaryBehind(t *testing.T) {
 	if string(data) != "payload" {
 		t.Errorf("copied %q", data)
 	}
-	if fileExists(target + ".new") {
+	if fsx.Exists(target + ".new") {
 		t.Error("the temporary neighbour was left behind")
 	}
 }

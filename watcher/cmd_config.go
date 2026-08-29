@@ -7,19 +7,23 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"slices"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // Menu driven editing of an existing config.yml, reached as config, edit or
 // settings. init writes the file, this changes it afterwards.
 type configEditor struct {
-	cfg   *Config
+	cfg   *config.Config
 	doc   *yamlDocument
 	p     *prompter
 	dirty bool
 }
 
 func runConfigEdit() int {
-	cfg, err := LoadConfig()
+	cfg, err := config.Load()
 	if err != nil {
 		fmt.Printf("Config error: %v\n", err)
 		fmt.Println("\nRun 'mcwod init' first to create one.")
@@ -82,28 +86,28 @@ func (e *configEditor) printMenu() {
 	fmt.Println("  q) Save and quit")
 }
 
-func duckDNSSummary(c *Config) string {
+func duckDNSSummary(c *config.Config) string {
 	if !c.DuckDNS.Enabled {
 		return "off"
 	}
 	return fmt.Sprintf("%s, every %dh", c.DuckDNSHost(), c.DuckDNS.UpdateIntervalHours)
 }
 
-func transferSummary(c *Config) string {
+func transferSummary(c *config.Config) string {
 	if !c.Transfer.Enabled {
 		return "off, everything is proxied through the watcher"
 	}
 	return fmt.Sprintf("on, players go to %s:%d", c.Transfer.Host, c.Transfer.Port)
 }
 
-func sleepSummary(c *Config) string {
+func sleepSummary(c *config.Config) string {
 	if !c.Sleep.Enabled {
 		return "off, the server PC is never sent to sleep"
 	}
 	return fmt.Sprintf("%s after %ds without players", c.Sleep.Action, c.Sleep.IdleAfter)
 }
 
-func assetsSummary(c *Config) string {
+func assetsSummary(c *config.Config) string {
 	dir := c.AssetsDir()
 	overrides := []string{}
 	for _, name := range []string{
@@ -142,7 +146,7 @@ func (e *configEditor) editServer() {
 	e.set(c.Server.SSHUser, "server", "ssh_user")
 
 	c.Server.MAC = e.p.validated("MAC address of the server PC", c.Server.MAC, func(v string) error {
-		_, err := ParseMAC(v)
+		_, err := config.ParseMAC(v)
 		return err
 	})
 	e.set(c.Server.MAC, "server", "mac")
@@ -176,7 +180,7 @@ func (e *configEditor) editNetwork() {
 	fmt.Println("A connection from outside your network using any other name is dropped.")
 	current := strings.Join(c.Watcher.AllowedHostnames, ", ")
 	answer := e.p.line("Allowed hostnames, comma separated", current)
-	c.Watcher.AllowedHostnames = splitList(answer)
+	c.Watcher.AllowedHostnames = config.SplitList(answer)
 	e.set([]string(c.Watcher.AllowedHostnames), "watcher", "allowed_hostnames")
 }
 
@@ -189,12 +193,12 @@ func (e *configEditor) editDuckDNS() {
 	}
 
 	c.DuckDNS.Domain = e.p.validated("Your DuckDNS address", c.DuckDNSHost(), func(v string) error {
-		if normalizeDuckDNSDomain(v) == "" {
+		if config.NormalizeDuckDNSDomain(v) == "" {
 			return fmt.Errorf("that is empty, it looks like yourname.duckdns.org")
 		}
 		return nil
 	})
-	c.DuckDNS.Domain = normalizeDuckDNSDomain(c.DuckDNS.Domain)
+	c.DuckDNS.Domain = config.NormalizeDuckDNSDomain(c.DuckDNS.Domain)
 	e.set(c.DuckDNS.Domain, "duckdns", "domain")
 
 	if e.p.yesNo("Replace the DuckDNS token", false) {
@@ -252,10 +256,10 @@ func (e *configEditor) editSleep() {
 
 	c.Sleep.Action = strings.ToLower(strings.TrimSpace(e.p.validated(
 		"Which action, suspend, hibernate, shutdown or custom", c.Sleep.Action, func(v string) error {
-			if contains(sleepActions, strings.ToLower(strings.TrimSpace(v))) {
+			if slices.Contains(config.SleepActions, strings.ToLower(strings.TrimSpace(v))) {
 				return nil
 			}
-			return fmt.Errorf("pick one of %s", strings.Join(sleepActions, ", "))
+			return fmt.Errorf("pick one of %s", strings.Join(config.SleepActions, ", "))
 		})))
 	e.set(c.Sleep.Action, "sleep", "action")
 

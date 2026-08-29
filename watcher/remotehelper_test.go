@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 func TestRemoteHelperScriptOnlyAllowsTheKnownVerbs(t *testing.T) {
@@ -97,7 +99,7 @@ func TestSleepCommandRejectsAnUnknownAction(t *testing.T) {
 }
 
 func TestDirectCommandRefusesSleepWithoutTheHelper(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Server.ContainerName = "minecraft"
 
 	if _, err := directCommand(&cfg, remoteVerbSleep); err == nil {
@@ -129,7 +131,7 @@ func TestForcedCommandEntryLocksTheKeyDown(t *testing.T) {
 }
 
 func TestSleepConfigNeedsTheHelper(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 	cfg.Server.IP = "192.168.1.100"
 	cfg.Server.SSHUser = "eliah"
@@ -149,8 +151,8 @@ func TestSleepConfigNeedsTheHelper(t *testing.T) {
 }
 
 func TestSleepConfigRejectsAnUnknownActionAndShortDelays(t *testing.T) {
-	base := func() Config {
-		cfg := defaultConfig()
+	base := func() config.Config {
+		cfg := config.Default()
 		cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 		cfg.Server.IP = "192.168.1.100"
 		cfg.Server.SSHUser = "eliah"
@@ -223,7 +225,7 @@ func TestRestrictedKeyStartsTheComposeProject(t *testing.T) {
 }
 
 func TestDirectStartUsesComposeWhenTheDirectoryIsKnown(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Server.ContainerName = "minecraft"
 	cfg.Server.ComposeDir = "/srv/minecraft"
 

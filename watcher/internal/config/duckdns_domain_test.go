@@ -1,6 +1,8 @@
-package main
+package config
 
-import "testing"
+import (
+	"testing"
+)
 
 // Whichever way somebody types it, both are what people actually have in front
 // of them when they copy it out of DuckDNS.
@@ -14,21 +16,21 @@ func TestDuckDNSDomainAcceptsBothSpellings(t *testing.T) {
 		"":                        "",
 	}
 	for in, want := range cases {
-		if got := normalizeDuckDNSDomain(in); got != want {
-			t.Errorf("normalizeDuckDNSDomain(%q) = %q, want %q", in, got, want)
+		if got := NormalizeDuckDNSDomain(in); got != want {
+			t.Errorf("NormalizeDuckDNSDomain(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
 
 // Somebody's own subdomain under duckdns is still theirs, only our suffix goes.
 func TestDuckDNSDomainKeepsAForeignSubdomain(t *testing.T) {
-	if got := normalizeDuckDNSDomain("mc.eliahmc.duckdns.org"); got != "mc.eliahmc" {
+	if got := NormalizeDuckDNSDomain("mc.eliahmc.duckdns.org"); got != "mc.eliahmc" {
 		t.Errorf("got %q, want mc.eliahmc", got)
 	}
 }
 
 func TestDuckDNSHostAddsTheSuffixBack(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := Default()
 	cfg.DuckDNS.Domain = "eliahmc"
 
 	if got := cfg.DuckDNSHost(); got != "eliahmc.duckdns.org" {
@@ -43,7 +45,7 @@ func TestDuckDNSHostAddsTheSuffixBack(t *testing.T) {
 // It used to be a hard error, which is a strange thing to refuse when it is
 // the form printed on the DuckDNS page.
 func TestFullAddressNoLongerFailsValidation(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := Default()
 	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 	cfg.Server.IP = "192.168.1.100"
 	cfg.Server.SSHUser = "eliah"

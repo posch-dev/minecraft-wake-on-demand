@@ -6,14 +6,16 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 func assetsForWorld(t *testing.T, world string) (*Assets, string) {
 	t.Helper()
 	dir := t.TempDir()
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Path = filepath.Join(dir, "config.yml")
-	cfg.Worlds = WorldsConfig{Active: world, List: []World{{Name: world, Container: world}}}
+	cfg.Worlds = config.WorldsConfig{Active: world, List: []config.World{{Name: world, Container: world}}}
 
 	assets := NewAssets(&cfg)
 	assets.dir = dir
@@ -94,7 +96,7 @@ func TestComposedIconUsesTheWorldsBasePicture(t *testing.T) {
 // A config with no worlds block must not look for a folder nobody made.
 func TestSingleWorldSetupLooksOnlyAtTheSharedFiles(t *testing.T) {
 	dir := t.TempDir()
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Path = filepath.Join(dir, "config.yml")
 	cfg.Server.ContainerName = "minecraft"
 	assets := NewAssets(&cfg)
@@ -123,7 +125,7 @@ func TestLoginWaitMessageCanBeOverridden(t *testing.T) {
 		t.Errorf("login wait = %s, want the shared file", assets.MOTDLoginWait())
 	}
 
-	assets.cfg.Worlds.List = []World{{Name: "creative"}}
+	assets.cfg.Worlds.List = []config.World{{Name: "creative"}}
 	assets.cfg.Worlds.Active = "creative"
 	world := filepath.Join(dir, "worlds", "creative")
 	if err := os.MkdirAll(world, 0o755); err != nil {

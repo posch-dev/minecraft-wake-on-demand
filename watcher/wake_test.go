@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 func TestBuildMagicPacket(t *testing.T) {
@@ -59,7 +61,7 @@ func TestSendMagicPacketReachesTheWire(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			listener, port := listenUDP(t)
 
-			cfg := defaultConfig()
+			cfg := config.Default()
 			cfg.Server.MAC = "01:23:45:67:89:AB"
 			cfg.Server.IP = "127.0.0.1"
 			cfg.Server.SSHUser = "tester"
@@ -90,7 +92,7 @@ func TestSendMagicPacketReachesTheWire(t *testing.T) {
 }
 
 func TestCooldownWithoutFailuresUsesTheShortGap(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Limits.BootCooldown = 10
 	waker := NewWaker(&cfg)
 
@@ -107,7 +109,7 @@ func TestCooldownWithoutFailuresUsesTheShortGap(t *testing.T) {
 
 // The gap doubles per failure and stops at boot_max_backoff.
 func TestFailureBackoffDoublesAndIsCapped(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Limits.BootCooldown = 10
 	cfg.Limits.BootFailureBackoff = 60
 	cfg.Limits.BootMaxBackoff = 900
@@ -135,7 +137,7 @@ func TestFailureBackoffDoublesAndIsCapped(t *testing.T) {
 // The Python version relied on arbitrary precision integers here, a fixed
 // width shift would overflow into a negative delay.
 func TestBackoffSurvivesAbsurdFailureCounts(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.Limits.BootFailureBackoff = 60
 	cfg.Limits.BootMaxBackoff = 900
 	waker := NewWaker(&cfg)
@@ -154,7 +156,7 @@ func TestBackoffSurvivesAbsurdFailureCounts(t *testing.T) {
 }
 
 func TestBootStateTracksFailuresAndResets(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := config.Default()
 	waker := NewWaker(&cfg)
 
 	if waker.Booting() {

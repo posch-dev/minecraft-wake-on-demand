@@ -3,11 +3,13 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 // Only offered to someone reachable from outside, and off unless asked for.
 func TestTransferModeIsNotOfferedWithoutDuckDNS(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.DuckDNS.Enabled = false
 
 	askTransferMode(newPrompterFrom(strings.NewReader("y\n25566\n")), &cfg)
@@ -18,7 +20,7 @@ func TestTransferModeIsNotOfferedWithoutDuckDNS(t *testing.T) {
 }
 
 func TestTransferModeAsksForTheForwardedPort(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.DuckDNS.Enabled = true
 	cfg.DuckDNS.Domain = "kicercraft"
 	cfg.Server.IP = "192.168.178.176"
@@ -38,7 +40,7 @@ func TestTransferModeAsksForTheForwardedPort(t *testing.T) {
 }
 
 func TestTransferModeStaysOffWhenDeclined(t *testing.T) {
-	cfg := defaultConfig()
+	cfg := config.Default()
 	cfg.DuckDNS.Enabled = true
 	cfg.DuckDNS.Domain = "kicercraft"
 

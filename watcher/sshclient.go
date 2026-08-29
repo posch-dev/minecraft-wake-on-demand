@@ -17,12 +17,14 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 const sshPort = 22
 
 type SSHRunner struct {
-	cfg *Config
+	cfg *config.Config
 
 	// Always 22 in production, the tests point it at a local server.
 	port int
@@ -31,7 +33,7 @@ type SSHRunner struct {
 	knownHostsMu sync.Mutex
 }
 
-func NewSSHRunner(cfg *Config) *SSHRunner {
+func NewSSHRunner(cfg *config.Config) *SSHRunner {
 	return &SSHRunner{cfg: cfg, port: sshPort}
 }
 

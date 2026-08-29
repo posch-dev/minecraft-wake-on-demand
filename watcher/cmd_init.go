@@ -17,6 +17,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
 type prompter struct {
@@ -124,7 +126,7 @@ func runInit() int {
 	fmt.Println("Press Enter to accept the value in brackets.")
 
 	p := newPrompter()
-	cfg := defaultConfig()
+	cfg := config.Default()
 
 	fmt.Println("\nNothing is set up yet, so let's do that now.")
 	printHint("You can change all of this later.")
@@ -187,12 +189,12 @@ func runInit() int {
 	cfg.DuckDNS.Enabled = p.yesNo("Use DuckDNS?", true)
 	if cfg.DuckDNS.Enabled {
 		cfg.DuckDNS.Domain = p.validated("Your DuckDNS address", "", func(v string) error {
-			if normalizeDuckDNSDomain(v) == "" {
+			if config.NormalizeDuckDNSDomain(v) == "" {
 				return fmt.Errorf("that is empty, it looks like yourname.duckdns.org")
 			}
 			return nil
 		})
-		cfg.DuckDNS.Domain = normalizeDuckDNSDomain(cfg.DuckDNS.Domain)
+		cfg.DuckDNS.Domain = config.NormalizeDuckDNSDomain(cfg.DuckDNS.Domain)
 		printHint("It stays visible here so you can check it, and it goes into",
 			"config.yml, which only your user can read.")
 		for cfg.DuckDNS.Token == "" && !p.exhausted {
@@ -258,7 +260,7 @@ func askMAC(p *prompter, ip string) string {
 	}
 
 	return p.validated("MAC address of the server PC", detected, func(v string) error {
-		if _, err := ParseMAC(v); err != nil {
+		if _, err := config.ParseMAC(v); err != nil {
 			return fmt.Errorf("that is not a MAC address, it looks like AA:BB:CC:DD:EE:FF")
 		}
 		return nil
@@ -337,7 +339,7 @@ func configTargetPath() string {
 }
 
 // The file holds the DuckDNS token, so it is not readable by other users.
-func writeConfig(path string, cfg *Config) error {
+func writeConfig(path string, cfg *config.Config) error {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return err
@@ -369,7 +371,7 @@ func giveToInvokingUser(path string) {
 
 // Only worth offering to someone whose friends come in from outside, everyone
 // else has nothing to forward and nothing to gain.
-func askTransferMode(p *prompter, cfg *Config) {
+func askTransferMode(p *prompter, cfg *config.Config) {
 	if !cfg.DuckDNS.Enabled {
 		return
 	}
