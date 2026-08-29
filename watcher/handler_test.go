@@ -11,6 +11,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/serverinfo"
 )
 
 // without waiting for a timeout.
@@ -178,8 +179,8 @@ func TestStatusPingWhileSleepingShowsCachedInfo(t *testing.T) {
 	cfg.Path = filepath.Join(dir, "config.yml")
 
 	cachePath := filepath.Join(dir, ".server-info.json")
-	sv := &ServerInfo{Name: "1.21.4", Protocol: 769, Updated: time.Now()}
-	data, _ := json.Marshal(map[string]*ServerInfo{"default": sv})
+	sv := &serverinfo.Info{Name: "1.21.4", Protocol: 769, Updated: time.Now()}
+	data, _ := json.Marshal(map[string]*serverinfo.Info{"default": sv})
 	if err := os.WriteFile(cachePath, data, 0644); err != nil {
 		t.Fatal(err)
 	}

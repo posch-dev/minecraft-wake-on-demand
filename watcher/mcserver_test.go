@@ -14,6 +14,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/serverinfo"
 )
 
 // Stands in for the real Minecraft server so the paths that only run when the
@@ -248,47 +249,6 @@ func readFull(conn net.Conn, buf []byte) (int, error) {
 	return total, nil
 }
 
-func TestSaveAndLoadServerInfoRoundTrip(t *testing.T) {
-	dir := t.TempDir()
-	cfg := config.Default()
-	cfg.Path = filepath.Join(dir, "config.yml")
-
-	waker := NewWaker(&cfg)
-	sv := &ServerInfo{Name: "1.21.4", Protocol: 769, Updated: time.Now()}
-	waker.saveServerInfo(sv)
-
-	waker2 := NewWaker(&cfg)
-	cached := waker2.CachedInfo()
-	if cached == nil {
-		t.Fatal("cached version was not loaded")
-	}
-	if cached.Name != "1.21.4" || cached.Protocol != 769 {
-		t.Errorf("cached = %+v", cached)
-	}
-}
-
-// Two worlds run two Minecraft versions, so one must not answer for the other.
-func TestServerInfoIsKeptPerWorld(t *testing.T) {
-	dir := t.TempDir()
-	cfg := config.Default()
-	cfg.Path = filepath.Join(dir, "config.yml")
-	cfg.Worlds.List = []config.World{{Name: "survival"}, {Name: "creative"}}
-
-	cfg.Worlds.Active = "survival"
-	NewWaker(&cfg).saveServerInfo(&ServerInfo{Name: "1.21.4", Protocol: 769})
-	cfg.Worlds.Active = "creative"
-	NewWaker(&cfg).saveServerInfo(&ServerInfo{Name: "26.2", Protocol: 776})
-
-	cfg.Worlds.Active = "survival"
-	if got := NewWaker(&cfg).CachedInfo(); got == nil || got.Protocol != 769 {
-		t.Errorf("survival = %+v, want protocol 769", got)
-	}
-	cfg.Worlds.Active = "creative"
-	if got := NewWaker(&cfg).CachedInfo(); got == nil || got.Protocol != 776 {
-		t.Errorf("creative = %+v, want protocol 776", got)
-	}
-}
-
 // Changing a world's version invalidates what was learned about it, the other
 // world keeps its entry.
 func TestForgetServerInfoDropsOnlyOneWorld(t *testing.T) {
@@ -298,11 +258,11 @@ func TestForgetServerInfoDropsOnlyOneWorld(t *testing.T) {
 	cfg.Worlds.List = []config.World{{Name: "survival"}, {Name: "creative"}}
 
 	cfg.Worlds.Active = "survival"
-	NewWaker(&cfg).saveServerInfo(&ServerInfo{Name: "1.21.4", Protocol: 769})
+	serverinfo.Save(&cfg, &serverinfo.Info{Name: "1.21.4", Protocol: 769})
 	cfg.Worlds.Active = "creative"
-	NewWaker(&cfg).saveServerInfo(&ServerInfo{Name: "26.2", Protocol: 776})
+	serverinfo.Save(&cfg, &serverinfo.Info{Name: "26.2", Protocol: 776})
 
-	forgetServerInfo(&cfg, "survival")
+	serverinfo.Forget(&cfg, "survival")
 
 	cfg.Worlds.Active = "survival"
 	if got := NewWaker(&cfg).CachedInfo(); got != nil {
@@ -328,7 +288,7 @@ func TestServerInfoFromAnOlderVersionIsIgnored(t *testing.T) {
 		t.Errorf("cached = %+v, want nothing", got)
 	}
 
-	NewWaker(&cfg).saveServerInfo(&ServerInfo{Name: "26.2", Protocol: 776})
+	serverinfo.Save(&cfg, &serverinfo.Info{Name: "26.2", Protocol: 776})
 	if got := NewWaker(&cfg).CachedInfo(); got == nil || got.Protocol != 776 {
 		t.Errorf("cached = %+v, want protocol 776", got)
 	}

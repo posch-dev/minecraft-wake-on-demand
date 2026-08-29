@@ -1,15 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
@@ -17,23 +12,15 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/netprobe"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/serverinfo"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/wol"
 )
 
 // A burst of connections shares one probe instead of hammering the server.
 const mcReachableTTL = 2 * time.Second
 
 // The discard protocol port, where wake capable hardware listens.
-const wolPort = 9
-
-// What a status probe told us about the running server, kept across restarts so
-// the watcher can answer for it while it sleeps.
-type ServerInfo struct {
-	Name       string    `json:"name"`
-	Protocol   int       `json:"protocol"`
-	MaxPlayers int       `json:"max_players"`
-	Updated    time.Time `json:"updated"`
-}
 
 type Waker struct {
 	cfg    *config.Config
@@ -41,7 +28,6 @@ type Waker struct {
 	ssh    *sshx.SSHRunner
 
 	// Always 9 in production, the tests point it at a local listener.
-	wolPort int
 
 	// Serializes whole boot sequences, only one wake runs at a time.
 	bootMu sync.Mutex
@@ -63,85 +49,20 @@ type Waker struct {
 	reachChecked time.Time
 
 	infoMu sync.Mutex
-	info   *ServerInfo
+	info   *serverinfo.Info
 }
 
 func NewWaker(cfg *config.Config) *Waker {
 	w := &Waker{
-		cfg:     cfg,
-		wolPort: wolPort,
-		pinger:  &netprobe.Pinger{},
-		ssh:     sshx.NewSSHRunner(cfg),
+		cfg:    cfg,
+		pinger: &netprobe.Pinger{},
+		ssh:    sshx.NewSSHRunner(cfg),
 	}
-	w.loadServerInfo()
+	w.info = serverinfo.Load(w.cfg)
 	return w
 }
 
-func (w *Waker) loadServerInfo() {
-	cache := readServerInfoCache(w.cfg.ServerInfoPath())
-	info, ok := cache[w.cfg.ServerInfoKey()]
-	if !ok {
-		return
-	}
-	w.info = info
-	logging.Infof("Loaded cached server info: %s (protocol %d, max players %d)",
-		info.Name, info.Protocol, info.MaxPlayers)
-}
-
-func (w *Waker) saveServerInfo(info *ServerInfo) {
-	path := w.cfg.ServerInfoPath()
-	cache := readServerInfoCache(path)
-	cache[w.cfg.ServerInfoKey()] = info
-	writeServerInfoCache(path, cache)
-}
-
-// Empty rather than nil on any problem, so a caller can always write into it.
-// An older single world file does not fit the shape and is left to be replaced.
-func readServerInfoCache(path string) map[string]*ServerInfo {
-	cache := map[string]*ServerInfo{}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return cache
-	}
-	if err := json.Unmarshal(data, &cache); err != nil {
-		logging.Infof("Replacing the server info cache %s, it is from an older version", path)
-		return map[string]*ServerInfo{}
-	}
-	return cache
-}
-
-// The cache holds nothing secret, 0600 only keeps other accounts on the watcher
-// from feeding the proxy a version it never probed.
-func writeServerInfoCache(path string, cache map[string]*ServerInfo) {
-	data, err := json.MarshalIndent(cache, "", "  ")
-	if err != nil {
-		logging.Warnf("Cannot encode server info cache: %v", err)
-		return
-	}
-	tmpPath := fmt.Sprintf("%s.tmp.%d", path, time.Now().UnixNano())
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
-		logging.Warnf("Cannot write server info cache %s: %v", tmpPath, err)
-		return
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		logging.Warnf("Cannot update server info cache %s: %v", path, err)
-		os.Remove(tmpPath)
-	}
-}
-
-// A world that changed its Minecraft version would otherwise keep claiming the
-// old one until someone connects.
-func forgetServerInfo(cfg *config.Config, world string) {
-	path := cfg.ServerInfoPath()
-	cache := readServerInfoCache(path)
-	if _, ok := cache[world]; !ok {
-		return
-	}
-	delete(cache, world)
-	writeServerInfoCache(path, cache)
-}
-
-func (w *Waker) CachedInfo() *ServerInfo {
+func (w *Waker) CachedInfo() *serverinfo.Info {
 	w.infoMu.Lock()
 	defer w.infoMu.Unlock()
 	return w.info
@@ -155,55 +76,6 @@ func (w *Waker) Booting() bool {
 	w.stateMu.Lock()
 	defer w.stateMu.Unlock()
 	return w.booting
-}
-
-// Six 0xFF bytes followed by the MAC sixteen times, 102 bytes in total.
-func buildMagicPacket(mac string) ([]byte, error) {
-	parsed, err := config.ParseMAC(mac)
-	if err != nil {
-		return nil, err
-	}
-	payload := bytes.Repeat([]byte{0xFF}, 6)
-	for i := 0; i < 16; i++ {
-		payload = append(payload, parsed...)
-	}
-	return payload, nil
-}
-
-func (w *Waker) SendMagicPacket() error {
-	payload, err := buildMagicPacket(w.cfg.Server.MAC)
-	if err != nil {
-		return err
-	}
-
-	target := w.cfg.Server.IP
-	broadcast := w.cfg.WoL.Mode == "broadcast"
-	if broadcast {
-		target = w.cfg.WoL.BroadcastAddress
-	}
-
-	dialer := net.Dialer{Timeout: 5 * time.Second}
-	if broadcast {
-		dialer.Control = func(network, address string, c syscall.RawConn) error {
-			var sockErr error
-			if err := c.Control(func(fd uintptr) { sockErr = setBroadcast(fd) }); err != nil {
-				return err
-			}
-			return sockErr
-		}
-	}
-
-	conn, err := dialer.Dial("udp", net.JoinHostPort(target, strconv.Itoa(w.wolPort)))
-	if err != nil {
-		return fmt.Errorf("cannot open WoL socket: %w", err)
-	}
-	defer conn.Close()
-
-	if _, err := conn.Write(payload); err != nil {
-		return fmt.Errorf("cannot send WoL packet: %w", err)
-	}
-	logging.Infof("WoL magic packet sent to %s (%s mode)", target, w.cfg.WoL.Mode)
-	return nil
 }
 
 // force skips the cache, needed once the boot lock is held because another
@@ -281,7 +153,7 @@ func (w *Waker) learnServerInfo(body []byte) {
 	w.infoMu.Lock()
 	defer w.infoMu.Unlock()
 
-	learned := &ServerInfo{
+	learned := &serverinfo.Info{
 		Name:       payload.Version.Name,
 		Protocol:   payload.Version.Protocol,
 		MaxPlayers: payload.Players.Max,
@@ -295,7 +167,7 @@ func (w *Waker) learnServerInfo(body []byte) {
 	w.info = learned
 	logging.Infof("Learned server info: %s (protocol %d, max players %d)",
 		learned.Name, learned.Protocol, learned.MaxPlayers)
-	go w.saveServerInfo(learned)
+	go serverinfo.Save(w.cfg, learned)
 }
 
 // When the server PC last finished booting, so the sleep monitor can leave it
@@ -457,7 +329,7 @@ func (w *Waker) FullBoot(ctx context.Context) bool {
 		logging.Infof("Server PC is up but MC not running, starting container...")
 	} else {
 		logging.Infof("Server PC is sleeping, sending WoL...")
-		if err := w.SendMagicPacket(); err != nil {
+		if err := wol.Send(w.cfg, wol.Port); err != nil {
 			logging.Errorf("WoL failed: %v", err)
 			return false
 		}

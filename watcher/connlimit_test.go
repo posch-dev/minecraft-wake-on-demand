@@ -3,6 +3,8 @@ package main
 import (
 	"net"
 	"testing"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/serverinfo"
 )
 
 func addrFor(t *testing.T, hostPort string) net.Addr {
@@ -91,7 +93,7 @@ func TestLoginLimitFollowsLearnedPlayerSlots(t *testing.T) {
 	}
 
 	waker.infoMu.Lock()
-	waker.info = &ServerInfo{Name: "1.21.4", Protocol: 769, MaxPlayers: 40}
+	waker.info = &serverinfo.Info{Name: "1.21.4", Protocol: 769, MaxPlayers: 40}
 	waker.infoMu.Unlock()
 	h.refreshConnectionLimits()
 
@@ -107,7 +109,7 @@ func TestConfiguredLoginLimitWinsOverLearnedSlots(t *testing.T) {
 	cfg := sleepingConfig()
 	cfg.Limits.MaxLogins = 3
 	waker := NewWaker(cfg)
-	waker.info = &ServerInfo{Name: "1.21.4", Protocol: 769, MaxPlayers: 40}
+	waker.info = &serverinfo.Info{Name: "1.21.4", Protocol: 769, MaxPlayers: 40}
 	h := NewHandler(cfg, waker)
 
 	if got := h.loginConnections.max; got != 3 {

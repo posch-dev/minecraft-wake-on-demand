@@ -9,6 +9,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/serverinfo"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/yamledit"
 )
@@ -213,7 +214,7 @@ func recordWorldChange(doc *yamledit.Document, cfg *config.Config, name, serverT
 	if err := doc.Set([]string{"worlds", "list"}, worlds); err != nil {
 		return err
 	}
-	forgetServerInfo(cfg, name)
+	serverinfo.Forget(cfg, name)
 	if cfg.Worlds.Active == "" {
 		if err := doc.Set([]string{"worlds", "active"}, worlds[0].Name); err != nil {
 			return err
