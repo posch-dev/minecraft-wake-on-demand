@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/yamledit"
 )
@@ -292,7 +293,7 @@ func openServerSession(p *ui.Prompter, cfg *config.Config) (*ServerSession, int)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	session, err := DialServerSession(ctx, NewSSHRunner(cfg), password, p)
+	session, err := DialServerSession(ctx, sshx.NewSSHRunner(cfg), password, p)
 	if err != nil {
 		cancel()
 		ui.PrintError(err.Error())

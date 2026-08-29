@@ -12,6 +12,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/netprobe"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"golang.org/x/crypto/ssh"
 )
@@ -164,7 +165,7 @@ func checkListenPort(c *checker, cfg *config.Config) {
 func checkSSHKey(c *checker, cfg *config.Config) bool {
 	c.section("SSH key")
 	path := cfg.ResolvedSSHKeyPath()
-	signer, err := loadPrivateKey(path)
+	signer, err := sshx.LoadPrivateKey(path)
 	if err != nil {
 		c.fail("%v", err)
 		c.hint("run: mcwod setup-ssh")
@@ -184,7 +185,7 @@ func checkSSHKey(c *checker, cfg *config.Config) bool {
 		c.hint("set it to accept-new unless you have a reason not to")
 	} else {
 		known := cfg.ResolvedKnownHostsPath()
-		if err := ensureKnownHostsFile(known); err != nil {
+		if err := sshx.EnsureKnownHostsFile(known); err != nil {
 			c.fail("%v", err)
 			return false
 		}
@@ -218,14 +219,14 @@ func checkServer(c *checker, cfg *config.Config, ctx context.Context) bool {
 
 func checkSSHLogin(c *checker, cfg *config.Config, ctx context.Context) {
 	c.section("SSH login and container")
-	runner := NewSSHRunner(cfg)
+	runner := sshx.NewSSHRunner(cfg)
 
 	if cfg.Server.RemoteHelper {
 		checkRemoteHelper(c, cfg, runner, ctx)
 		return
 	}
 
-	out, err := runner.RunVerb(ctx, remoteVerbStatus)
+	out, err := RunVerb(ctx, runner, remoteVerbStatus)
 	if err != nil {
 		if isAuthFailure(err) {
 			c.fail("SSH login as %s failed: %v", cfg.Server.SSHUser, err)
@@ -248,7 +249,7 @@ func checkSSHLogin(c *checker, cfg *config.Config, ctx context.Context) {
 
 // With the helper installed, check can ask real questions instead of guessing
 // from a refused command.
-func checkRemoteHelper(c *checker, cfg *config.Config, runner *SSHRunner, ctx context.Context) {
+func checkRemoteHelper(c *checker, cfg *config.Config, runner *sshx.SSHRunner, ctx context.Context) {
 	out, err := runner.Run(ctx, remoteVerbHello)
 	if err != nil {
 		if isAuthFailure(err) {
@@ -280,7 +281,7 @@ func checkRemoteHelper(c *checker, cfg *config.Config, runner *SSHRunner, ctx co
 	}
 	c.ok("helper answered, the key is bound to %s", remoteHelperPathUnix)
 
-	state, err := runner.RunVerb(ctx, remoteVerbStatus)
+	state, err := RunVerb(ctx, runner, remoteVerbStatus)
 	if err != nil {
 		c.warn("the helper could not inspect the container: %v", err)
 	} else {
@@ -293,8 +294,8 @@ func checkRemoteHelper(c *checker, cfg *config.Config, runner *SSHRunner, ctx co
 
 // A NIC with Wake-on-LAN switched off in the driver is the most common reason
 // this whole project does nothing, and nothing else in the setup reveals it.
-func checkWakeOnLANDriver(c *checker, runner *SSHRunner, ctx context.Context) {
-	out, err := runner.RunVerb(ctx, remoteVerbWoLStatus)
+func checkWakeOnLANDriver(c *checker, runner *sshx.SSHRunner, ctx context.Context) {
+	out, err := RunVerb(ctx, runner, remoteVerbWoLStatus)
 	if err != nil {
 		c.info("could not read the Wake-on-LAN setting from the network driver")
 		c.hint("check it yourself with: ethtool <interface> | grep Wake-on")
@@ -315,8 +316,8 @@ func checkWakeOnLANDriver(c *checker, runner *SSHRunner, ctx context.Context) {
 
 // The sleep monitor counts players through this, so a container without RCON
 // would leave it unable to tell an empty server from a busy one.
-func checkPlayerQuery(c *checker, cfg *config.Config, runner *SSHRunner, ctx context.Context) {
-	out, err := runner.RunVerb(ctx, remoteVerbPlayers)
+func checkPlayerQuery(c *checker, cfg *config.Config, runner *sshx.SSHRunner, ctx context.Context) {
+	out, err := RunVerb(ctx, runner, remoteVerbPlayers)
 	if err != nil {
 		if !cfg.Sleep.Enabled {
 			c.info("the player count is not available: %v", err)

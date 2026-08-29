@@ -16,6 +16,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -75,7 +76,7 @@ func runSetupSSH() int {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	session, err := DialServerSession(ctx, NewSSHRunner(cfg), password, p)
+	session, err := DialServerSession(ctx, sshx.NewSSHRunner(cfg), password, p)
 	if err != nil {
 		fmt.Printf("\n%v\n", err)
 		return 1
@@ -136,7 +137,7 @@ func runSetupSSH() int {
 	}
 
 	fmt.Println("\nVerifying the key works...")
-	runner := NewSSHRunner(cfg)
+	runner := sshx.NewSSHRunner(cfg)
 
 	if !helperInstalled {
 		if _, err := runner.Run(ctx, "true"); err != nil {
@@ -183,7 +184,7 @@ var installableSleepActions = []string{"suspend", "hibernate", "shutdown"}
 // has no way to type one.
 func ensureKeyPair(path string) (ssh.Signer, error) {
 	if _, err := os.Stat(path); err == nil {
-		signer, err := loadPrivateKey(path)
+		signer, err := sshx.LoadPrivateKey(path)
 		if err != nil {
 			return nil, err
 		}
@@ -265,9 +266,9 @@ func shellSafe(value string) string {
 
 // Always asks, whatever ssh_strict_host_key says. Someone is sitting here,
 // so the fingerprint gets shown instead of silently trusted.
-func interactiveHostKeyCallback(runner *SSHRunner, p *ui.Prompter) (ssh.HostKeyCallback, error) {
-	path := runner.cfg.ResolvedKnownHostsPath()
-	if err := ensureKnownHostsFile(path); err != nil {
+func interactiveHostKeyCallback(runner *sshx.SSHRunner, p *ui.Prompter) (ssh.HostKeyCallback, error) {
+	path := runner.Config().ResolvedKnownHostsPath()
+	if err := sshx.EnsureKnownHostsFile(path); err != nil {
 		return nil, err
 	}
 	verify, err := knownhosts.New(path)
@@ -297,7 +298,7 @@ func interactiveHostKeyCallback(runner *SSHRunner, p *ui.Prompter) (ssh.HostKeyC
 		if !p.YesNo("Is that the right server", false) {
 			return fmt.Errorf("host key rejected")
 		}
-		return runner.appendKnownHost(path, hostname, key)
+		return runner.AppendKnownHost(path, hostname, key)
 	}, nil
 }
 

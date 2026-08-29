@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"golang.org/x/crypto/ssh"
 )
@@ -53,13 +54,13 @@ func passwordAuth(password string) []ssh.AuthMethod {
 	}
 }
 
-func DialServerSession(ctx context.Context, runner *SSHRunner, password string, p *ui.Prompter) (*ServerSession, error) {
+func DialServerSession(ctx context.Context, runner *sshx.SSHRunner, password string, p *ui.Prompter) (*ServerSession, error) {
 	callback, err := interactiveHostKeyCallback(runner, p)
 	if err != nil {
 		return nil, err
 	}
 	clientCfg := &ssh.ClientConfig{
-		User:            runner.cfg.Server.SSHUser,
+		User:            runner.Config().Server.SSHUser,
 		Auth:            passwordAuth(password),
 		HostKeyCallback: callback,
 		Timeout:         15 * time.Second,
@@ -75,7 +76,7 @@ func DialServerSession(ctx context.Context, runner *SSHRunner, password string, 
 	sshConn, chans, reqs, err := ssh.NewClientConn(conn, runner.Address(), clientCfg)
 	if err != nil {
 		conn.Close()
-		return nil, fmt.Errorf("login as %s failed: %w", runner.cfg.Server.SSHUser, err)
+		return nil, fmt.Errorf("login as %s failed: %w", runner.Config().Server.SSHUser, err)
 	}
 	conn.SetDeadline(time.Time{})
 

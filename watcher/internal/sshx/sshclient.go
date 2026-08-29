@@ -1,4 +1,4 @@
-package main
+package sshx
 
 import (
 	"context"
@@ -35,13 +35,16 @@ func NewSSHRunner(cfg *config.Config) *SSHRunner {
 	return &SSHRunner{cfg: cfg, port: sshPort}
 }
 
+// Only a test points this anywhere but 22.
+func (r *SSHRunner) SetPort(port int) { r.port = port }
+
 func (r *SSHRunner) Address() string {
 	return net.JoinHostPort(r.cfg.Server.IP, strconv.Itoa(r.port))
 }
 
 // OpenSSH refuses group or world readable keys and so do we, an unattended
 // service has no business reading a key everyone on the box can read.
-func loadPrivateKey(path string) (ssh.Signer, error) {
+func LoadPrivateKey(path string) (ssh.Signer, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -79,7 +82,7 @@ func (r *SSHRunner) hostKeyCallback() (ssh.HostKeyCallback, error) {
 	}
 
 	path := r.cfg.ResolvedKnownHostsPath()
-	if err := ensureKnownHostsFile(path); err != nil {
+	if err := EnsureKnownHostsFile(path); err != nil {
 		return nil, err
 	}
 	verify, err := knownhosts.New(path)
@@ -112,7 +115,7 @@ func (r *SSHRunner) hostKeyCallback() (ssh.HostKeyCallback, error) {
 
 		logging.Infof("Learned host key for %s (%s), fingerprint %s",
 			hostname, key.Type(), ssh.FingerprintSHA256(key))
-		return r.appendKnownHost(path, hostname, key)
+		return r.AppendKnownHost(path, hostname, key)
 	}, nil
 }
 
@@ -127,7 +130,7 @@ func (r *SSHRunner) acceptAnyHostKey() ssh.HostKeyCallback {
 	}
 }
 
-func ensureKnownHostsFile(path string) error {
+func EnsureKnownHostsFile(path string) error {
 	if _, err := os.Stat(path); err == nil {
 		return nil
 	} else if !os.IsNotExist(err) {
@@ -145,7 +148,7 @@ func ensureKnownHostsFile(path string) error {
 	return f.Close()
 }
 
-func (r *SSHRunner) appendKnownHost(path, hostname string, key ssh.PublicKey) error {
+func (r *SSHRunner) AppendKnownHost(path, hostname string, key ssh.PublicKey) error {
 	r.knownHostsMu.Lock()
 	defer r.knownHostsMu.Unlock()
 
@@ -163,7 +166,7 @@ func (r *SSHRunner) appendKnownHost(path, hostname string, key ssh.PublicKey) er
 }
 
 func (r *SSHRunner) clientConfig() (*ssh.ClientConfig, error) {
-	signer, err := loadPrivateKey(r.cfg.ResolvedSSHKeyPath())
+	signer, err := LoadPrivateKey(r.cfg.ResolvedSSHKeyPath())
 	if err != nil {
 		return nil, err
 	}
@@ -235,46 +238,6 @@ func (r *SSHRunner) Run(ctx context.Context, command string) (string, error) {
 	}
 }
 
-// With the helper, a bare verb. Without it, the whole command, which is what
-// a plain key and the older forced command expect.
-func (r *SSHRunner) RunVerb(ctx context.Context, verb string) (string, error) {
-	if r.cfg.Server.RemoteHelper {
-		return r.Run(ctx, verb)
-	}
-	command, err := directCommand(r.cfg, verb)
-	if err != nil {
-		return "", err
-	}
-	return r.Run(ctx, command)
-}
-
-// A restricted key may ignore the command entirely, which is the recommended
-// setup, so an empty response is success as long as the exit status is zero.
-func (r *SSHRunner) StartContainer(ctx context.Context) error {
-	logging.Infof("Starting container %s via SSH", r.cfg.Server.ContainerName)
-
-	out, err := r.RunVerb(ctx, remoteVerbStart)
-	if err != nil {
-		if out != "" {
-			return fmt.Errorf("%w: %s", err, logging.Sanitize(out, 200))
-		}
-		return err
-	}
-	logging.Infof("Container started successfully")
-	return nil
-}
-
-// Used before a hibernate or shutdown so the world is written out. Suspend does
-// not need it, the process simply resumes.
-func (r *SSHRunner) StopContainer(ctx context.Context) error {
-	logging.Infof("Stopping container %s via SSH", r.cfg.Server.ContainerName)
-
-	out, err := r.RunVerb(ctx, remoteVerbStop)
-	if err != nil {
-		if out != "" {
-			return fmt.Errorf("%w: %s", err, logging.Sanitize(out, 200))
-		}
-		return err
-	}
-	return nil
-}
+// The verbs and what they mean live in the remote package, which needs the
+// config this runner was built with.
+func (r *SSHRunner) Config() *config.Config { return r.cfg }

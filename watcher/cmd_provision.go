@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
@@ -22,7 +23,7 @@ func provisionServer(ctx context.Context, p *ui.Prompter, cfg *config.Config, pu
 		return false
 	}
 
-	session, err := DialServerSession(ctx, NewSSHRunner(cfg), password, p)
+	session, err := DialServerSession(ctx, sshx.NewSSHRunner(cfg), password, p)
 	if err != nil {
 		fmt.Printf("\n%v\n", err)
 		fmt.Println("Falling back to the questions.")

@@ -10,6 +10,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
@@ -327,7 +328,7 @@ func runRestoreCompose() int {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	session, err := DialServerSession(ctx, NewSSHRunner(cfg), password, p)
+	session, err := DialServerSession(ctx, sshx.NewSSHRunner(cfg), password, p)
 	if err != nil {
 		fmt.Printf("\n%v\n", err)
 		return 1

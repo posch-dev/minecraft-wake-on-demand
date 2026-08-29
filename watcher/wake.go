@@ -16,6 +16,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/netprobe"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 )
 
 // A burst of connections shares one probe instead of hammering the server.
@@ -36,7 +37,7 @@ type ServerInfo struct {
 type Waker struct {
 	cfg    *config.Config
 	pinger *netprobe.Pinger
-	ssh    *SSHRunner
+	ssh    *sshx.SSHRunner
 
 	// Always 9 in production, the tests point it at a local listener.
 	wolPort int
@@ -69,7 +70,7 @@ func NewWaker(cfg *config.Config) *Waker {
 		cfg:     cfg,
 		wolPort: wolPort,
 		pinger:  &netprobe.Pinger{},
-		ssh:     NewSSHRunner(cfg),
+		ssh:     sshx.NewSSHRunner(cfg),
 	}
 	w.loadServerInfo()
 	return w
@@ -467,7 +468,7 @@ func (w *Waker) FullBoot(ctx context.Context) bool {
 		}
 	}
 
-	if err := w.ssh.StartContainer(ctx); err != nil {
+	if err := StartContainer(ctx, w.ssh); err != nil {
 		logging.Errorf("Container start failed: %v", err)
 		return false
 	}

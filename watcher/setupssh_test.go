@@ -9,11 +9,13 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/testsupport"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
-func setupSSHConfig(t *testing.T, server *testSSHServer, keyPath string) (*SSHRunner, string) {
+func setupSSHConfig(t *testing.T, server *testsupport.TestSSHServer, keyPath string) (*sshx.SSHRunner, string) {
 	t.Helper()
 	dir := filepath.Dir(keyPath)
 	cfg := config.Default()
@@ -25,18 +27,18 @@ func setupSSHConfig(t *testing.T, server *testSSHServer, keyPath string) (*SSHRu
 	knownHosts := filepath.Join(dir, "known_hosts")
 	cfg.Server.SSHKnownHosts = knownHosts
 
-	runner := NewSSHRunner(&cfg)
-	runner.port = server.port()
+	runner := sshx.NewSSHRunner(&cfg)
+	runner.SetPort(server.Port())
 	return runner, knownHosts
 }
 
 // accept-new lets the watcher learn a key silently. setup-ssh must not,
 // somebody is sitting in front of it and was promised a fingerprint.
 func TestSetupSSHAsksBeforeTrustingAnUnknownHost(t *testing.T) {
-	hostKey := newHostKey(t)
+	hostKey := testsupport.NewHostKey(t)
 	dir := t.TempDir()
-	keyPath, publicKey := writeTestKey(t, dir)
-	server := startTestSSHServer(t, hostKey, publicKey, "correct-horse")
+	keyPath, publicKey := testsupport.WriteTestKey(t, dir)
+	server := testsupport.StartTestSSHServer(t, hostKey, publicKey, "correct-horse")
 	runner, knownHosts := setupSSHConfig(t, server, keyPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -63,20 +65,20 @@ func TestSetupSSHAsksBeforeTrustingAnUnknownHost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("known_hosts does not parse: %v", err)
 	}
-	if err := verify(server.addr, server.listener.Addr(), hostKey.PublicKey()); err != nil {
+	if err := verify(server.Addr, server.Listener.Addr(), hostKey.PublicKey()); err != nil {
 		t.Errorf("the confirmed key was not stored: %v", err)
 	}
 }
 
 // A key that is already trusted must not trigger the question again.
 func TestSetupSSHDoesNotAskForAKnownHost(t *testing.T) {
-	hostKey := newHostKey(t)
+	hostKey := testsupport.NewHostKey(t)
 	dir := t.TempDir()
-	keyPath, publicKey := writeTestKey(t, dir)
-	server := startTestSSHServer(t, hostKey, publicKey, "correct-horse")
+	keyPath, publicKey := testsupport.WriteTestKey(t, dir)
+	server := testsupport.StartTestSSHServer(t, hostKey, publicKey, "correct-horse")
 	runner, knownHosts := setupSSHConfig(t, server, keyPath)
 
-	line := knownhosts.Line([]string{knownhosts.Normalize(server.addr)}, hostKey.PublicKey())
+	line := knownhosts.Line([]string{knownhosts.Normalize(server.Addr)}, hostKey.PublicKey())
 	if err := os.WriteFile(knownHosts, []byte(line+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -99,14 +101,14 @@ func TestSetupSSHDoesNotAskForAKnownHost(t *testing.T) {
 
 // Even with someone present, a changed key is never something to click through.
 func TestSetupSSHRefusesAChangedHostKey(t *testing.T) {
-	hostKey := newHostKey(t)
-	otherKey := newHostKey(t)
+	hostKey := testsupport.NewHostKey(t)
+	otherKey := testsupport.NewHostKey(t)
 	dir := t.TempDir()
-	keyPath, publicKey := writeTestKey(t, dir)
-	server := startTestSSHServer(t, hostKey, publicKey, "correct-horse")
+	keyPath, publicKey := testsupport.WriteTestKey(t, dir)
+	server := testsupport.StartTestSSHServer(t, hostKey, publicKey, "correct-horse")
 	runner, knownHosts := setupSSHConfig(t, server, keyPath)
 
-	line := knownhosts.Line([]string{knownhosts.Normalize(server.addr)}, otherKey.PublicKey())
+	line := knownhosts.Line([]string{knownhosts.Normalize(server.Addr)}, otherKey.PublicKey())
 	if err := os.WriteFile(knownHosts, []byte(line+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -126,13 +128,13 @@ func TestSetupSSHRefusesAChangedHostKey(t *testing.T) {
 }
 
 func TestSetupSSHRefusesAWrongPassword(t *testing.T) {
-	hostKey := newHostKey(t)
+	hostKey := testsupport.NewHostKey(t)
 	dir := t.TempDir()
-	keyPath, publicKey := writeTestKey(t, dir)
-	server := startTestSSHServer(t, hostKey, publicKey, "correct-horse")
+	keyPath, publicKey := testsupport.WriteTestKey(t, dir)
+	server := testsupport.StartTestSSHServer(t, hostKey, publicKey, "correct-horse")
 	runner, knownHosts := setupSSHConfig(t, server, keyPath)
 
-	line := knownhosts.Line([]string{knownhosts.Normalize(server.addr)}, hostKey.PublicKey())
+	line := knownhosts.Line([]string{knownhosts.Normalize(server.Addr)}, hostKey.PublicKey())
 	if err := os.WriteFile(knownHosts, []byte(line+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +165,7 @@ func TestEnsureKeyPairCreatesAnUnencryptedEd25519Key(t *testing.T) {
 	}
 
 	// It has to load back through the same path the watcher uses.
-	reloaded, err := loadPrivateKey(path)
+	reloaded, err := sshx.LoadPrivateKey(path)
 	if err != nil {
 		t.Fatalf("the generated key does not load: %v", err)
 	}

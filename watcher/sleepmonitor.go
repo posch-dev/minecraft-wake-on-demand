@@ -8,6 +8,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 )
 
 // A client that connects and goes quiet would hold the counter above zero forever.
@@ -35,15 +36,15 @@ type SleepMonitor struct {
 }
 
 func NewSleepMonitor(cfg *config.Config, waker *Waker) *SleepMonitor {
-	runner := NewSSHRunner(cfg)
+	runner := sshx.NewSSHRunner(cfg)
 	return &SleepMonitor{
 		cfg:             cfg,
 		waker:           waker,
 		now:             time.Now,
 		lastPlayerQuery: time.Now(),
 		hostReachable:   waker.HostReachable,
-		runVerb:         runner.RunVerb,
-		stopContainer:   runner.StopContainer,
+		runVerb:         func(ctx context.Context, verb string) (string, error) { return RunVerb(ctx, runner, verb) },
+		stopContainer:   func(ctx context.Context) error { return StopContainer(ctx, runner) },
 	}
 }
 

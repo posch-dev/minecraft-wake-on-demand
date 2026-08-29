@@ -10,6 +10,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
@@ -47,7 +48,7 @@ func runPlayers() int {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	session, err := DialServerSession(ctx, NewSSHRunner(cfg), password, p)
+	session, err := DialServerSession(ctx, sshx.NewSSHRunner(cfg), password, p)
 	if err != nil {
 		ui.PrintError(err.Error())
 		return 1
