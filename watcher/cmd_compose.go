@@ -10,6 +10,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
@@ -18,7 +19,7 @@ const eulaURL = "https://aka.ms/MinecraftEULA"
 
 // Sets the Minecraft and backup containers up on the server, either as a fresh
 // compose file or as two services added to one that is already there.
-func offerContainerSetup(p *ui.Prompter, s *ServerSession, cfg *config.Config, facts ServerFacts) bool {
+func offerContainerSetup(p *ui.Prompter, s *remote.ServerSession, cfg *config.Config, facts ServerFacts) bool {
 	fmt.Println("\nYour Minecraft server")
 	if !facts.Platform.HasDocker {
 		ui.PrintWarning("Docker is not installed on that PC, so there is nothing to set up yet.")
@@ -97,7 +98,7 @@ func acceptEULA(p *ui.Prompter) bool {
 	return p.YesNo("Do you accept them?", true)
 }
 
-func defaultComposeDir(s *ServerSession, cfg *config.Config) string {
+func defaultComposeDir(s *remote.ServerSession, cfg *config.Config) string {
 	if s.Platform().Windows {
 		return `C:\Users\` + cfg.Server.SSHUser + `\minecraft`
 	}
@@ -212,7 +213,7 @@ func askAdmin(p *ui.Prompter) string {
 
 // An existing password is left alone, replacing it would break whatever else
 // already reads it.
-func prepareRCONPassword(s *ServerSession, target ComposeTarget) (string, error) {
+func prepareRCONPassword(s *remote.ServerSession, target ComposeTarget) (string, error) {
 	if hasRCONPasswordVar(target.ExistingEnv) {
 		fmt.Printf("\n%s is already set in %s, keeping it.\n", rconPasswordVar, target.EnvFile)
 		return "", nil
@@ -232,7 +233,7 @@ func buildComposeContent(target ComposeTarget, spec ComposeSpec) (string, error)
 	return newComposeFile(spec)
 }
 
-func writeComposeFiles(p *ui.Prompter, s *ServerSession, target ComposeTarget,
+func writeComposeFiles(p *ui.Prompter, s *remote.ServerSession, target ComposeTarget,
 	spec ComposeSpec, content, password string) bool {
 
 	if target.Exists() && !p.YesNo("Write the changed "+target.File, true) {
@@ -300,11 +301,11 @@ func writeComposeFiles(p *ui.Prompter, s *ServerSession, target ComposeTarget,
 	return true
 }
 
-func makeDirCommand(s *ServerSession, dir string) string {
+func makeDirCommand(s *remote.ServerSession, dir string) string {
 	if s.Platform().Windows {
-		return "New-Item -ItemType Directory -Force -Path " + powerShellQuote(dir) + " | Out-Null"
+		return "New-Item -ItemType Directory -Force -Path " + remote.PowerShellQuote(dir) + " | Out-Null"
 	}
-	return "mkdir -p " + shellQuote(dir)
+	return "mkdir -p " + remote.ShellQuote(dir)
 }
 
 // Puts a compose file the watcher replaced back, and keeps the current one so
@@ -328,7 +329,7 @@ func runRestoreCompose() int {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	session, err := DialServerSession(ctx, sshx.NewSSHRunner(cfg), password, p)
+	session, err := remote.DialServerSession(ctx, sshx.NewSSHRunner(cfg), password, p)
 	if err != nil {
 		fmt.Printf("\n%v\n", err)
 		return 1

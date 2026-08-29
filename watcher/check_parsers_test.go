@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 )
 
 func TestParsePlayerCountReadsBothVanillaShapes(t *testing.T) {
@@ -15,7 +17,7 @@ func TestParsePlayerCountReadsBothVanillaShapes(t *testing.T) {
 		"Es sind 4 von maximal 20 Spielern online: a, b, c, d": 4,
 	}
 	for output, want := range cases {
-		got, ok := parsePlayerCount(output)
+		got, ok := remote.ParsePlayerCount(output)
 		if !ok {
 			t.Errorf("parsePlayerCount(%q) could not read a count", output)
 			continue
@@ -30,38 +32,38 @@ func TestParsePlayerCountReadsBothVanillaShapes(t *testing.T) {
 // PC to sleep under the players.
 func TestParsePlayerCountReportsWhenItCannotTell(t *testing.T) {
 	for _, output := range []string{"", "Unknown command", "rcon: connection refused"} {
-		if count, ok := parsePlayerCount(output); ok {
+		if count, ok := remote.ParsePlayerCount(output); ok {
 			t.Errorf("parsePlayerCount(%q) = %d, ok, but it should admit it cannot tell", output, count)
 		}
 	}
 }
 
 func TestParseWakeOnLANSetting(t *testing.T) {
-	cases := map[string]wakeOnLANSetting{
-		"\tWake-on: g":                          wolEnabled,
-		"        Wake-on: pumbg":                wolEnabled,
-		"Wake-on: d":                            wolDisabled,
-		"Wake-on: D":                            wolDisabled,
-		"Wake-on:":                              wolUnknown,
-		"Settings for eth0:":                    wolUnknown,
-		"":                                      wolUnknown,
-		"Supports Wake-on: pumbg\n\tWake-on: d": wolEnabled,
+	cases := map[string]remote.WakeOnLANSetting{
+		"\tWake-on: g":                          remote.WolEnabled,
+		"        Wake-on: pumbg":                remote.WolEnabled,
+		"Wake-on: d":                            remote.WolDisabled,
+		"Wake-on: D":                            remote.WolDisabled,
+		"Wake-on:":                              remote.WolUnknown,
+		"Settings for eth0:":                    remote.WolUnknown,
+		"":                                      remote.WolUnknown,
+		"Supports Wake-on: pumbg\n\tWake-on: d": remote.WolEnabled,
 	}
 	for output, want := range cases {
-		if got := parseWakeOnLANSetting(output); got != want {
+		if got := remote.ParseWakeOnLANSetting(output); got != want {
 			t.Errorf("parseWakeOnLANSetting(%q) = %d, want %d", output, got, want)
 		}
 	}
 }
 
 func TestWoLStatusVerbIsInBothHelperScripts(t *testing.T) {
-	unix := remoteHelperScriptUnix("minecraft", "", "")
-	windows := remoteHelperScriptWindows("minecraft", "", "")
+	unix := remote.RemoteHelperScriptUnix("minecraft", "", "")
+	windows := remote.RemoteHelperScriptWindows("minecraft", "", "")
 
-	if !containsAll(unix, remoteVerbWoLStatus, "ethtool") {
+	if !containsAll(unix, remote.RemoteVerbWoLStatus, "ethtool") {
 		t.Errorf("the sh helper cannot report the Wake-on-LAN setting:\n%s", unix)
 	}
-	if !containsAll(windows, remoteVerbWoLStatus, "WakeOnMagicPacket") {
+	if !containsAll(windows, remote.RemoteVerbWoLStatus, "WakeOnMagicPacket") {
 		t.Errorf("the PowerShell helper cannot report the Wake-on-LAN setting:\n%s", windows)
 	}
 }

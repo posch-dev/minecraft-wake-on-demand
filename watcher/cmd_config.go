@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/yamledit"
@@ -319,7 +320,7 @@ func (e *configEditor) setUpContainer() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	session, err := DialServerSession(ctx, sshx.NewSSHRunner(e.cfg), password, e.p)
+	session, err := remote.DialServerSession(ctx, sshx.NewSSHRunner(e.cfg), password, e.p)
 	if err != nil {
 		fmt.Printf("\n%v\n", err)
 		return

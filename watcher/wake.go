@@ -16,6 +16,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/netprobe"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 )
 
@@ -468,7 +469,7 @@ func (w *Waker) FullBoot(ctx context.Context) bool {
 		}
 	}
 
-	if err := StartContainer(ctx, w.ssh); err != nil {
+	if err := remote.StartContainer(ctx, w.ssh); err != nil {
 		logging.Errorf("Container start failed: %v", err)
 		return false
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/yamledit"
 )
@@ -94,7 +95,7 @@ func decideAboutTheWorld(p *ui.Prompter, world config.World, serverType, version
 	return false, false
 }
 
-func applyWorldChange(p *ui.Prompter, s *ServerSession, cfg *config.Config, doc *yamledit.Document,
+func applyWorldChange(p *ui.Prompter, s *remote.ServerSession, cfg *config.Config, doc *yamledit.Document,
 	world config.World, serverType, version string, keepWorld bool) int {
 
 	target := inspectComposeTarget(s, world.Dir)
@@ -155,7 +156,7 @@ func applyWorldChange(p *ui.Prompter, s *ServerSession, cfg *config.Config, doc 
 
 // Runs on the server, so a large world does not travel over the SSH connection
 // only to be written back again.
-func backUpWorld(s *ServerSession, world config.World, version string) bool {
+func backUpWorld(s *remote.ServerSession, world config.World, version string) bool {
 	name := "before-" + version + ".tar.gz"
 	fmt.Println("")
 	ui.PrintHint("Once a world has been opened in a newer version it cannot go back.",
@@ -171,27 +172,27 @@ func backUpWorld(s *ServerSession, world config.World, version string) bool {
 	return true
 }
 
-func backupWorldCommand(s *ServerSession, dir, name string) string {
+func backupWorldCommand(s *remote.ServerSession, dir, name string) string {
 	if s.Platform().Windows {
-		return "New-Item -ItemType Directory -Force -Path " + powerShellQuote(dir+`\backups`) +
-			" | Out-Null; Compress-Archive -Force -Path " + powerShellQuote(dir+`\data`) +
-			" -DestinationPath " + powerShellQuote(dir+`\backups\`+strings.TrimSuffix(name, ".tar.gz")+".zip")
+		return "New-Item -ItemType Directory -Force -Path " + remote.PowerShellQuote(dir+`\backups`) +
+			" | Out-Null; Compress-Archive -Force -Path " + remote.PowerShellQuote(dir+`\data`) +
+			" -DestinationPath " + remote.PowerShellQuote(dir+`\backups\`+strings.TrimSuffix(name, ".tar.gz")+".zip")
 	}
-	return "set -e; cd " + shellQuote(dir) + "; mkdir -p backups; tar czf " +
-		shellQuote("backups/"+name) + " data"
+	return "set -e; cd " + remote.ShellQuote(dir) + "; mkdir -p backups; tar czf " +
+		remote.ShellQuote("backups/"+name) + " data"
 }
 
 // Moved, never deleted, because somebody who picked a fresh world may still
 // want what was there.
-func moveWorldAside(s *ServerSession, world config.World, version string) bool {
+func moveWorldAside(s *remote.ServerSession, world config.World, version string) bool {
 	aside := "data.before-" + version + "-" + time.Now().UTC().Format("20060102-150405")
 
 	var command string
 	if s.Platform().Windows {
-		command = "Move-Item -LiteralPath " + powerShellQuote(world.Dir+`\data`) +
-			" -Destination " + powerShellQuote(world.Dir+`\`+aside)
+		command = "Move-Item -LiteralPath " + remote.PowerShellQuote(world.Dir+`\data`) +
+			" -Destination " + remote.PowerShellQuote(world.Dir+`\`+aside)
 	} else {
-		command = "cd " + shellQuote(world.Dir) + " && mv data " + shellQuote(aside)
+		command = "cd " + remote.ShellQuote(world.Dir) + " && mv data " + remote.ShellQuote(aside)
 	}
 	if out, err := s.Run(command); err != nil {
 		ui.PrintError("Could not move the old world aside: " + logging.Sanitize(out, 200))

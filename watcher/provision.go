@@ -7,12 +7,13 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 )
 
 // What one password login can find out about the server PC, so init can fill
 // these in instead of asking.
 type ServerFacts struct {
-	Platform  ServerPlatform
+	Platform  remote.ServerPlatform
 	Interface string
 	MAC       string
 	Broadcast string
@@ -24,13 +25,13 @@ type ServerFacts struct {
 	CanSuspend   bool
 	CanHibernate bool
 	MemoryGB     int
-	WakeOnLAN    wakeOnLANSetting
+	WakeOnLAN    remote.WakeOnLANSetting
 }
 
 // The interface carrying the default route is the one the magic packet arrives
 // on, everything else is read relative to it.
-func discoverServer(s *ServerSession) ServerFacts {
-	facts := ServerFacts{Platform: s.Platform(), WakeOnLAN: wolUnknown}
+func discoverServer(s *remote.ServerSession) ServerFacts {
+	facts := ServerFacts{Platform: s.Platform(), WakeOnLAN: remote.WolUnknown}
 	if facts.Platform.Windows {
 		discoverWindows(s, &facts)
 	} else {
@@ -40,25 +41,25 @@ func discoverServer(s *ServerSession) ServerFacts {
 	return facts
 }
 
-func discoverUnix(s *ServerSession, facts *ServerFacts) {
+func discoverUnix(s *remote.ServerSession, facts *ServerFacts) {
 	if out, err := s.Run("ip route show default | awk '{print $5; exit}'"); err == nil {
-		facts.Interface = firstLine(out)
+		facts.Interface = remote.FirstLine(out)
 	}
 	if facts.Interface == "" {
 		return
 	}
 
-	if out, err := s.Run("cat /sys/class/net/" + shellQuote(facts.Interface) + "/address"); err == nil {
-		if _, parseErr := config.ParseMAC(firstLine(out)); parseErr == nil {
-			facts.MAC = firstLine(out)
+	if out, err := s.Run("cat /sys/class/net/" + remote.ShellQuote(facts.Interface) + "/address"); err == nil {
+		if _, parseErr := config.ParseMAC(remote.FirstLine(out)); parseErr == nil {
+			facts.MAC = remote.FirstLine(out)
 		}
 	}
-	if out, err := s.Run("ip -o -4 addr show dev " + shellQuote(facts.Interface) + " | awk '{print $6; exit}'"); err == nil {
-		facts.Broadcast = firstLine(out)
+	if out, err := s.Run("ip -o -4 addr show dev " + remote.ShellQuote(facts.Interface) + " | awk '{print $6; exit}'"); err == nil {
+		facts.Broadcast = remote.FirstLine(out)
 	}
 
 	if out, err := s.Run("awk '/MemTotal/{print $2}' /proc/meminfo"); err == nil {
-		facts.MemoryGB = kilobytesToGB(firstLine(out))
+		facts.MemoryGB = kilobytesToGB(remote.FirstLine(out))
 	}
 
 	// /sys/power/state lists what the kernel can actually do, mem is suspend
@@ -69,38 +70,38 @@ func discoverUnix(s *ServerSession, facts *ServerFacts) {
 	}
 
 	// ethtool usually needs root to report the wake settings.
-	if out, err := s.RunSudo("ethtool " + shellQuote(facts.Interface)); err == nil {
-		facts.WakeOnLAN = parseWakeOnLANSetting(out)
-	} else if out, err := s.Run("ethtool " + shellQuote(facts.Interface)); err == nil {
-		facts.WakeOnLAN = parseWakeOnLANSetting(out)
+	if out, err := s.RunSudo("ethtool " + remote.ShellQuote(facts.Interface)); err == nil {
+		facts.WakeOnLAN = remote.ParseWakeOnLANSetting(out)
+	} else if out, err := s.Run("ethtool " + remote.ShellQuote(facts.Interface)); err == nil {
+		facts.WakeOnLAN = remote.ParseWakeOnLANSetting(out)
 	}
 }
 
-func discoverWindows(s *ServerSession, facts *ServerFacts) {
+func discoverWindows(s *remote.ServerSession, facts *ServerFacts) {
 	if out, err := s.Run("(Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | " +
 		"Select-Object -First 1).InterfaceAlias"); err == nil {
-		facts.Interface = firstLine(out)
+		facts.Interface = remote.FirstLine(out)
 	}
 	if facts.Interface == "" {
 		return
 	}
 
 	if out, err := s.Run("(Get-NetAdapter -Name '" + facts.Interface + "').MacAddress"); err == nil {
-		if _, parseErr := config.ParseMAC(firstLine(out)); parseErr == nil {
-			facts.MAC = firstLine(out)
+		if _, parseErr := config.ParseMAC(remote.FirstLine(out)); parseErr == nil {
+			facts.MAC = remote.FirstLine(out)
 		}
 	}
-	if out, err := s.Run(wolStatusCommandWindows); err == nil {
-		facts.WakeOnLAN = parseWakeOnLANSetting(out)
+	if out, err := s.Run(remote.WolStatusCommandWindows); err == nil {
+		facts.WakeOnLAN = remote.ParseWakeOnLANSetting(out)
 	}
 	if out, err := s.Run("(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory"); err == nil {
-		facts.MemoryGB = bytesToGB(firstLine(out))
+		facts.MemoryGB = bytesToGB(remote.FirstLine(out))
 	}
 	// Windows suspend over SSH is unreliable, hibernate is the honest option.
 	facts.CanHibernate = true
 }
 
-func discoverContainers(s *ServerSession, facts *ServerFacts) {
+func discoverContainers(s *remote.ServerSession, facts *ServerFacts) {
 	if !facts.Platform.HasDocker {
 		return
 	}
@@ -117,11 +118,11 @@ func discoverContainers(s *ServerSession, facts *ServerFacts) {
 
 // Reads the published Minecraft port and whether RCON is on, both of which only
 // make sense once a container has been picked.
-func inspectContainer(s *ServerSession, name string) (mcPort int, rcon bool) {
-	if out, err := s.Run("docker port " + shellQuote(name) + " 25565/tcp"); err == nil {
+func inspectContainer(s *remote.ServerSession, name string) (mcPort int, rcon bool) {
+	if out, err := s.Run("docker port " + remote.ShellQuote(name) + " 25565/tcp"); err == nil {
 		mcPort = parseDockerPort(out)
 	}
-	if out, err := s.Run("docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' " + shellQuote(name)); err == nil {
+	if out, err := s.Run("docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' " + remote.ShellQuote(name)); err == nil {
 		rcon = parseRCONEnabled(out)
 	}
 	return mcPort, rcon
@@ -129,7 +130,7 @@ func inspectContainer(s *ServerSession, name string) (mcPort int, rcon bool) {
 
 // docker port answers "0.0.0.0:25565" and often a second line for IPv6.
 func parseDockerPort(out string) int {
-	_, port, found := strings.Cut(firstLine(out), ":")
+	_, port, found := strings.Cut(remote.FirstLine(out), ":")
 	if !found {
 		return 0
 	}
@@ -187,14 +188,14 @@ func suggestedMemory(totalGB int) string {
 
 // A card left at Wake-on: d swallows the magic packet, which makes this whole
 // project do nothing with no other symptom.
-func enableWakeOnLAN(s *ServerSession, iface string) error {
+func enableWakeOnLAN(s *remote.ServerSession, iface string) error {
 	if s.Platform().Windows {
 		_, err := s.Run("Set-NetAdapterPowerManagement -Name '" + iface + "' -WakeOnMagicPacket Enabled")
 		return err
 	}
 
 	unit := wakeOnLANUnit(iface)
-	staged, err := stageFile(s, "wol-unit", unit)
+	staged, err := remote.StageFile(s, "wol-unit", unit)
 	if err != nil {
 		return err
 	}
@@ -202,13 +203,13 @@ func enableWakeOnLAN(s *ServerSession, iface string) error {
 	install := fmt.Sprintf(
 		"set -e; ethtool -s %s wol g; install -o root -g root -m 0644 %s %s; "+
 			"systemctl daemon-reload; systemctl enable %s",
-		shellQuote(iface), shellQuote(staged), shellQuote(wakeOnLANUnitPath(iface)),
-		shellQuote(wakeOnLANUnitName(iface)))
+		remote.ShellQuote(iface), remote.ShellQuote(staged), remote.ShellQuote(wakeOnLANUnitPath(iface)),
+		remote.ShellQuote(wakeOnLANUnitName(iface)))
 
 	if out, err := s.RunSudo(install); err != nil {
 		return fmt.Errorf("%w: %s", err, logging.Sanitize(out, 200))
 	}
-	s.Run("rm -f " + shellQuote(staged))
+	s.Run("rm -f " + remote.ShellQuote(staged))
 	return nil
 }
 

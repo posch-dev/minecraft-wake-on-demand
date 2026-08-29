@@ -1,7 +1,8 @@
-package main
+package remote
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // One password login, used to look around and install things.
@@ -109,9 +111,9 @@ func (s *ServerSession) RunSudo(command string) (string, error) {
 		return "", fmt.Errorf("there is no sudo on Windows, the SSH account has to be an administrator")
 	}
 	if s.platform.PasswordlessSudo {
-		return s.runWithStdin("sudo -n sh -c "+shellQuote(command), "")
+		return s.runWithStdin("sudo -n sh -c "+ShellQuote(command), "")
 	}
-	return s.runWithStdin("sudo -S -p '' sh -c "+shellQuote(command), s.password+"\n")
+	return s.runWithStdin("sudo -S -p '' sh -c "+ShellQuote(command), s.password+"\n")
 }
 
 func (s *ServerSession) runWithStdin(command, stdin string) (string, error) {
@@ -147,7 +149,7 @@ func (s *ServerSession) Detect() ServerPlatform {
 	}
 
 	if out, err := s.Run("command -v systemctl"); err == nil {
-		platform.SystemctlPath = firstLine(out)
+		platform.SystemctlPath = FirstLine(out)
 	}
 	_, err := s.Run("command -v docker")
 	platform.HasDocker = err == nil
@@ -159,16 +161,62 @@ func (s *ServerSession) Detect() ServerPlatform {
 }
 
 func looksLikeUnix(unameOutput string) bool {
-	switch strings.ToLower(firstLine(unameOutput)) {
+	switch strings.ToLower(FirstLine(unameOutput)) {
 	case "linux", "darwin", "freebsd", "openbsd", "netbsd":
 		return true
 	}
 	return false
 }
 
-func firstLine(value string) string {
+func FirstLine(value string) string {
 	if idx := strings.IndexAny(value, "\r\n"); idx >= 0 {
 		return strings.TrimSpace(value[:idx])
 	}
 	return strings.TrimSpace(value)
 }
+
+// Always asks, whatever ssh_strict_host_key says. Someone is sitting here,
+// so the fingerprint gets shown instead of silently trusted.
+func interactiveHostKeyCallback(runner *sshx.SSHRunner, p *ui.Prompter) (ssh.HostKeyCallback, error) {
+	path := runner.Config().ResolvedKnownHostsPath()
+	if err := sshx.EnsureKnownHostsFile(path); err != nil {
+		return nil, err
+	}
+	verify, err := knownhosts.New(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read %s: %w", path, err)
+	}
+
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		err := verify(hostname, remote, key)
+		if err == nil {
+			return nil
+		}
+		var keyErr *knownhosts.KeyError
+		if !errors.As(err, &keyErr) {
+			return err
+		}
+		if len(keyErr.Want) > 0 {
+			return fmt.Errorf("host key for %s changed, expected %s but got %s. "+
+				"either the server was reinstalled, in which case remove its line from %s, "+
+				"or someone is intercepting the connection",
+				hostname, keyErr.Want[0].Key.Type(), key.Type(), path)
+		}
+
+		fmt.Printf("\nThe server %s presents this host key:\n", hostname)
+		fmt.Printf("  type        %s\n", key.Type())
+		fmt.Printf("  fingerprint %s\n", ssh.FingerprintSHA256(key))
+		if !p.YesNo("Is that the right server", false) {
+			return fmt.Errorf("host key rejected")
+		}
+		return runner.AppendKnownHost(path, hostname, key)
+	}, nil
+}
+
+// The caller that opened the context this session runs in hands in how to let
+// it go again.
+func (s *ServerSession) OnClose(f func()) { s.detach = f }
+
+// Command construction depends only on which system the server runs, so a test
+// can ask for the commands without a server to ask.
+func NewSessionForPlatform(p ServerPlatform) *ServerSession { return &ServerSession{platform: p} }

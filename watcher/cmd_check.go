@@ -12,6 +12,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/netprobe"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"golang.org/x/crypto/ssh"
@@ -226,7 +227,7 @@ func checkSSHLogin(c *checker, cfg *config.Config, ctx context.Context) {
 		return
 	}
 
-	out, err := RunVerb(ctx, runner, remoteVerbStatus)
+	out, err := remote.RunVerb(ctx, runner, remote.RemoteVerbStatus)
 	if err != nil {
 		if isAuthFailure(err) {
 			c.fail("SSH login as %s failed: %v", cfg.Server.SSHUser, err)
@@ -250,7 +251,7 @@ func checkSSHLogin(c *checker, cfg *config.Config, ctx context.Context) {
 // With the helper installed, check can ask real questions instead of guessing
 // from a refused command.
 func checkRemoteHelper(c *checker, cfg *config.Config, runner *sshx.SSHRunner, ctx context.Context) {
-	out, err := runner.Run(ctx, remoteVerbHello)
+	out, err := runner.Run(ctx, remote.RemoteVerbHello)
 	if err != nil {
 		if isAuthFailure(err) {
 			c.fail("SSH login as %s failed: %v", cfg.Server.SSHUser, err)
@@ -259,14 +260,14 @@ func checkRemoteHelper(c *checker, cfg *config.Config, runner *sshx.SSHRunner, c
 			return
 		}
 		c.fail("the helper did not answer: %v", err)
-		c.hint("server.remote_helper is true but %s is missing or not bound to the key", remoteHelperPathUnix)
+		c.hint("server.remote_helper is true but %s is missing or not bound to the key", remote.RemoteHelperPathUnix)
 		c.hint("run: mcwod setup-ssh")
 		return
 	}
 	c.ok("SSH login as %s works", cfg.Server.SSHUser)
 
-	if answer := strings.TrimSpace(out); answer != remoteHelperMarker {
-		if answer == legacyHelperMarker {
+	if answer := strings.TrimSpace(out); answer != remote.RemoteHelperMarker {
+		if answer == remote.LegacyHelperMarker {
 			c.fail("the server still runs the helper from before the rename")
 			c.hint("it works, but the paths and the marker changed with mcwod 2.1")
 			c.hint("run: mcwod setup-ssh")
@@ -274,14 +275,14 @@ func checkRemoteHelper(c *checker, cfg *config.Config, runner *sshx.SSHRunner, c
 		}
 		// An older forced command runs docker start for every word it is sent,
 		// so a wrong answer here means sleep would start the container instead.
-		c.fail("the helper answered %q instead of %q", logging.Sanitize(answer, 60), remoteHelperMarker)
+		c.fail("the helper answered %q instead of %q", logging.Sanitize(answer, 60), remote.RemoteHelperMarker)
 		c.hint("an older mcwod line in authorized_keys is still bound to the key")
 		c.hint("remove it on the server, then run: mcwod setup-ssh")
 		return
 	}
-	c.ok("helper answered, the key is bound to %s", remoteHelperPathUnix)
+	c.ok("helper answered, the key is bound to %s", remote.RemoteHelperPathUnix)
 
-	state, err := RunVerb(ctx, runner, remoteVerbStatus)
+	state, err := remote.RunVerb(ctx, runner, remote.RemoteVerbStatus)
 	if err != nil {
 		c.warn("the helper could not inspect the container: %v", err)
 	} else {
@@ -295,16 +296,16 @@ func checkRemoteHelper(c *checker, cfg *config.Config, runner *sshx.SSHRunner, c
 // A NIC with Wake-on-LAN switched off in the driver is the most common reason
 // this whole project does nothing, and nothing else in the setup reveals it.
 func checkWakeOnLANDriver(c *checker, runner *sshx.SSHRunner, ctx context.Context) {
-	out, err := RunVerb(ctx, runner, remoteVerbWoLStatus)
+	out, err := remote.RunVerb(ctx, runner, remote.RemoteVerbWoLStatus)
 	if err != nil {
 		c.info("could not read the Wake-on-LAN setting from the network driver")
 		c.hint("check it yourself with: ethtool <interface> | grep Wake-on")
 		return
 	}
-	switch parseWakeOnLANSetting(out) {
-	case wolEnabled:
+	switch remote.ParseWakeOnLANSetting(out) {
+	case remote.WolEnabled:
 		c.ok("Wake-on-LAN is armed in the network driver")
-	case wolDisabled:
+	case remote.WolDisabled:
 		c.fail("Wake-on-LAN is switched off in the network driver")
 		c.hint("the magic packet arrives but the card ignores it, so the PC never wakes")
 		c.hint("turn it on with: sudo ethtool -s <interface> wol g")
@@ -317,7 +318,7 @@ func checkWakeOnLANDriver(c *checker, runner *sshx.SSHRunner, ctx context.Contex
 // The sleep monitor counts players through this, so a container without RCON
 // would leave it unable to tell an empty server from a busy one.
 func checkPlayerQuery(c *checker, cfg *config.Config, runner *sshx.SSHRunner, ctx context.Context) {
-	out, err := RunVerb(ctx, runner, remoteVerbPlayers)
+	out, err := remote.RunVerb(ctx, runner, remote.RemoteVerbPlayers)
 	if err != nil {
 		if !cfg.Sleep.Enabled {
 			c.info("the player count is not available: %v", err)
@@ -328,7 +329,7 @@ func checkPlayerQuery(c *checker, cfg *config.Config, runner *sshx.SSHRunner, ct
 		c.hint("enable RCON in the container, itzg/minecraft-server does by default")
 		return
 	}
-	online, ok := parsePlayerCount(out)
+	online, ok := remote.ParsePlayerCount(out)
 	if !ok {
 		c.warn("could not read a player count from %q", logging.Sanitize(out, 60))
 		c.hint("the sleep monitor treats an unreadable answer as 'someone is playing'")

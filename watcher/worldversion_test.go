@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 )
 
 const composeForVersionChange = `services:
@@ -52,7 +54,7 @@ func TestSetWorldEnvironmentRefusesAMissingService(t *testing.T) {
 
 // The backup runs on the server, the world never travels over SSH.
 func TestBackupCommandStaysOnTheServer(t *testing.T) {
-	unix := backupWorldCommand(&ServerSession{}, "/srv/survival", "before-1.21.8.tar.gz")
+	unix := backupWorldCommand(&remote.ServerSession{}, "/srv/survival", "before-1.21.8.tar.gz")
 
 	for _, want := range []string{"mkdir -p backups", "tar czf", "data"} {
 		if !strings.Contains(unix, want) {
@@ -65,7 +67,7 @@ func TestBackupCommandStaysOnTheServer(t *testing.T) {
 }
 
 func TestBackupCommandOnWindows(t *testing.T) {
-	windows := &ServerSession{platform: ServerPlatform{Windows: true}}
+	windows := remote.NewSessionForPlatform(remote.ServerPlatform{Windows: true})
 	command := backupWorldCommand(windows, `C:\srv\survival`, "before-1.21.8.tar.gz")
 
 	if !strings.Contains(command, "Compress-Archive") {

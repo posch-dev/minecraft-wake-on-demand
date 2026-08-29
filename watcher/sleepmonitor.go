@@ -8,6 +8,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 )
 
@@ -43,8 +44,8 @@ func NewSleepMonitor(cfg *config.Config, waker *Waker) *SleepMonitor {
 		now:             time.Now,
 		lastPlayerQuery: time.Now(),
 		hostReachable:   waker.HostReachable,
-		runVerb:         func(ctx context.Context, verb string) (string, error) { return RunVerb(ctx, runner, verb) },
-		stopContainer:   func(ctx context.Context) error { return StopContainer(ctx, runner) },
+		runVerb:         func(ctx context.Context, verb string) (string, error) { return remote.RunVerb(ctx, runner, verb) },
+		stopContainer:   func(ctx context.Context) error { return remote.StopContainer(ctx, runner) },
 	}
 }
 
@@ -170,7 +171,7 @@ func (m *SleepMonitor) playersOnline(ctx context.Context) (int, bool) {
 	m.lastPlayerQuery = m.now()
 
 	// A stopped container has nobody on it, which saves the second round trip.
-	state, err := m.runVerb(ctx, remoteVerbStatus)
+	state, err := m.runVerb(ctx, remote.RemoteVerbStatus)
 	if err != nil {
 		logging.Warnf("Sleep monitor cannot read the container state: %v", err)
 		return 0, false
@@ -179,12 +180,12 @@ func (m *SleepMonitor) playersOnline(ctx context.Context) (int, bool) {
 		return 0, true
 	}
 
-	out, err := m.runVerb(ctx, remoteVerbPlayers)
+	out, err := m.runVerb(ctx, remote.RemoteVerbPlayers)
 	if err != nil {
 		logging.Warnf("Sleep monitor cannot read the player count: %v", err)
 		return 0, false
 	}
-	online, ok := parsePlayerCount(out)
+	online, ok := remote.ParsePlayerCount(out)
 	if !ok {
 		logging.Warnf("Sleep monitor cannot read a player count from %q", logging.Sanitize(out, 60))
 	}
@@ -210,7 +211,7 @@ func (m *SleepMonitor) sleepServer(ctx context.Context) {
 
 	logging.Infof("Sending the server PC to %s", m.cfg.Sleep.Action)
 	// The connection dies mid command as the machine goes down, that is success.
-	if _, err := m.runVerb(actionCtx, remoteVerbSleep); err != nil {
+	if _, err := m.runVerb(actionCtx, remote.RemoteVerbSleep); err != nil {
 		logging.Infof("Sleep command returned %v, normal when the PC goes down mid connection", err)
 	}
 }

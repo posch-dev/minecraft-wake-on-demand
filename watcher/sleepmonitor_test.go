@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 )
 
 // Stands in for the server so the state machine can be driven without SSH.
@@ -40,14 +42,14 @@ func sleepMonitorFor(t *testing.T, answers *fakeServerAnswers, transfer bool) (*
 		now:   func() time.Time { return clock },
 		runVerb: func(_ context.Context, verb string) (string, error) {
 			switch verb {
-			case remoteVerbStatus:
+			case remote.RemoteVerbStatus:
 				return answers.containerState, nil
-			case remoteVerbPlayers:
+			case remote.RemoteVerbPlayers:
 				if answers.playersErr != nil {
 					return "", answers.playersErr
 				}
 				return answers.playerOutput, nil
-			case remoteVerbSleep:
+			case remote.RemoteVerbSleep:
 				answers.sleepCalls++
 				return "", nil
 			}

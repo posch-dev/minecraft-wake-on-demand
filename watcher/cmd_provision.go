@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
@@ -23,7 +24,7 @@ func provisionServer(ctx context.Context, p *ui.Prompter, cfg *config.Config, pu
 		return false
 	}
 
-	session, err := DialServerSession(ctx, sshx.NewSSHRunner(cfg), password, p)
+	session, err := remote.DialServerSession(ctx, sshx.NewSSHRunner(cfg), password, p)
 	if err != nil {
 		fmt.Printf("\n%v\n", err)
 		fmt.Println("Falling back to the questions.")
@@ -43,32 +44,32 @@ func provisionServer(ctx context.Context, p *ui.Prompter, cfg *config.Config, pu
 	}
 
 	action := offerSleep(p, facts)
-	entry := authorizedKeyEntry(publicKey, cfg.Server.ContainerName, cfg.Server.ComposeDir, true)
+	entry := remote.AuthorizedKeyEntry(publicKey, cfg.Server.ContainerName, cfg.Server.ComposeDir, true)
 	if action != "" {
 		cfg.Sleep.Action = action
 		if platform.Windows {
-			fmt.Println(windowsHelperInstructions(cfg, publicKey))
+			fmt.Println(remote.WindowsHelperInstructions(cfg, publicKey))
 			fmt.Println("Auto-sleep stays off until that script is in place.")
 			cfg.Sleep.Enabled = false
-		} else if err := installRemoteHelperUnix(session, cfg); err != nil {
+		} else if err := remote.InstallRemoteHelperUnix(session, cfg); err != nil {
 			fmt.Printf("\nThe helper could not be installed: %v\n", err)
 			fmt.Println("Auto-sleep stays off, the key will only start the container.")
 		} else {
-			fmt.Printf("Helper installed at %s, owned by root.\n", remoteHelperPathUnix)
+			fmt.Printf("Helper installed at %s, owned by root.\n", remote.RemoteHelperPathUnix)
 			cfg.Server.RemoteHelper = true
 			cfg.Sleep.Enabled = true
-			entry = remoteHelperKeyEntryUnix(publicKey)
+			entry = remote.RemoteHelperKeyEntryUnix(publicKey)
 		}
 	}
 
 	if platform.Windows {
 		fmt.Println("\nWindows OpenSSH needs the key placed by hand:")
-		fmt.Println(windowsAuthorizedKeysNote(cfg.Server.SSHUser))
+		fmt.Println(remote.WindowsAuthorizedKeysNote(cfg.Server.SSHUser))
 		fmt.Printf("%s\n\n", entry)
 		return true
 	}
 
-	status, err := appendAuthorizedKey(session, entry)
+	status, err := remote.AppendAuthorizedKey(session, entry)
 	if err != nil {
 		fmt.Printf("\nThe key could not be installed: %v\n", err)
 		return true
@@ -82,7 +83,7 @@ func provisionServer(ctx context.Context, p *ui.Prompter, cfg *config.Config, pu
 }
 
 // Everything found is shown and confirmed, never applied behind the user's back.
-func applyFacts(p *ui.Prompter, session *ServerSession, cfg *config.Config, facts ServerFacts) {
+func applyFacts(p *ui.Prompter, session *remote.ServerSession, cfg *config.Config, facts ServerFacts) {
 	fmt.Println("\n--- What the server told us ---")
 
 	if facts.MAC != "" {
@@ -165,12 +166,12 @@ func validateContainerName(v string) error {
 }
 
 // The single most common reason this project appears to do nothing at all.
-func offerWakeOnLANFix(p *ui.Prompter, session *ServerSession, facts ServerFacts) {
+func offerWakeOnLANFix(p *ui.Prompter, session *remote.ServerSession, facts ServerFacts) {
 	switch facts.WakeOnLAN {
-	case wolEnabled:
+	case remote.WolEnabled:
 		fmt.Println("Wake-on-LAN is already armed in the network driver.")
 		return
-	case wolUnknown:
+	case remote.WolUnknown:
 		fmt.Println("\nCould not read the Wake-on-LAN setting from the driver.")
 		fmt.Println("If waking never works, check it with: ethtool " + facts.Interface)
 		return

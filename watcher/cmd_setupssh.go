@@ -5,9 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/pem"
-	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,10 +14,10 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 func runSetupSSH() int {
@@ -76,7 +74,7 @@ func runSetupSSH() int {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	session, err := DialServerSession(ctx, sshx.NewSSHRunner(cfg), password, p)
+	session, err := remote.DialServerSession(ctx, sshx.NewSSHRunner(cfg), password, p)
 	if err != nil {
 		fmt.Printf("\n%v\n", err)
 		return 1
@@ -91,7 +89,7 @@ func runSetupSSH() int {
 	}
 
 	if platform.Windows {
-		fmt.Println(windowsHelperInstructions(cfg, publicKey))
+		fmt.Println(remote.WindowsHelperInstructions(cfg, publicKey))
 		if wantSleep {
 			fmt.Println("Set server.remote_helper: true and the sleep block in config.yml once the")
 			fmt.Println("script is in place, then run: mcwod check")
@@ -110,22 +108,22 @@ func runSetupSSH() int {
 			fmt.Println("setup-ssh again.")
 			return 1
 		}
-		if err := installRemoteHelperUnix(session, cfg); err != nil {
+		if err := remote.InstallRemoteHelperUnix(session, cfg); err != nil {
 			fmt.Printf("\n%v\n", err)
 			fmt.Println("\nNothing was installed. The password may have been wrong, or the")
 			fmt.Println("account may not be allowed to use sudo.")
 			return 1
 		}
-		fmt.Printf("Helper installed at %s, owned by root.\n", remoteHelperPathUnix)
-		fmt.Printf("Sudoers rule written to %s, checked with visudo first.\n", sudoersPath)
-		entry = remoteHelperKeyEntryUnix(publicKey)
+		fmt.Printf("Helper installed at %s, owned by root.\n", remote.RemoteHelperPathUnix)
+		fmt.Printf("Sudoers rule written to %s, checked with visudo first.\n", remote.SudoersPath)
+		entry = remote.RemoteHelperKeyEntryUnix(publicKey)
 		helperInstalled = true
 	} else {
 		restrict := p.YesNo("Restrict the key so it can only start the container (recommended)", true)
-		entry = authorizedKeyEntry(publicKey, cfg.Server.ContainerName, cfg.Server.ComposeDir, restrict)
+		entry = remote.AuthorizedKeyEntry(publicKey, cfg.Server.ContainerName, cfg.Server.ComposeDir, restrict)
 	}
 
-	status, err := appendAuthorizedKey(session, entry)
+	status, err := remote.AppendAuthorizedKey(session, entry)
 	if err != nil {
 		fmt.Printf("\n%v\n", err)
 		return 1
@@ -155,13 +153,13 @@ func runSetupSSH() int {
 		return 0
 	}
 
-	out, err := runner.Run(ctx, remoteVerbHello)
+	out, err := runner.Run(ctx, remote.RemoteVerbHello)
 	if err != nil {
 		fmt.Printf("The key was refused: %v\n", err)
 		return 1
 	}
-	if strings.TrimSpace(out) != remoteHelperMarker {
-		fmt.Printf("The helper answered %q instead of %q.\n", logging.Sanitize(out, 80), remoteHelperMarker)
+	if strings.TrimSpace(out) != remote.RemoteHelperMarker {
+		fmt.Printf("The helper answered %q instead of %q.\n", logging.Sanitize(out, 80), remote.RemoteHelperMarker)
 		fmt.Println("An older mcwod line in authorized_keys is still bound to the key.")
 		fmt.Println("Remove it and run setup-ssh again.")
 		return 1
@@ -222,84 +220,10 @@ func ensureKeyPair(path string) (ssh.Signer, error) {
 	return ssh.NewSignerFromKey(private)
 }
 
-// Appended only when absent, so a second run does not duplicate the line.
-// An older entry is left alone, which is why hello verifies afterwards.
-// Reports whether the line was added or replaced, because skipping a key that
-// is already there leaves an outdated forced command in place and the watcher
-// then starts the wrong container.
-func appendAuthorizedKey(s *ServerSession, entry string) (string, error) {
-	command, err := authorizedKeyCommand(entry)
-	if err != nil {
-		return "", err
-	}
-	out, err := s.Run(command)
-	if err != nil {
-		return "", fmt.Errorf("cannot write authorized_keys: %w: %s", err, logging.Sanitize(out, 200))
-	}
-	return strings.TrimSpace(out), nil
-}
-
-// Every line carrying this key is dropped and the current one appended, so one
-// key never ends up with two forced commands.
-func authorizedKeyCommand(entry string) (string, error) {
-	fields := strings.Fields(entry)
-	if len(fields) < 2 {
-		return "", fmt.Errorf("malformed authorized_keys entry")
-	}
-	keyBody := fields[len(fields)-2]
-
-	return fmt.Sprintf(
-		"set -e; cd ~/.ssh 2>/dev/null || { mkdir -p ~/.ssh; chmod 700 ~/.ssh; cd ~/.ssh; }; "+
-			"touch authorized_keys; chmod 600 authorized_keys; "+
-			"if grep -qF %[1]s authorized_keys; then echo replaced; else echo added; fi; "+
-			"grep -vF %[1]s authorized_keys > authorized_keys.mcwod || true; "+
-			"printf '%%s\\n' %[2]s >> authorized_keys.mcwod; "+
-			"chmod 600 authorized_keys.mcwod; mv authorized_keys.mcwod authorized_keys",
-		shellQuote(keyBody), shellQuote(entry)), nil
-}
-
 // Everything interpolated here is either generated by us or validated on load,
 // so this is a guard against surprises rather than the only line of defence.
 func shellSafe(value string) string {
 	return strings.ReplaceAll(value, "'", "")
-}
-
-// Always asks, whatever ssh_strict_host_key says. Someone is sitting here,
-// so the fingerprint gets shown instead of silently trusted.
-func interactiveHostKeyCallback(runner *sshx.SSHRunner, p *ui.Prompter) (ssh.HostKeyCallback, error) {
-	path := runner.Config().ResolvedKnownHostsPath()
-	if err := sshx.EnsureKnownHostsFile(path); err != nil {
-		return nil, err
-	}
-	verify, err := knownhosts.New(path)
-	if err != nil {
-		return nil, fmt.Errorf("cannot read %s: %w", path, err)
-	}
-
-	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		err := verify(hostname, remote, key)
-		if err == nil {
-			return nil
-		}
-		var keyErr *knownhosts.KeyError
-		if !errors.As(err, &keyErr) {
-			return err
-		}
-		if len(keyErr.Want) > 0 {
-			return fmt.Errorf("host key for %s changed, expected %s but got %s. "+
-				"either the server was reinstalled, in which case remove its line from %s, "+
-				"or someone is intercepting the connection",
-				hostname, keyErr.Want[0].Key.Type(), key.Type(), path)
-		}
-
-		fmt.Printf("\nThe server %s presents this host key:\n", hostname)
-		fmt.Printf("  type        %s\n", key.Type())
-		fmt.Printf("  fingerprint %s\n", ssh.FingerprintSHA256(key))
-		if !p.YesNo("Is that the right server", false) {
-			return fmt.Errorf("host key rejected")
-		}
-		return runner.AppendKnownHost(path, hostname, key)
-	}, nil
 }
 
 func printManualInstructions(cfg *config.Config, publicKey string) {

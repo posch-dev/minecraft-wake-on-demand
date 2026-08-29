@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/testsupport"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
@@ -46,7 +47,7 @@ func TestSetupSSHAsksBeforeTrustingAnUnknownHost(t *testing.T) {
 
 	// Answering no has to abort and leave known_hosts empty.
 	refuse := ui.NewPrompterFrom(strings.NewReader("n\n"))
-	if _, err := DialServerSession(ctx, runner, "correct-horse", refuse); err == nil {
+	if _, err := remote.DialServerSession(ctx, runner, "correct-horse", refuse); err == nil {
 		t.Fatal("a refused host key must abort the setup")
 	}
 	if data, _ := os.ReadFile(knownHosts); len(strings.TrimSpace(string(data))) != 0 {
@@ -55,7 +56,7 @@ func TestSetupSSHAsksBeforeTrustingAnUnknownHost(t *testing.T) {
 
 	// Answering yes has to accept it and remember the key.
 	accept := ui.NewPrompterFrom(strings.NewReader("y\n"))
-	session, err := DialServerSession(ctx, runner, "correct-horse", accept)
+	session, err := remote.DialServerSession(ctx, runner, "correct-horse", accept)
 	if err != nil {
 		t.Fatalf("accepting the host key should succeed: %v", err)
 	}
@@ -88,13 +89,13 @@ func TestSetupSSHDoesNotAskForAKnownHost(t *testing.T) {
 
 	// An empty prompter would block or refuse if a question were asked.
 	silent := ui.NewPrompterFrom(strings.NewReader(""))
-	session, err := DialServerSession(ctx, runner, "correct-horse", silent)
+	session, err := remote.DialServerSession(ctx, runner, "correct-horse", silent)
 	if err != nil {
 		t.Fatalf("a known host should not be questioned: %v", err)
 	}
 	defer session.Close()
 
-	if _, err := appendAuthorizedKey(session, "ssh-ed25519 AAAAtest mcwod"); err != nil {
+	if _, err := remote.AppendAuthorizedKey(session, "ssh-ed25519 AAAAtest mcwod"); err != nil {
 		t.Errorf("appending the key should work over an open session: %v", err)
 	}
 }
@@ -118,7 +119,7 @@ func TestSetupSSHRefusesAChangedHostKey(t *testing.T) {
 
 	// Answering yes must not help here.
 	eager := ui.NewPrompterFrom(strings.NewReader("y\ny\ny\n"))
-	_, err := DialServerSession(ctx, runner, "correct-horse", eager)
+	_, err := remote.DialServerSession(ctx, runner, "correct-horse", eager)
 	if err == nil {
 		t.Fatal("a changed host key must abort even when confirmed")
 	}
@@ -143,7 +144,7 @@ func TestSetupSSHRefusesAWrongPassword(t *testing.T) {
 	defer cancel()
 
 	p := ui.NewPrompterFrom(strings.NewReader(""))
-	_, err := DialServerSession(ctx, runner, "wrong-password", p)
+	_, err := remote.DialServerSession(ctx, runner, "wrong-password", p)
 	if err == nil {
 		t.Fatal("a wrong password must not install the key")
 	}

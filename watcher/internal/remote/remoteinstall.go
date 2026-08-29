@@ -1,4 +1,4 @@
-package main
+package remote
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 
 // Staged as the user, then moved by one sudo call, so only the password
 // goes to sudo over stdin.
-func installRemoteHelperUnix(s *ServerSession, cfg *config.Config) error {
+func InstallRemoteHelperUnix(s *ServerSession, cfg *config.Config) error {
 	sleepCommand := ""
 	if cfg.Sleep.Action != "" {
 		command, err := sleepCommandUnix(cfg.Sleep.Action, cfg.Sleep.Command, s.platform.SystemctlPath)
@@ -20,28 +20,28 @@ func installRemoteHelperUnix(s *ServerSession, cfg *config.Config) error {
 		sleepCommand = command
 	}
 
-	script := remoteHelperScriptUnix(cfg.Server.ContainerName, cfg.Server.ComposeDir, sleepCommand)
-	staged, err := stageFile(s, "mcwod-remote", script)
+	script := RemoteHelperScriptUnix(cfg.Server.ContainerName, cfg.Server.ComposeDir, sleepCommand)
+	staged, err := StageFile(s, "mcwod-remote", script)
 	if err != nil {
 		return err
 	}
 
 	install := fmt.Sprintf("install -o root -g root -m 0755 %s %s",
-		shellQuote(staged), shellQuote(remoteHelperPathUnix))
+		ShellQuote(staged), ShellQuote(RemoteHelperPathUnix))
 
 	// Only a systemctl based action needs a rule, a custom command is the
 	// user's own business and they arrange its rights themselves.
 	needsSudoers := cfg.Sleep.Action != "" && cfg.Sleep.Action != "custom"
 	if needsSudoers {
 		line := sudoersLine(cfg.Server.SSHUser, s.platform.SystemctlPath, cfg.Sleep.Action)
-		stagedSudoers, err := stageFile(s, "mcwod-sudoers", line)
+		stagedSudoers, err := StageFile(s, "mcwod-sudoers", line)
 		if err != nil {
 			return err
 		}
 		// A broken file in sudoers.d locks the user out of their own machine,
 		// so it is checked before it is allowed anywhere near /etc.
 		install += fmt.Sprintf(" && visudo -c -q -f %s && install -o root -g root -m 0440 %s %s",
-			shellQuote(stagedSudoers), shellQuote(stagedSudoers), shellQuote(sudoersPath))
+			ShellQuote(stagedSudoers), ShellQuote(stagedSudoers), ShellQuote(SudoersPath))
 	}
 
 	if out, err := s.RunSudo("set -e; " + install); err != nil {
@@ -49,13 +49,13 @@ func installRemoteHelperUnix(s *ServerSession, cfg *config.Config) error {
 	}
 
 	// The staged copies are removable by the user, the installed ones are not.
-	s.Run("rm -f " + shellQuote(staged))
+	s.Run("rm -f " + ShellQuote(staged))
 	return nil
 }
 
 // mktemp picks the name, so there is no predictable path in /tmp for someone
 // else on the box to point a symlink at.
-func stageFile(s *ServerSession, label, content string) (string, error) {
+func StageFile(s *ServerSession, label, content string) (string, error) {
 	marker := "MCWOL_" + strings.ToUpper(label)
 	command := fmt.Sprintf(
 		"set -e; path=$(mktemp); umask 077; cat > \"$path\" <<'%s'\n%s\n%s\nprintf '%%s\n' \"$path\"",
@@ -82,12 +82,12 @@ func lastLine(value string) string {
 
 // Windows has no unattended way to gain administrator rights over SSH, so the
 // script is printed for the user to place themselves.
-func windowsHelperInstructions(cfg *config.Config, publicKey string) string {
+func WindowsHelperInstructions(cfg *config.Config, publicKey string) string {
 	sleepCommand, err := sleepCommandWindows(cfg.Sleep.Action, cfg.Sleep.Command)
 	if err != nil {
 		sleepCommand = ""
 	}
-	script := remoteHelperScriptWindows(cfg.Server.ContainerName, cfg.Server.ComposeDir, sleepCommand)
+	script := RemoteHelperScriptWindows(cfg.Server.ContainerName, cfg.Server.ComposeDir, sleepCommand)
 
 	var b strings.Builder
 	b.WriteString("\nOn a Windows server PC, do these three steps in an administrator PowerShell.\n")
@@ -99,13 +99,13 @@ func windowsHelperInstructions(cfg *config.Config, publicKey string) string {
 		"/grant \"Administrators:(F)\" /grant \"SYSTEM:(F)\" /grant \"Users:(RX)\"\n")
 	b.WriteString("\n3. Add this single line to authorized_keys:\n\n")
 	b.WriteString(remoteHelperKeyEntryWindows(publicKey) + "\n")
-	b.WriteString("\n" + windowsAuthorizedKeysNote(cfg.Server.SSHUser))
+	b.WriteString("\n" + WindowsAuthorizedKeysNote(cfg.Server.SSHUser))
 	return b.String()
 }
 
 // Windows OpenSSH ignores the profile authorized_keys for admin accounts,
 // the usual reason a correct looking key is never accepted.
-func windowsAuthorizedKeysNote(user string) string {
+func WindowsAuthorizedKeysNote(user string) string {
 	return fmt.Sprintf(`The file is C:\Users\%s\.ssh\authorized_keys for a normal account.
 If the account is an administrator, Windows OpenSSH reads
 C:\ProgramData\ssh\administrators_authorized_keys instead and ignores

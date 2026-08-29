@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 )
 
 func TestParseDockerPort(t *testing.T) {
@@ -83,7 +85,7 @@ func TestValidateContainerName(t *testing.T) {
 
 // The commands the discovery sends must not be built by pasting a name in raw.
 func TestDiscoveryQuotesTheInterfaceName(t *testing.T) {
-	quoted := shellQuote("eth0'; rm -rf /; echo '")
+	quoted := remote.ShellQuote("eth0'; rm -rf /; echo '")
 	if strings.HasPrefix(quoted, "'eth0'") && !strings.Contains(quoted, `'\''`) {
 		t.Errorf("an interface name with a quote in it escapes its quoting: %s", quoted)
 	}

@@ -1,4 +1,4 @@
-package main
+package remote
 
 import (
 	"strings"
@@ -8,11 +8,11 @@ import (
 )
 
 func TestRemoteHelperScriptOnlyAllowsTheKnownVerbs(t *testing.T) {
-	script := remoteHelperScriptUnix("minecraft", "", "sudo -n /usr/bin/systemctl suspend")
+	script := RemoteHelperScriptUnix("minecraft", "", "sudo -n /usr/bin/systemctl suspend")
 
 	for _, verb := range []string{
-		remoteVerbHello, remoteVerbStart, remoteVerbStop,
-		remoteVerbStatus, remoteVerbPlayers, remoteVerbSleep,
+		RemoteVerbHello, remoteVerbStart, remoteVerbStop,
+		RemoteVerbStatus, RemoteVerbPlayers, RemoteVerbSleep,
 	} {
 		if !strings.Contains(script, verb+")") {
 			t.Errorf("the script has no branch for %q", verb)
@@ -28,9 +28,9 @@ func TestRemoteHelperScriptOnlyAllowsTheKnownVerbs(t *testing.T) {
 }
 
 func TestRemoteHelperScriptLeavesOutSleepWhenNotWanted(t *testing.T) {
-	script := remoteHelperScriptUnix("minecraft", "", "")
+	script := RemoteHelperScriptUnix("minecraft", "", "")
 
-	if strings.Contains(script, remoteVerbSleep+")") {
+	if strings.Contains(script, RemoteVerbSleep+")") {
 		t.Error("without a sleep command the script must not offer the sleep verb")
 	}
 	if !strings.Contains(script, remoteVerbStart+")") {
@@ -39,7 +39,7 @@ func TestRemoteHelperScriptLeavesOutSleepWhenNotWanted(t *testing.T) {
 }
 
 func TestRemoteHelperScriptQuotesTheContainerName(t *testing.T) {
-	script := remoteHelperScriptUnix("odd'; rm -rf /; echo '", "", "")
+	script := RemoteHelperScriptUnix("odd'; rm -rf /; echo '", "", "")
 
 	if strings.Contains(script, "rm -rf /;") && !strings.Contains(script, `'\'''`) {
 		t.Errorf("a container name with a quote in it broke out of the script:\n%s", script)
@@ -47,13 +47,13 @@ func TestRemoteHelperScriptQuotesTheContainerName(t *testing.T) {
 }
 
 func TestShellQuoteEscapesSingleQuotes(t *testing.T) {
-	if got, want := shellQuote("it's"), `'it'\''s'`; got != want {
+	if got, want := ShellQuote("it's"), `'it'\''s'`; got != want {
 		t.Errorf("shellQuote = %s, want %s", got, want)
 	}
 }
 
 func TestPowerShellQuoteDoublesSingleQuotes(t *testing.T) {
-	if got, want := powerShellQuote("it's"), "'it''s'"; got != want {
+	if got, want := PowerShellQuote("it's"), "'it''s'"; got != want {
 		t.Errorf("powerShellQuote = %s, want %s", got, want)
 	}
 }
@@ -102,13 +102,13 @@ func TestDirectCommandRefusesSleepWithoutTheHelper(t *testing.T) {
 	cfg := config.Default()
 	cfg.Server.ContainerName = "minecraft"
 
-	if _, err := directCommand(&cfg, remoteVerbSleep); err == nil {
+	if _, err := directCommand(&cfg, RemoteVerbSleep); err == nil {
 		t.Error("sleeping without the helper has no safe command, it must fail")
 	}
 	if got, _ := directCommand(&cfg, remoteVerbStart); got != "docker start minecraft" {
 		t.Errorf("start = %q", got)
 	}
-	if got, _ := directCommand(&cfg, remoteVerbPlayers); got != "docker exec minecraft rcon-cli list" {
+	if got, _ := directCommand(&cfg, RemoteVerbPlayers); got != "docker exec minecraft rcon-cli list" {
 		t.Errorf("players = %q", got)
 	}
 	if _, err := directCommand(&cfg, "reboot"); err == nil {
@@ -117,7 +117,7 @@ func TestDirectCommandRefusesSleepWithoutTheHelper(t *testing.T) {
 }
 
 func TestForcedCommandEntryLocksTheKeyDown(t *testing.T) {
-	entry := remoteHelperKeyEntryUnix("ssh-ed25519 AAAAexample")
+	entry := RemoteHelperKeyEntryUnix("ssh-ed25519 AAAAexample")
 
 	for _, want := range []string{
 		`command="/usr/local/bin/mcwod-remote"`,
@@ -185,7 +185,7 @@ func TestSleepConfigRejectsAnUnknownActionAndShortDelays(t *testing.T) {
 // docker start leaves the backup container behind, which is why backups stopped
 // happening after every wake.
 func TestStartBringsTheWholeComposeProjectUp(t *testing.T) {
-	script := remoteHelperScriptUnix("minecraft", "/srv/minecraft", "")
+	script := RemoteHelperScriptUnix("minecraft", "/srv/minecraft", "")
 
 	for _, want := range []string{
 		`COMPOSE_DIR='/srv/minecraft'`,
@@ -200,7 +200,7 @@ func TestStartBringsTheWholeComposeProjectUp(t *testing.T) {
 
 // Someone who set the server up by hand has no compose directory recorded.
 func TestWithoutAComposeDirectoryOnlyTheContainerIsStarted(t *testing.T) {
-	script := remoteHelperScriptUnix("minecraft", "", "")
+	script := RemoteHelperScriptUnix("minecraft", "", "")
 
 	if !strings.Contains(script, "COMPOSE_DIR=''") {
 		t.Errorf("the helper should carry an empty directory:\n%s", script)
@@ -213,12 +213,12 @@ func TestWithoutAComposeDirectoryOnlyTheContainerIsStarted(t *testing.T) {
 // A restricted key without the helper runs one fixed command, so that command
 // has to be the one that brings the project up.
 func TestRestrictedKeyStartsTheComposeProject(t *testing.T) {
-	entry := authorizedKeyEntry("ssh-ed25519 AAAAexample", "minecraft", "/srv/minecraft", true)
+	entry := AuthorizedKeyEntry("ssh-ed25519 AAAAexample", "minecraft", "/srv/minecraft", true)
 	if !strings.Contains(entry, "docker compose --project-directory '/srv/minecraft' up -d") {
 		t.Errorf("forced command = %s", entry)
 	}
 
-	plain := authorizedKeyEntry("ssh-ed25519 AAAAexample", "minecraft", "", true)
+	plain := AuthorizedKeyEntry("ssh-ed25519 AAAAexample", "minecraft", "", true)
 	if !strings.Contains(plain, "docker start minecraft") {
 		t.Errorf("forced command without a directory = %s", plain)
 	}

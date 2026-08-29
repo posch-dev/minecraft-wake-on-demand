@@ -1,4 +1,4 @@
-package main
+package remote
 
 import (
 	"fmt"
@@ -7,33 +7,34 @@ import (
 	"strings"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // The watcher sends one of these words and nothing else, the helper maps them.
 // A leaked key can therefore do exactly this much and no more.
 const (
-	remoteVerbHello   = "hello"
+	RemoteVerbHello   = "hello"
 	remoteVerbStart   = "start"
 	remoteVerbStop    = "stop"
-	remoteVerbStatus  = "status"
-	remoteVerbPlayers = "players"
-	remoteVerbSleep   = "sleep"
+	RemoteVerbStatus  = "status"
+	RemoteVerbPlayers = "players"
+	RemoteVerbSleep   = "sleep"
 	// Reports whether the network card is armed for the magic packet, which is
 	// the one setting nothing else in the setup would reveal.
-	remoteVerbWoLStatus = "wolstatus"
+	RemoteVerbWoLStatus = "wolstatus"
 )
 
-type wakeOnLANSetting int
+type WakeOnLANSetting int
 
 const (
-	wolUnknown wakeOnLANSetting = iota
-	wolEnabled
-	wolDisabled
+	WolUnknown WakeOnLANSetting = iota
+	WolEnabled
+	WolDisabled
 )
 
 // Answer to the hello verb, so check can tell the helper apart from an older
 // key whose forced command silently runs docker start no matter what we send.
-const remoteHelperMarker = "mcwod-remote 1"
+const RemoteHelperMarker = "mcwod-remote 1"
 
 // The interface carrying the default route is the one the magic packet arrives
 // on, so that is the one worth reporting.
@@ -42,18 +43,18 @@ const wolStatusCommandUnix = "iface=$(ip route show default | awk '{print $5; ex
 
 // PowerShell reports the same thing as ethtool, phrased differently. The output
 // is normalised to a Wake-on: line so one parser covers both.
-const wolStatusCommandWindows = `(Get-NetAdapter -Physical | Where-Object Status -eq 'Up' | ` +
+const WolStatusCommandWindows = `(Get-NetAdapter -Physical | Where-Object Status -eq 'Up' | ` +
 	`Get-NetAdapterPowerManagement | ForEach-Object { if ($_.WakeOnMagicPacket -eq 'Enabled') ` +
 	`{ 'Wake-on: g' } else { 'Wake-on: d' } }) | Select-Object -First 1`
 
 // What the helper answered before the rename, so check can name the reason
 // instead of reporting an answer nobody recognises.
-const legacyHelperMarker = "mc-wol-remote 1"
+const LegacyHelperMarker = "mc-wol-remote 1"
 
 const (
-	remoteHelperPathUnix    = "/usr/local/bin/mcwod-remote"
+	RemoteHelperPathUnix    = "/usr/local/bin/mcwod-remote"
 	remoteHelperPathWindows = `C:\ProgramData\mcwod\mcwod-remote.ps1`
-	sudoersPath             = "/etc/sudoers.d/mcwod"
+	SudoersPath             = "/etc/sudoers.d/mcwod"
 )
 
 // Used when no helper is installed. Sleep is absent, it needs the sudoers line.
@@ -64,13 +65,13 @@ func directCommand(cfg *config.Config, verb string) (string, error) {
 		return composeCommandUnix(cfg, "up -d", "docker start "+container), nil
 	case remoteVerbStop:
 		return composeCommandUnix(cfg, "stop", "docker stop "+container), nil
-	case remoteVerbStatus:
+	case RemoteVerbStatus:
 		return "docker inspect -f {{.State.Status}} " + container, nil
-	case remoteVerbPlayers:
+	case RemoteVerbPlayers:
 		return "docker exec " + container + " rcon-cli list", nil
-	case remoteVerbWoLStatus:
+	case RemoteVerbWoLStatus:
 		return wolStatusCommandUnix, nil
-	case remoteVerbSleep:
+	case RemoteVerbSleep:
 		return "", fmt.Errorf("sending the server PC to sleep needs the helper script, " +
 			"run 'mcwod setup-ssh' to install it")
 	}
@@ -85,7 +86,7 @@ func composeCommandUnix(cfg *config.Config, subcommand, fallback string) string 
 	if dir == "" {
 		return fallback
 	}
-	return "docker compose --project-directory " + shellQuote(dir) + " " + subcommand
+	return "docker compose --project-directory " + ShellQuote(dir) + " " + subcommand
 }
 
 // Absolute path so the sudoers rule can name it exactly. Filled in from the
@@ -143,47 +144,47 @@ func composeOrPlainWindows(subcommand, plain string) string {
 		" } else { " + plain + " $container }"
 }
 
-func remoteHelperScriptUnix(containerName, composeDir, sleepCommand string) string {
+func RemoteHelperScriptUnix(containerName, composeDir, sleepCommand string) string {
 	var b strings.Builder
 	b.WriteString("#!/bin/sh\n")
 	b.WriteString("# Forced command for the mcwod key, installed by 'mcwod setup-ssh'.\n")
 	b.WriteString("# The watcher sends one of the words below and nothing else ever runs, so a\n")
 	b.WriteString("# stolen key cannot do more than what is listed here.\n")
 	b.WriteString("set -eu\n\n")
-	b.WriteString("CONTAINER=" + shellQuote(containerName) + "\n")
-	b.WriteString("COMPOSE_DIR=" + shellQuote(composeDir) + "\n\n")
+	b.WriteString("CONTAINER=" + ShellQuote(containerName) + "\n")
+	b.WriteString("COMPOSE_DIR=" + ShellQuote(composeDir) + "\n\n")
 	b.WriteString("case \"${SSH_ORIGINAL_COMMAND:-}\" in\n")
-	b.WriteString(remoteVerbHello + ")   echo " + shellQuote(remoteHelperMarker) + " ;;\n")
+	b.WriteString(RemoteVerbHello + ")   echo " + ShellQuote(RemoteHelperMarker) + " ;;\n")
 	b.WriteString(remoteVerbStart + ")   " + composeOrPlainUnix("up -d", "docker start") + " ;;\n")
 	b.WriteString(remoteVerbStop + ")    " + composeOrPlainUnix("stop", "docker stop") + " ;;\n")
-	b.WriteString(remoteVerbStatus + ")  exec docker inspect -f '{{.State.Status}}' \"$CONTAINER\" ;;\n")
-	b.WriteString(remoteVerbPlayers + ") exec docker exec \"$CONTAINER\" rcon-cli list ;;\n")
-	b.WriteString(remoteVerbWoLStatus + ") " + wolStatusCommandUnix + " ;;\n")
+	b.WriteString(RemoteVerbStatus + ")  exec docker inspect -f '{{.State.Status}}' \"$CONTAINER\" ;;\n")
+	b.WriteString(RemoteVerbPlayers + ") exec docker exec \"$CONTAINER\" rcon-cli list ;;\n")
+	b.WriteString(RemoteVerbWoLStatus + ") " + wolStatusCommandUnix + " ;;\n")
 	if sleepCommand != "" {
 		// Unquoted on purpose, the command is several words and has to split.
-		b.WriteString(remoteVerbSleep + ")   exec " + sleepCommand + " ;;\n")
+		b.WriteString(RemoteVerbSleep + ")   exec " + sleepCommand + " ;;\n")
 	}
 	b.WriteString("*)       echo 'mcwod-remote: refused' >&2; exit 1 ;;\n")
 	b.WriteString("esac\n")
 	return b.String()
 }
 
-func remoteHelperScriptWindows(containerName, composeDir, sleepCommand string) string {
+func RemoteHelperScriptWindows(containerName, composeDir, sleepCommand string) string {
 	var b strings.Builder
 	b.WriteString("# Forced command for the mcwod key.\n")
 	b.WriteString("# The watcher sends one of the words below and nothing else ever runs.\n")
 	b.WriteString("$ErrorActionPreference = 'Stop'\n")
-	b.WriteString("$container = " + powerShellQuote(containerName) + "\n")
-	b.WriteString("$composeDir = " + powerShellQuote(composeDir) + "\n\n")
+	b.WriteString("$container = " + PowerShellQuote(containerName) + "\n")
+	b.WriteString("$composeDir = " + PowerShellQuote(composeDir) + "\n\n")
 	b.WriteString("switch ($env:SSH_ORIGINAL_COMMAND) {\n")
-	b.WriteString("  '" + remoteVerbHello + "'   { " + powerShellQuote(remoteHelperMarker) + " }\n")
+	b.WriteString("  '" + RemoteVerbHello + "'   { " + PowerShellQuote(RemoteHelperMarker) + " }\n")
 	b.WriteString("  '" + remoteVerbStart + "'   { " + composeOrPlainWindows("up -d", "docker start") + " }\n")
 	b.WriteString("  '" + remoteVerbStop + "'    { " + composeOrPlainWindows("stop", "docker stop") + " }\n")
-	b.WriteString("  '" + remoteVerbStatus + "'  { docker inspect -f '{{.State.Status}}' $container }\n")
-	b.WriteString("  '" + remoteVerbWoLStatus + "' { " + wolStatusCommandWindows + " }\n")
-	b.WriteString("  '" + remoteVerbPlayers + "' { docker exec $container rcon-cli list }\n")
+	b.WriteString("  '" + RemoteVerbStatus + "'  { docker inspect -f '{{.State.Status}}' $container }\n")
+	b.WriteString("  '" + RemoteVerbWoLStatus + "' { " + WolStatusCommandWindows + " }\n")
+	b.WriteString("  '" + RemoteVerbPlayers + "' { docker exec $container rcon-cli list }\n")
 	if sleepCommand != "" {
-		b.WriteString("  '" + remoteVerbSleep + "'   { " + sleepCommand + " }\n")
+		b.WriteString("  '" + RemoteVerbSleep + "'   { " + sleepCommand + " }\n")
 	}
 	b.WriteString("  default { Write-Error 'mcwod-remote: refused'; exit 1 }\n")
 	b.WriteString("}\n")
@@ -192,19 +193,19 @@ func remoteHelperScriptWindows(containerName, composeDir, sleepCommand string) s
 
 // The restricted form is what SECURITY.md recommends: even a leaked key can
 // then only do what the forced command allows.
-func authorizedKeyEntry(publicKey, containerName, composeDir string, restrict bool) string {
+func AuthorizedKeyEntry(publicKey, containerName, composeDir string, restrict bool) string {
 	if !restrict {
 		return publicKey + " mcwod"
 	}
 	if strings.TrimSpace(composeDir) != "" {
 		return forcedCommandEntry(publicKey,
-			"docker compose --project-directory "+shellQuote(composeDir)+" up -d")
+			"docker compose --project-directory "+ShellQuote(composeDir)+" up -d")
 	}
 	return forcedCommandEntry(publicKey, "docker start "+containerName)
 }
 
-func remoteHelperKeyEntryUnix(publicKey string) string {
-	return forcedCommandEntry(publicKey, remoteHelperPathUnix)
+func RemoteHelperKeyEntryUnix(publicKey string) string {
+	return forcedCommandEntry(publicKey, RemoteHelperPathUnix)
 }
 
 func remoteHelperKeyEntryWindows(publicKey string) string {
@@ -219,11 +220,11 @@ func forcedCommandEntry(publicKey, command string) string {
 
 // Single quoted with the one escape sh understands, so a container name can
 // never break out of the generated script.
-func shellQuote(value string) string {
+func ShellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
-func powerShellQuote(value string) string {
+func PowerShellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }
 
@@ -236,7 +237,7 @@ var playerCountPatterns = []*regexp.Regexp{
 }
 
 // Not ok means unreadable, which callers must treat as busy and not as empty.
-func parsePlayerCount(output string) (int, bool) {
+func ParsePlayerCount(output string) (int, bool) {
 	for _, pattern := range playerCountPatterns {
 		if match := pattern.FindStringSubmatch(output); match != nil {
 			if count, err := strconv.Atoi(match[1]); err == nil {
@@ -249,19 +250,55 @@ func parsePlayerCount(output string) (int, bool) {
 
 // ethtool prints "Wake-on: g" when the card is armed for the magic packet and
 // "Wake-on: d" when it is disabled entirely.
-func parseWakeOnLANSetting(ethtoolOutput string) wakeOnLANSetting {
+func ParseWakeOnLANSetting(ethtoolOutput string) WakeOnLANSetting {
 	_, value, found := strings.Cut(ethtoolOutput, "Wake-on:")
 	if !found {
-		return wolUnknown
+		return WolUnknown
 	}
-	value = strings.TrimSpace(firstLine(value))
+	value = strings.TrimSpace(FirstLine(value))
 	switch {
 	case value == "":
-		return wolUnknown
+		return WolUnknown
 	case strings.ContainsAny(value, "gG"):
-		return wolEnabled
+		return WolEnabled
 	case value == "d" || value == "D":
-		return wolDisabled
+		return WolDisabled
 	}
-	return wolUnknown
+	return WolUnknown
+}
+
+// Every line carrying this key is dropped and the current one appended, so one
+// key never ends up with two forced commands.
+func AuthorizedKeyCommand(entry string) (string, error) {
+	fields := strings.Fields(entry)
+	if len(fields) < 2 {
+		return "", fmt.Errorf("malformed authorized_keys entry")
+	}
+	keyBody := fields[len(fields)-2]
+
+	return fmt.Sprintf(
+		"set -e; cd ~/.ssh 2>/dev/null || { mkdir -p ~/.ssh; chmod 700 ~/.ssh; cd ~/.ssh; }; "+
+			"touch authorized_keys; chmod 600 authorized_keys; "+
+			"if grep -qF %[1]s authorized_keys; then echo replaced; else echo added; fi; "+
+			"grep -vF %[1]s authorized_keys > authorized_keys.mcwod || true; "+
+			"printf '%%s\\n' %[2]s >> authorized_keys.mcwod; "+
+			"chmod 600 authorized_keys.mcwod; mv authorized_keys.mcwod authorized_keys",
+		ShellQuote(keyBody), ShellQuote(entry)), nil
+}
+
+// Appended only when absent, so a second run does not duplicate the line.
+// An older entry is left alone, which is why hello verifies afterwards.
+// Reports whether the line was added or replaced, because skipping a key that
+// is already there leaves an outdated forced command in place and the watcher
+// then starts the wrong container.
+func AppendAuthorizedKey(s *ServerSession, entry string) (string, error) {
+	command, err := AuthorizedKeyCommand(entry)
+	if err != nil {
+		return "", err
+	}
+	out, err := s.Run(command)
+	if err != nil {
+		return "", fmt.Errorf("cannot write authorized_keys: %w: %s", err, logging.Sanitize(out, 200))
+	}
+	return strings.TrimSpace(out), nil
 }

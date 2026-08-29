@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/yamledit"
@@ -145,7 +146,7 @@ func switchWorld(p *ui.Prompter, cfg *config.Config, doc *yamledit.Document) int
 
 // Only one world may hold the Minecraft port, and docker keeps it for a moment
 // after the container stops.
-func stopActiveWorld(cfg *config.Config, session *ServerSession) {
+func stopActiveWorld(cfg *config.Config, session *remote.ServerSession) {
 	active, ok := cfg.ActiveWorld()
 	if !ok {
 		return
@@ -157,7 +158,7 @@ func stopActiveWorld(cfg *config.Config, session *ServerSession) {
 	}
 }
 
-func confirmPlayersWillDrop(p *ui.Prompter, cfg *config.Config, session *ServerSession) bool {
+func confirmPlayersWillDrop(p *ui.Prompter, cfg *config.Config, session *remote.ServerSession) bool {
 	online, ok := onlinePlayers(cfg, session)
 	if !ok || online == 0 {
 		return true
@@ -167,16 +168,16 @@ func confirmPlayersWillDrop(p *ui.Prompter, cfg *config.Config, session *ServerS
 	return p.YesNo("Continue?", false)
 }
 
-func onlinePlayers(cfg *config.Config, session *ServerSession) (int, bool) {
+func onlinePlayers(cfg *config.Config, session *remote.ServerSession) (int, bool) {
 	active, ok := cfg.ActiveWorld()
 	if !ok {
 		return 0, false
 	}
-	out, err := session.Run("docker exec " + shellQuote(active.Container) + " rcon-cli list")
+	out, err := session.Run("docker exec " + remote.ShellQuote(active.Container) + " rcon-cli list")
 	if err != nil {
 		return 0, false
 	}
-	return parsePlayerCount(out)
+	return remote.ParsePlayerCount(out)
 }
 
 func makeWorld(p *ui.Prompter, cfg *config.Config, doc *yamledit.Document) int {
@@ -283,7 +284,7 @@ func pickWorld(p *ui.Prompter, worlds []config.World, question string) (config.W
 
 // Every one of these needs to write files on the server, which the restricted
 // key cannot do, so they all start the same way.
-func openServerSession(p *ui.Prompter, cfg *config.Config) (*ServerSession, int) {
+func openServerSession(p *ui.Prompter, cfg *config.Config) (*remote.ServerSession, int) {
 	fmt.Printf("\nLogging in to %s.\n", cfg.Server.IP)
 	ui.PrintHint("Your password is used for this one login and is never saved.")
 	password := p.Secret(fmt.Sprintf("Password for %s@%s", cfg.Server.SSHUser, cfg.Server.IP))
@@ -293,13 +294,13 @@ func openServerSession(p *ui.Prompter, cfg *config.Config) (*ServerSession, int)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	session, err := DialServerSession(ctx, sshx.NewSSHRunner(cfg), password, p)
+	session, err := remote.DialServerSession(ctx, sshx.NewSSHRunner(cfg), password, p)
 	if err != nil {
 		cancel()
 		ui.PrintError(err.Error())
 		return nil, 1
 	}
-	session.detach = cancel
+	session.OnClose(cancel)
 	session.Detect()
 	return session, 0
 }

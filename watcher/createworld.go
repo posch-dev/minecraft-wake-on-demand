@@ -6,12 +6,13 @@ import (
 	"strings"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
 // A world of its own, in its own folder, so a broken one is one broken world
 // and restore-compose stays unambiguous.
-func createWorld(p *ui.Prompter, s *ServerSession, cfg *config.Config, facts ServerFacts) (config.World, bool) {
+func createWorld(p *ui.Prompter, s *remote.ServerSession, cfg *config.Config, facts ServerFacts) (config.World, bool) {
 	if !facts.Platform.HasDocker {
 		ui.PrintWarning("Docker is not installed on that PC, so there is nothing to set up.")
 		return config.World{}, false
@@ -85,7 +86,7 @@ func createWorld(p *ui.Prompter, s *ServerSession, cfg *config.Config, facts Ser
 
 // Next to the worlds that already exist, so they end up together rather than
 // scattered wherever somebody happened to be.
-func worldDirectory(s *ServerSession, cfg *config.Config, name string) string {
+func worldDirectory(s *remote.ServerSession, cfg *config.Config, name string) string {
 	base := ""
 	if world, ok := cfg.ActiveWorld(); ok && world.Dir != "" {
 		base = parentDirectory(s, world.Dir)
@@ -96,7 +97,7 @@ func worldDirectory(s *ServerSession, cfg *config.Config, name string) string {
 	return joinRemote(s, base, name)
 }
 
-func parentDirectory(s *ServerSession, dir string) string {
+func parentDirectory(s *remote.ServerSession, dir string) string {
 	trimmed := strings.TrimRight(dir, `\/`)
 	if s.Platform().Windows {
 		if cut := strings.LastIndexAny(trimmed, `\/`); cut > 0 {

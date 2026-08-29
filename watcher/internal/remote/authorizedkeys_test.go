@@ -1,4 +1,4 @@
-package main
+package remote
 
 import (
 	"os"
@@ -15,7 +15,7 @@ func runAuthorizedKeyCommand(t *testing.T, home, entry string) string {
 	if err != nil {
 		t.Skip("no sh to run the generated command with")
 	}
-	command, err := authorizedKeyCommand(entry)
+	command, err := AuthorizedKeyCommand(entry)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestAuthorizedKeyReplacesAnOutdatedForcedCommand(t *testing.T) {
 }
 
 func TestAuthorizedKeyCommandRefusesAMalformedEntry(t *testing.T) {
-	if _, err := authorizedKeyCommand("ssh-ed25519"); err == nil {
+	if _, err := AuthorizedKeyCommand("ssh-ed25519"); err == nil {
 		t.Error("an entry without a key body was accepted")
 	}
 }
