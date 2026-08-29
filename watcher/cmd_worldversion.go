@@ -9,11 +9,12 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/yamledit"
 )
 
 // Where a world can actually be lost, so the backup runs before anything else
 // and is not something to decline.
-func changeWorldVersion(p *ui.Prompter, cfg *config.Config, doc *yamlDocument) int {
+func changeWorldVersion(p *ui.Prompter, cfg *config.Config, doc *yamledit.Document) int {
 	worlds := cfg.WorldList()
 	world, picked := pickWorld(p, worlds, "Which world?")
 	if !picked {
@@ -93,7 +94,7 @@ func decideAboutTheWorld(p *ui.Prompter, world config.World, serverType, version
 	return false, false
 }
 
-func applyWorldChange(p *ui.Prompter, s *ServerSession, cfg *config.Config, doc *yamlDocument,
+func applyWorldChange(p *ui.Prompter, s *ServerSession, cfg *config.Config, doc *yamledit.Document,
 	world config.World, serverType, version string, keepWorld bool) int {
 
 	target := inspectComposeTarget(s, world.Dir)
@@ -200,7 +201,7 @@ func moveWorldAside(s *ServerSession, world config.World, version string) bool {
 	return true
 }
 
-func recordWorldChange(doc *yamlDocument, cfg *config.Config, name, serverType, version string) error {
+func recordWorldChange(doc *yamledit.Document, cfg *config.Config, name, serverType, version string) error {
 	worlds := cfg.WorldList()
 	for i := range worlds {
 		if strings.EqualFold(worlds[i].Name, name) {

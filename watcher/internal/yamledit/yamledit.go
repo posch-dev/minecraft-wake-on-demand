@@ -1,4 +1,4 @@
-package main
+package yamledit
 
 import (
 	"fmt"
@@ -10,12 +10,12 @@ import (
 
 // Editing the parsed document keeps the comments people wrote in their config,
 // re-marshalling the Config would silently drop every one of them.
-type yamlDocument struct {
+type Document struct {
 	path string
 	root *yaml.Node
 }
 
-func loadYAMLDocument(path string) (*yamlDocument, error) {
+func Load(path string) (*Document, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -27,12 +27,12 @@ func loadYAMLDocument(path string) (*yamlDocument, error) {
 	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
 		return nil, fmt.Errorf("%s is empty", path)
 	}
-	return &yamlDocument{path: path, root: doc.Content[0]}, nil
+	return &Document{path: path, root: doc.Content[0]}, nil
 }
 
 // Creates the intermediate mappings when a section is missing, so a config
 // written before a feature existed can still be edited.
-func (d *yamlDocument) Set(path []string, value any) error {
+func (d *Document) Set(path []string, value any) error {
 	node := d.root
 	for _, key := range path[:len(path)-1] {
 		child, err := mappingChild(node, key)
@@ -93,7 +93,7 @@ func setMappingValue(node *yaml.Node, key string, value any) error {
 
 // The file holds the DuckDNS token. WriteFile leaves an existing file's mode
 // alone, so it is tightened explicitly rather than assumed.
-func (d *yamlDocument) Save() error {
+func (d *Document) Save() error {
 	data, err := yaml.Marshal(d.root)
 	if err != nil {
 		return err

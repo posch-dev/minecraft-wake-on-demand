@@ -1,4 +1,4 @@
-package main
+package yamledit
 
 import (
 	"os"
@@ -28,20 +28,20 @@ motd:
   sleeping: '{"text":"asleep"}'
 `
 
-func documentFrom(t *testing.T, body string) (*yamlDocument, string) {
+func documentFrom(t *testing.T, body string) (*Document, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yml")
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	doc, err := loadYAMLDocument(path)
+	doc, err := Load(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return doc, path
 }
 
-func saved(t *testing.T, doc *yamlDocument, path string) string {
+func saved(t *testing.T, doc *Document, path string) string {
 	t.Helper()
 	if err := doc.Save(); err != nil {
 		t.Fatal(err)
@@ -198,7 +198,7 @@ func TestLoadingRejectsBrokenYAML(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := loadYAMLDocument(path); err == nil {
+	if _, err := Load(path); err == nil {
 		t.Error("broken YAML should not load")
 	}
 }

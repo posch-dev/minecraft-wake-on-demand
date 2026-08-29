@@ -15,6 +15,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/netprobe"
 )
 
 // A burst of connections shares one probe instead of hammering the server.
@@ -34,7 +35,7 @@ type ServerInfo struct {
 
 type Waker struct {
 	cfg    *config.Config
-	pinger *Pinger
+	pinger *netprobe.Pinger
 	ssh    *SSHRunner
 
 	// Always 9 in production, the tests point it at a local listener.
@@ -67,7 +68,7 @@ func NewWaker(cfg *config.Config) *Waker {
 	w := &Waker{
 		cfg:     cfg,
 		wolPort: wolPort,
-		pinger:  &Pinger{},
+		pinger:  &netprobe.Pinger{},
 		ssh:     NewSSHRunner(cfg),
 	}
 	w.loadServerInfo()

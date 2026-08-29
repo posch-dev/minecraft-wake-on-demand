@@ -10,13 +10,14 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/yamledit"
 )
 
 // Menu driven editing of an existing config.yml, reached as config, edit or
 // settings. init writes the file, this changes it afterwards.
 type configEditor struct {
 	cfg   *config.Config
-	doc   *yamlDocument
+	doc   *yamledit.Document
 	p     *ui.Prompter
 	dirty bool
 }
@@ -28,7 +29,7 @@ func runConfigEdit() int {
 		fmt.Println("\nRun 'mcwod init' first to create one.")
 		return 1
 	}
-	doc, err := loadYAMLDocument(cfg.Path)
+	doc, err := yamledit.Load(cfg.Path)
 	if err != nil {
 		fmt.Printf("%v\n", err)
 		return 1

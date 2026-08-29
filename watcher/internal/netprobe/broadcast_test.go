@@ -1,4 +1,4 @@
-package main
+package netprobe
 
 import (
 	"net"
@@ -34,7 +34,7 @@ func TestBroadcastFollowsTheRealMask(t *testing.T) {
 		{"192.168.1.50/25", "192.168.1.100", "192.168.1.127"},
 	}
 	for _, c := range cases {
-		got := broadcastForIP(net.ParseIP(c.server).To4(), netsFrom(t, c.cidr))
+		got := BroadcastForIP(net.ParseIP(c.server).To4(), netsFrom(t, c.cidr))
 		if got != c.want {
 			t.Errorf("%s with the watcher on %s = %q, want %q", c.server, c.cidr, got, c.want)
 		}
@@ -44,10 +44,10 @@ func TestBroadcastFollowsTheRealMask(t *testing.T) {
 func TestBroadcastPicksTheMatchingInterface(t *testing.T) {
 	nets := netsFrom(t, "10.8.0.2/24", "192.168.1.50/24", "172.17.0.1/16")
 
-	if got := broadcastForIP(net.ParseIP("192.168.1.100").To4(), nets); got != "192.168.1.255" {
+	if got := BroadcastForIP(net.ParseIP("192.168.1.100").To4(), nets); got != "192.168.1.255" {
 		t.Errorf("got %q, want the LAN interface to win", got)
 	}
-	if got := broadcastForIP(net.ParseIP("172.17.0.9").To4(), nets); got != "172.17.255.255" {
+	if got := BroadcastForIP(net.ParseIP("172.17.0.9").To4(), nets); got != "172.17.255.255" {
 		t.Errorf("got %q, want the docker interface", got)
 	}
 }
@@ -56,13 +56,13 @@ func TestBroadcastPicksTheMatchingInterface(t *testing.T) {
 func TestBroadcastReportsWhenNothingMatches(t *testing.T) {
 	nets := netsFrom(t, "192.168.1.50/24")
 
-	if got := broadcastForIP(net.ParseIP("10.9.9.9").To4(), nets); got != "" {
+	if got := BroadcastForIP(net.ParseIP("10.9.9.9").To4(), nets); got != "" {
 		t.Errorf("got %q, want an empty answer so the caller can ask", got)
 	}
 }
 
 func TestGuessBroadcastStillAnswersForRubbish(t *testing.T) {
-	if got := guessBroadcast("not-an-ip"); got != "255.255.255.255" {
+	if got := GuessBroadcast("not-an-ip"); got != "255.255.255.255" {
 		t.Errorf("got %q, want the all subnets fallback", got)
 	}
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/netprobe"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"golang.org/x/crypto/ssh"
 )
@@ -194,7 +195,7 @@ func checkSSHKey(c *checker, cfg *config.Config) bool {
 
 func checkServer(c *checker, cfg *config.Config, ctx context.Context) bool {
 	c.section("Server PC")
-	pinger := &Pinger{}
+	pinger := &netprobe.Pinger{}
 	c.info("reachability checks use %s", pinger.Mode())
 
 	if !pinger.Ping(ctx, cfg.Server.IP, 2*time.Second) {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/netprobe"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
@@ -81,7 +82,7 @@ func describeServerState(cfg *config.Config) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	pinger := &Pinger{}
+	pinger := &netprobe.Pinger{}
 	if !pinger.Ping(ctx, cfg.Server.IP, 1500*time.Millisecond) {
 		return "asleep, joining wakes it up"
 	}

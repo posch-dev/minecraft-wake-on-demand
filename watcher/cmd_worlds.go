@@ -9,6 +9,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/yamledit"
 )
 
 func runWorlds() int {
@@ -17,7 +18,7 @@ func runWorlds() int {
 		ui.PrintError("Config error: " + err.Error())
 		return 1
 	}
-	doc, err := loadYAMLDocument(cfg.Path)
+	doc, err := yamledit.Load(cfg.Path)
 	if err != nil {
 		ui.PrintError(err.Error())
 		return 1
@@ -103,7 +104,7 @@ func prettyServerType(name string) string {
 	return strings.ToUpper(name[:1]) + name[1:]
 }
 
-func switchWorld(p *ui.Prompter, cfg *config.Config, doc *yamlDocument) int {
+func switchWorld(p *ui.Prompter, cfg *config.Config, doc *yamledit.Document) int {
 	worlds := cfg.WorldList()
 	if len(worlds) < 2 {
 		ui.PrintHint("There is only one world, so there is nothing to switch to.")
@@ -177,7 +178,7 @@ func onlinePlayers(cfg *config.Config, session *ServerSession) (int, bool) {
 	return parsePlayerCount(out)
 }
 
-func makeWorld(p *ui.Prompter, cfg *config.Config, doc *yamlDocument) int {
+func makeWorld(p *ui.Prompter, cfg *config.Config, doc *yamledit.Document) int {
 	session, code := openServerSession(p, cfg)
 	if code != 0 {
 		return code
@@ -210,7 +211,7 @@ func makeWorld(p *ui.Prompter, cfg *config.Config, doc *yamlDocument) int {
 	return 0
 }
 
-func removeWorld(p *ui.Prompter, cfg *config.Config, doc *yamlDocument) int {
+func removeWorld(p *ui.Prompter, cfg *config.Config, doc *yamledit.Document) int {
 	worlds := cfg.WorldList()
 	if len(worlds) < 2 {
 		ui.PrintHint("There is only one world, so removing it would leave nothing.")
@@ -252,7 +253,7 @@ func removeWorld(p *ui.Prompter, cfg *config.Config, doc *yamlDocument) int {
 	return 0
 }
 
-func appendWorld(doc *yamlDocument, cfg *config.Config, world config.World) error {
+func appendWorld(doc *yamledit.Document, cfg *config.Config, world config.World) error {
 	list := append(cfg.WorldList(), world)
 	if err := doc.Set([]string{"worlds", "list"}, list); err != nil {
 		return err
