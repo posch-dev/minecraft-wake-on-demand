@@ -525,7 +525,7 @@ into a red exclamation mark while the PC boots. That picture is inside the
 program, there is nothing to install for it.
 
 Anything you put in `assets/` replaces it. Copyable examples are in
-`assets/examples/`.
+`internal/embedded/examples/`.
 
 | File | What it does |
 |------|--------------|

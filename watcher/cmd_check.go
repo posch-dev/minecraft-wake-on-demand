@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/assets"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/netprobe"
@@ -110,37 +111,37 @@ func checkAssets(c *checker, cfg *config.Config) {
 	}
 	c.ok("assets directory %s", dir)
 
-	assets := NewAssets(cfg)
-	for _, state := range []string{stateSleeping, stateStarting, stateLive} {
-		reportMOTDSource(c, cfg, assets, state)
+	set := assets.NewAssets(cfg)
+	for _, state := range []string{assets.StateSleeping, assets.StateStarting, assets.StateLive} {
+		reportMOTDSource(c, cfg, set, state)
 	}
 
-	if icon := assets.IconSleeping(); icon == "" {
+	if icon := set.IconSleeping(); icon == "" {
 		c.warn("no icon for the sleeping state, the list shows the default block")
 	} else {
 		c.ok("sleeping icon ready, %d bytes encoded", len(icon))
 	}
-	if assets.IconLive() == "" {
+	if set.IconLive() == "" {
 		c.info("no server-icon.png, the running server's own icon is passed through")
 	} else {
-		c.ok("running server shows your icon, %d bytes encoded", len(assets.IconLive()))
+		c.ok("running server shows your icon, %d bytes encoded", len(set.IconLive()))
 	}
 }
 
-func reportMOTDSource(c *checker, cfg *config.Config, assets *Assets, state string) {
+func reportMOTDSource(c *checker, cfg *config.Config, set *assets.Assets, state string) {
 	fromFile := map[string]func() string{
-		stateSleeping: assets.MOTDSleeping,
-		stateStarting: assets.MOTDStarting,
-		stateLive:     assets.MOTDLive,
+		assets.StateSleeping: set.MOTDSleeping,
+		assets.StateStarting: set.MOTDStarting,
+		assets.StateLive:     set.MOTDLive,
 	}[state]()
 	fromConfig := map[string]string{
-		stateSleeping: cfg.MOTD.Sleeping,
-		stateStarting: cfg.MOTD.Starting,
-		stateLive:     cfg.MOTD.Live,
+		assets.StateSleeping: cfg.MOTD.Sleeping,
+		assets.StateStarting: cfg.MOTD.Starting,
+		assets.StateLive:     cfg.MOTD.Live,
 	}[state]
 
 	switch {
-	case fromFile == "" && state == stateLive:
+	case fromFile == "" && state == assets.StateLive:
 		c.info("motd-live.json not set, the running server's own MOTD is passed through")
 	case fromFile != fromConfig:
 		c.ok("motd-%s.json loaded", state)

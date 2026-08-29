@@ -1,4 +1,4 @@
-package main
+package assets
 
 import (
 	"bytes"
@@ -20,31 +20,26 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/embedded"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 )
 
 // Unauthenticated and answered to anyone, so an uncapped icon is an amplifier.
 const (
-	maxIconBytes = 64 * 1024
+	MaxIconBytes = 64 * 1024
 	maxMOTDBytes = 8 * 1024
-	iconEdge     = 64
+	IconEdge     = 64
 )
 
 const assetRefreshInterval = time.Minute
 
-//go:embed assets/embed/overlay-sleeping.png
-var overlaySleepingPNG []byte
-
-//go:embed assets/embed/overlay-starting.png
-var overlayStartingPNG []byte
-
 // The three things the server list can be showing, and the message a player
 // gets when their own attempt to join is what starts the server.
 const (
-	stateSleeping  = "sleeping"
-	stateStarting  = "starting"
-	stateLive      = "live"
+	StateSleeping  = "sleeping"
+	StateStarting  = "starting"
+	StateLive      = "live"
 	stateLoginWait = "login-wait"
 )
 
@@ -110,16 +105,16 @@ func (a *Assets) search(name string) []string {
 }
 
 func (a *Assets) MOTDSleeping() string {
-	return a.motd(stateSleeping, a.cfg.MOTD.Sleeping)
+	return a.motd(StateSleeping, a.cfg.MOTD.Sleeping)
 }
 
 func (a *Assets) MOTDStarting() string {
-	return a.motd(stateStarting, a.cfg.MOTD.Starting)
+	return a.motd(StateStarting, a.cfg.MOTD.Starting)
 }
 
 // Empty means the real server's own MOTD is passed through untouched.
 func (a *Assets) MOTDLive() string {
-	return a.motd(stateLive, a.cfg.MOTD.Live)
+	return a.motd(StateLive, a.cfg.MOTD.Live)
 }
 
 // Shown to whoever's attempt to join woke the server, on the disconnect screen.
@@ -160,11 +155,11 @@ func (a *Assets) motdAt(path string) string {
 }
 
 func (a *Assets) IconSleeping() string {
-	return a.stateIcon(stateSleeping, overlaySleepingPNG)
+	return a.stateIcon(StateSleeping, embedded.OverlaySleepingPNG)
 }
 
 func (a *Assets) IconStarting() string {
-	return a.stateIcon(stateStarting, overlayStartingPNG)
+	return a.stateIcon(StateStarting, embedded.OverlayStartingPNG)
 }
 
 // The same rule as the other two states: a file for this state wins, otherwise
@@ -216,15 +211,15 @@ func (a *Assets) readBaseIcon(path string, info os.FileInfo, statErr error) imag
 	if statErr != nil {
 		return nil
 	}
-	if info.Size() > maxIconBytes {
-		logging.Warnf("Ignoring %s: %d bytes is over the %d byte limit", path, info.Size(), maxIconBytes)
+	if info.Size() > MaxIconBytes {
+		logging.Warnf("Ignoring %s: %d bytes is over the %d byte limit", path, info.Size(), MaxIconBytes)
 		return nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil
 	}
-	decoded, err := decodeIconPNG(path, data)
+	decoded, err := DecodeIconPNG(path, data)
 	if err != nil {
 		logging.Warnf("Ignoring %s: %v", path, err)
 		return nil
@@ -248,10 +243,10 @@ func (a *Assets) iconFile(path string) string {
 
 	// A rejected file is cached as empty too, so it is complained about once.
 	dataURI := ""
-	if info.Size() > maxIconBytes {
-		logging.Warnf("Ignoring %s: %d bytes is over the %d byte limit", path, info.Size(), maxIconBytes)
+	if info.Size() > MaxIconBytes {
+		logging.Warnf("Ignoring %s: %d bytes is over the %d byte limit", path, info.Size(), MaxIconBytes)
 	} else if data, err := os.ReadFile(path); err == nil {
-		if _, err := decodeIconPNG(path, data); err != nil {
+		if _, err := DecodeIconPNG(path, data); err != nil {
 			logging.Warnf("Ignoring %s: %v", path, err)
 		} else {
 			dataURI = encodeDataURI(data)
@@ -296,7 +291,7 @@ func composeOverlay(base image.Image, overlayPNG []byte) string {
 		return ""
 	}
 
-	bounds := image.Rect(0, 0, iconEdge, iconEdge)
+	bounds := image.Rect(0, 0, IconEdge, IconEdge)
 	canvas := image.NewNRGBA(bounds)
 	draw.Draw(canvas, bounds, image.NewUniform(color.White), image.Point{}, draw.Src)
 	if base != nil {
@@ -318,13 +313,13 @@ func encodeDataURI(pngBytes []byte) string {
 
 // Clients drop the whole status response over a wrongly sized icon, so a silent
 // skip beats a server that vanishes from the list.
-func decodeIconPNG(path string, data []byte) (image.Image, error) {
-	width, height, err := pngDimensions(data)
+func DecodeIconPNG(path string, data []byte) (image.Image, error) {
+	width, height, err := PngDimensions(data)
 	if err != nil {
 		return nil, err
 	}
-	if width != iconEdge || height != iconEdge {
-		return nil, fmt.Errorf("icon is %dx%d, Minecraft requires %dx%d", width, height, iconEdge, iconEdge)
+	if width != IconEdge || height != IconEdge {
+		return nil, fmt.Errorf("icon is %dx%d, Minecraft requires %dx%d", width, height, IconEdge, IconEdge)
 	}
 	return png.Decode(bytes.NewReader(data))
 }
@@ -332,7 +327,7 @@ func decodeIconPNG(path string, data []byte) (image.Image, error) {
 var pngSignature = []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
 
 // The IHDR chunk is first and holds the dimensions, cheaper than decoding.
-func pngDimensions(data []byte) (int, int, error) {
+func PngDimensions(data []byte) (int, int, error) {
 	if len(data) < 24 || !bytes.Equal(data[:8], pngSignature) {
 		return 0, 0, errNotAPNG
 	}

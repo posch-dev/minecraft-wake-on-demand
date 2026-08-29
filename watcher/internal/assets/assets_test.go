@@ -1,4 +1,4 @@
-package main
+package assets
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/embedded"
 )
 
 func writePNG(t *testing.T, path string, width, height int, fill color.Color) {
@@ -68,8 +69,8 @@ func TestSleepingIconFallsBackToTheBuiltInOverlay(t *testing.T) {
 		t.Fatal("the built-in overlay should be served when no file exists")
 	}
 	img := decodeDataURI(t, icon)
-	if got := img.Bounds().Dx(); got != iconEdge {
-		t.Errorf("width = %d, want %d", got, iconEdge)
+	if got := img.Bounds().Dx(); got != IconEdge {
+		t.Errorf("width = %d, want %d", got, IconEdge)
 	}
 
 	// The background has to be opaque white, not transparent.
@@ -203,7 +204,7 @@ func TestIconIsSkippedWhenWronglySized(t *testing.T) {
 func TestIconIsSkippedWhenOverTheSizeLimit(t *testing.T) {
 	assets, dir := assetsIn(t)
 	path := filepath.Join(dir, "server-icon-live.png")
-	if err := os.WriteFile(path, bytes.Repeat([]byte{0x89}, maxIconBytes+1), 0644); err != nil {
+	if err := os.WriteFile(path, bytes.Repeat([]byte{0x89}, MaxIconBytes+1), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -275,7 +276,7 @@ func TestPNGDimensionsReadsTheIHDRChunk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	width, height, err := pngDimensions(buf.Bytes())
+	width, height, err := PngDimensions(buf.Bytes())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +288,7 @@ func TestPNGDimensionsReadsTheIHDRChunk(t *testing.T) {
 func TestPNGDimensionsRejectsShortAndForeignData(t *testing.T) {
 	truncated := binary.BigEndian.AppendUint32(append([]byte{}, pngSignature...), 13)
 	for _, data := range [][]byte{nil, []byte("GIF89a"), truncated} {
-		if _, _, err := pngDimensions(data); err == nil {
+		if _, _, err := PngDimensions(data); err == nil {
 			t.Errorf("pngDimensions(%q) should have failed", data)
 		}
 	}
@@ -296,16 +297,16 @@ func TestPNGDimensionsRejectsShortAndForeignData(t *testing.T) {
 // The overlays ship inside the binary, a broken one would break every ping.
 func TestEmbeddedOverlaysAreValid64x64PNGs(t *testing.T) {
 	for name, data := range map[string][]byte{
-		"sleeping": overlaySleepingPNG,
-		"starting": overlayStartingPNG,
+		"sleeping": embedded.OverlaySleepingPNG,
+		"starting": embedded.OverlayStartingPNG,
 	} {
-		width, height, err := pngDimensions(data)
+		width, height, err := PngDimensions(data)
 		if err != nil {
 			t.Errorf("the %s overlay is not a PNG: %v", name, err)
 			continue
 		}
-		if width != iconEdge || height != iconEdge {
-			t.Errorf("the %s overlay is %dx%d, want %dx%d", name, width, height, iconEdge, iconEdge)
+		if width != IconEdge || height != IconEdge {
+			t.Errorf("the %s overlay is %dx%d, want %dx%d", name, width, height, IconEdge, IconEdge)
 		}
 	}
 }
@@ -323,7 +324,7 @@ func TestIconsAreComposedBeforeTheFirstRequest(t *testing.T) {
 	writePNG(t, filepath.Join(dir, "server-icon.png"), 64, 64, color.NRGBA{1, 2, 3, 255})
 
 	assets := NewAssets(&cfg)
-	for _, state := range []string{stateSleeping, stateStarting} {
+	for _, state := range []string{StateSleeping, StateStarting} {
 		if _, cached := assets.iconCache["composed:"+state+":"+filepath.Join(dir, "server-icon.png")]; !cached {
 			t.Errorf("the %s icon was not composed up front, cache holds %d", state, len(assets.iconCache))
 		}

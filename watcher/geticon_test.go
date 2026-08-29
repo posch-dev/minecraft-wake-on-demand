@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/assets"
 )
 
 func iconDataURI(t *testing.T, width, height int) (string, []byte) {
@@ -68,7 +70,7 @@ func TestDecodeFaviconDataURIRejectsRubbish(t *testing.T) {
 // ever reaches the disk.
 func TestDecodeFaviconDataURIRefusesAnOversizedIcon(t *testing.T) {
 	oversized := iconDataURIPrefix + base64.StdEncoding.EncodeToString(
-		bytes.Repeat([]byte{0x89}, maxIconBytes+1))
+		bytes.Repeat([]byte{0x89}, assets.MaxIconBytes+1))
 
 	if _, err := decodeFaviconDataURI(oversized); err == nil {
 		t.Error("an icon over the size limit must be refused")
@@ -160,7 +162,7 @@ func TestWriteServerIconCreatesTheAssetsDirectory(t *testing.T) {
 func TestFetchedIconGoesThroughTheSameValidation(t *testing.T) {
 	_, raw := iconDataURI(t, 128, 128)
 
-	if _, err := decodeIconPNG("the server's icon", raw); err == nil {
+	if _, err := assets.DecodeIconPNG("the server's icon", raw); err == nil {
 		t.Error("a 128x128 icon from the server must be refused")
 	}
 }

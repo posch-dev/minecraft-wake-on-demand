@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"fmt"
 	"io"
 	"io/fs"
@@ -10,19 +9,11 @@ import (
 	"strings"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/embedded"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
-
-//go:embed mcwod.service
-var systemdUnitTemplate string
-
-// Carried in the binary so a downloaded release can lay them out without a
-// checkout to copy them from.
-//
-//go:embed assets/examples
-var exampleAssets embed.FS
 
 const installedBinaryName = "mcwod" + exeSuffix
 
@@ -149,7 +140,7 @@ func writeExampleAssets(dir string) error {
 	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0o755); err != nil {
 		return err
 	}
-	entries, err := fs.ReadDir(exampleAssets, "assets/examples")
+	entries, err := fs.ReadDir(embedded.Examples, embedded.ExamplesDir)
 	if err != nil {
 		return err
 	}
@@ -165,7 +156,7 @@ func writeExampleAssets(dir string) error {
 		if fsx.Exists(path) {
 			continue
 		}
-		data, err := exampleAssets.ReadFile("assets/examples/" + entry.Name())
+		data, err := embedded.Examples.ReadFile(embedded.ExamplesDir + "/" + entry.Name())
 		if err != nil {
 			return err
 		}

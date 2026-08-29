@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/assets"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
@@ -80,7 +81,7 @@ func runGetServerIcon() int {
 		ui.PrintError("Your server sent something that is not a usable picture: " + err.Error())
 		return 1
 	}
-	if _, err := decodeIconPNG("the server's picture", decoded); err != nil {
+	if _, err := assets.DecodeIconPNG("the server's picture", decoded); err != nil {
 		ui.PrintError(err.Error())
 		return 1
 	}
@@ -132,8 +133,8 @@ func decodeFaviconDataURI(favicon string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(decoded) > maxIconBytes {
-		return nil, fmt.Errorf("icon is %d bytes, over the %d byte limit", len(decoded), maxIconBytes)
+	if len(decoded) > assets.MaxIconBytes {
+		return nil, fmt.Errorf("icon is %d bytes, over the %d byte limit", len(decoded), assets.MaxIconBytes)
 	}
 	return decoded, nil
 }

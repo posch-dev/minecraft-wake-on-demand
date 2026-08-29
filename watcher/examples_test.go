@@ -5,15 +5,17 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/assets"
 )
 
 // The server list shows two lines, so an example that only fills one teaches
 // the wrong shape.
 func TestExampleMOTDsRenderTwoLines(t *testing.T) {
 	for _, file := range []string{
-		"assets/examples/motd-sleeping.json",
-		"assets/examples/motd-starting.json",
-		"assets/examples/motd-live.json",
+		"internal/embedded/examples/motd-sleeping.json",
+		"internal/embedded/examples/motd-starting.json",
+		"internal/embedded/examples/motd-live.json",
 	} {
 		data, err := os.ReadFile(file)
 		if err != nil {
@@ -47,9 +49,9 @@ func TestExampleMOTDsUseKnownColours(t *testing.T) {
 	}
 
 	for _, file := range []string{
-		"assets/examples/motd-sleeping.json",
-		"assets/examples/motd-starting.json",
-		"assets/examples/motd-live.json",
+		"internal/embedded/examples/motd-sleeping.json",
+		"internal/embedded/examples/motd-starting.json",
+		"internal/embedded/examples/motd-live.json",
 	} {
 		data, err := os.ReadFile(file)
 		if err != nil {
@@ -79,20 +81,20 @@ func TestExampleMOTDsUseKnownColours(t *testing.T) {
 // The picture has to be exactly what the watcher accepts, or the example is a
 // trap rather than a starting point.
 func TestExampleIconIsAValid64x64PNG(t *testing.T) {
-	data, err := os.ReadFile("assets/examples/server-icon.png")
+	data, err := os.ReadFile("internal/embedded/examples/server-icon.png")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	width, height, err := pngDimensions(data)
+	width, height, err := assets.PngDimensions(data)
 	if err != nil {
 		t.Fatalf("the example icon is not a PNG: %v", err)
 	}
-	if width != iconEdge || height != iconEdge {
-		t.Errorf("the example icon is %dx%d, want %dx%d", width, height, iconEdge, iconEdge)
+	if width != assets.IconEdge || height != assets.IconEdge {
+		t.Errorf("the example icon is %dx%d, want %dx%d", width, height, assets.IconEdge, assets.IconEdge)
 	}
-	if len(data) > maxIconBytes {
-		t.Errorf("the example icon is %d bytes, over the %d byte limit", len(data), maxIconBytes)
+	if len(data) > assets.MaxIconBytes {
+		t.Errorf("the example icon is %d bytes, over the %d byte limit", len(data), assets.MaxIconBytes)
 	}
 }
 

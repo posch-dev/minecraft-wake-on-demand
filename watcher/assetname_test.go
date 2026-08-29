@@ -1,26 +1,17 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/testsupport"
 )
 
-func readRepoFile(t *testing.T, parts ...string) string {
-	t.Helper()
-	body, err := os.ReadFile(filepath.Join(append([]string{".."}, parts...)...))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(body)
-}
-
-// Three places name the release assets. If they drift, update stops finding
+// Three places name the release  If they drift, update stops finding
 // what the workflow published and the failure is silent.
 func TestAssetNamesAgreeAcrossCodeWorkflowAndInstaller(t *testing.T) {
-	workflow := readRepoFile(t, ".github", "workflows", "release.yml")
-	installer := readRepoFile(t, "watcher", "install.sh")
+	workflow := testsupport.ReadRepoFile(t, ".github", "workflows", "release.yml")
+	installer := testsupport.ReadRepoFile(t, "watcher", "install.sh")
 
 	for _, platform := range []struct{ goos, goarch, want string }{
 		{"linux", "amd64", "mcwod_linux_amd64"},
@@ -55,7 +46,7 @@ func TestAssetNameRefusesAPlatformNothingIsPublishedFor(t *testing.T) {
 // checksums.txt is what the download is verified against, so the workflow has
 // to actually produce it.
 func TestWorkflowPublishesChecksums(t *testing.T) {
-	workflow := readRepoFile(t, ".github", "workflows", "release.yml")
+	workflow := testsupport.ReadRepoFile(t, ".github", "workflows", "release.yml")
 
 	if !strings.Contains(workflow, "checksums.txt") {
 		t.Error("release.yml publishes no checksums.txt, update would refuse every install")
