@@ -83,9 +83,11 @@ echo "=== 1. install ==="
 echo ""
 echo "=== 2. what it produced ==="
 ok_if "binary installed and executable" test -x /opt/mcwod/mcwod
-ok_if "config.yml placed" test -f /opt/mcwod/config.yml
-MODE="$(stat -c %a /opt/mcwod/config.yml 2>/dev/null || echo none)"
-ok_if "config.yml is mode 600, it holds the DuckDNS token (got $MODE)" test "$MODE" = "600"
+fail_if "the example was placed as the config, which would make init refuse" \
+    test -f /opt/mcwod/config.yml
+OWNER="$(stat -c %U /opt/mcwod 2>/dev/null || echo none)"
+ok_if "install dir belongs to $SUDO_USER, the server info cache goes there (got $OWNER)" \
+    test "$OWNER" = "$SUDO_USER"
 ok_if "example assets copied" test -f /opt/mcwod/assets/examples/motd-sleeping.json
 ok_if "known_hosts created" test -f /opt/mcwod/known_hosts
 ok_if "unit installed" test -f /etc/systemd/system/mcwod.service

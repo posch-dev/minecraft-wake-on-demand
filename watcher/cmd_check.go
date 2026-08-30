@@ -360,14 +360,26 @@ func checkSleepAction(c *checker, cfg *Config) {
 	c.info("the sleep command itself is not run here, that would switch the PC off")
 }
 
+// Everything docker inspect can report for .State.Status. Anything else came
+// from a forced command that ignored what it was sent.
+var dockerContainerStates = map[string]bool{
+	"created": true, "restarting": true, "running": true,
+	"removing": true, "paused": true, "exited": true, "dead": true,
+}
+
 func reportContainerState(c *checker, cfg *Config, state string) {
-	switch strings.TrimSpace(state) {
-	case "":
+	answer := strings.TrimSpace(state)
+	switch {
+	case answer == "":
 		c.warn("container '%s' did not report a state", cfg.Server.ContainerName)
-	case "running":
+	case !dockerContainerStates[answer]:
+		c.info("the key is restricted, so it started the server instead of answering")
+		c.hint("that is the recommended setup, the state below is simply not available")
+		c.hint("run setup-ssh again to install the helper, which check can question properly")
+	case answer == "running":
 		c.ok("container '%s' is running", cfg.Server.ContainerName)
 	default:
-		c.ok("container '%s' exists, state '%s'", cfg.Server.ContainerName, sanitizeForLog(state, 32))
+		c.ok("container '%s' exists, state '%s'", cfg.Server.ContainerName, answer)
 	}
 }
 

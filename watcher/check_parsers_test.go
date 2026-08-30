@@ -74,3 +74,18 @@ func containsAll(haystack string, needles ...string) bool {
 	}
 	return true
 }
+
+// A restricted key runs docker start whatever it is sent, and that prints the
+// container name, which check used to show as the container's state.
+func TestAContainerNameIsNotAContainerState(t *testing.T) {
+	for _, state := range []string{"created", "restarting", "running", "removing", "paused", "exited", "dead"} {
+		if !dockerContainerStates[state] {
+			t.Errorf("%q is a state docker reports", state)
+		}
+	}
+	for _, notAState := range []string{"fh-minecraft", "minecraft", "survival", "mcwod-remote 1"} {
+		if dockerContainerStates[notAState] {
+			t.Errorf("%q was taken for a state", notAState)
+		}
+	}
+}
