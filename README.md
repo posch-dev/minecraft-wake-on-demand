@@ -198,12 +198,12 @@ automatic backup, and starts it. See
 
 Two things happen outside MCWOD, and nothing can do them for you:
 
-1. **Forward port `25565`, TCP, in your router to the watcher** — the always-on
+1. **Forward port `25565`, TCP, in your router to the watcher**, the always-on
    device, *not* the server PC. Every router words this differently: "port
    forwarding", "port sharing", "virtual server", "NAT". You need one rule:
    outside port `25565` to the watcher's local address, port `25565`, TCP.
-2. **Give the server PC a fixed local address** — a "DHCP reservation", or
-   "always assign this address", in your router. If that address changes, MCWOD
+2. **Give the server PC a fixed local address**, a "DHCP reservation" or
+   "always assign this address" in your router. If that address changes, MCWOD
    wakes a device that is not there any more.
 
 Skip both if only people in your own home are ever going to play.

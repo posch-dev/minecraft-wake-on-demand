@@ -1,378 +1,400 @@
 # Security
 
-This project puts a service on the internet and gives it the ability to power on
-a PC in your home network. That combination deserves a written down threat model,
-so this file explains what is exposed, what the defaults protect against, and
-what you can tighten further. The [README](README.md) stays focused on getting it
-running, everything technical lives here.
+Two things about this project deserve a second thought. It puts a program on a
+port that anybody on the internet can reach, and that program can switch on a PC
+inside your home.
 
-## What is exposed
+This page says what is exposed, what the settings already protect you from, and
+what you can lock down further if you want to. The [README](README.md) is about
+getting it running. The reasoning lives here.
 
-| Component | Reachable from | Authentication |
-|-----------|----------------|----------------|
-| Watcher, port 25565 | the internet, via your router | none, by design |
-| Minecraft server | the watcher, or the internet in transfer mode | Mojang account (online mode) |
-| SSH on the server PC | the watcher, on the LAN | key only, forced command |
-| RCON | the docker network on the server PC | password from `server/.env` |
+The short version, if you stop reading here: the defaults are fine for a home
+server. Switch the Minecraft whitelist on. `mcwod setup-ssh` has already limited
+its own key to starting your server and nothing else.
 
-The watcher cannot authenticate anyone. A Minecraft client speaks its handshake
-before any account check happens, so the proxy has to accept and parse packets
-from strangers. Everything below exists because of that.
+## What can reach what
 
-## Design decisions
+| Part | Who can reach it | What it asks for |
+|------|------------------|------------------|
+| Watcher, port 25565 | anybody on the internet, through your router | nothing, on purpose |
+| Minecraft server | the watcher, or the internet in transfer mode | a real Minecraft account |
+| SSH on the server PC | the watcher, inside your network | one key, tied to one command |
+| RCON | only the Minecraft container's own network | the password in `server/.env` |
 
-**The proxy never blocks on network calls.** Every connection is handled in its
-own goroutine, and reachability is probed once and cached for two seconds behind
-a mutex. Without that, a handful of connections per second could each open their
-own probe against a server that is asleep, which is its normal state.
+The watcher cannot check who anybody is. A Minecraft client says hello before any
+account check happens, so the watcher has to read packets from strangers, and
+strangers is who reaches port 25565. Everything below exists because of that one
+fact.
 
-**Waking the server is rate limited.** A login attempt on a sleeping server
-triggers Wake-on-LAN, an SSH call and a container start. Without a limit anyone
-could replay that endlessly. `limits.boot_cooldown` (default 10 seconds) is the
-minimum gap between attempts. It is deliberately short: waking the PC and
-starting the container takes longer than that anyway, so a player who finds the
-server down is never left waiting on the limiter, while an attacker still cannot
-turn one packet per second into one wake per second.
+## What stops somebody abusing it
 
-The real protection against repeated abuse is the failure backoff. After a wake
-attempt that does not end with a reachable server, the gap grows from
-`limits.boot_failure_backoff` and doubles with every further failure up to
-`limits.boot_max_backoff`, so a server that cannot come up is not retried on
-every connection. The counter resets on the first success. Clients that arrive
-during a cooldown get a proper disconnect message, not a dropped socket.
+### Waking the PC is rate limited
 
-**Concurrent connections are capped, in two separate pools.** Logins are
-limited to the player slots the server itself reports, since more players
-cannot join anyway, and `limits.max_logins` overrides that with a fixed number.
-Status pings get their own pool of five times that with a floor of 64. Sharing
-one pool would let a handful of server list entries take every slot a player
-could have used, and a full server would blank the entry in everyone else's
-list. `limits.max_per_ip` (default 8) applies to each pool on its own, which is
-why they count separately: a household behind one NAT has to be able to play and
-keep the list open at the same time. Without any of this, the accept loop
-started a goroutine per connection with no limit, so a plain connection flood
-could exhaust memory and file descriptors on a Pi.
+One login attempt on a sleeping server sets off a wake-up packet, an SSH call
+and a container start. Without a limit somebody could set that off over and
+over. `limits.boot_cooldown`, ten seconds by default, is the shortest gap
+between two attempts. Ten seconds is deliberately short: waking the PC takes
+longer than that anyway, so a real player never waits on the limiter, while one
+packet a second still cannot become one wake a second.
 
-**What the status response can contain is bounded.** A status ping is
-unauthenticated and answered to anyone who asks, so an oversized icon would turn
-a 30 byte request into a multi megabyte reply, which is a usable amplifier
-against the watcher's own uplink. Icons are capped at 64 kB and must be the
-64x64 that Minecraft requires, MOTD files at 8 kB, and anything larger is
-skipped with a line in the log. The response from the real server is read by its
-length prefix and capped at 256 kB rather than trusted to fit one read.
+The real protection is what happens after a failure. If a wake-up does not end
+with a reachable server, the next attempt waits `limits.boot_failure_backoff`,
+and the wait doubles with every further failure up to `limits.boot_max_backoff`.
+A server that cannot come up is not retried on every connection. The first
+success resets it. Anybody who arrives during a wait gets a proper "not now"
+message rather than a dropped connection.
 
-**The packet parser is defensive.** VarInts are rejected past 35 bits,
-incomplete reads return an error instead of indexing out of bounds, and the
-initial client exchange has timeouts so a half open connection cannot be held
-forever. Usernames are limited to the protocol's 16 characters, must decode as
-UTF-8, must come with a complete 16 byte UUID, and are stripped of non-printable
-characters before they reach the log.
+### Only so many connections at once
 
-**Transfer targets depend on where the client came from.** In transfer mode the
-watcher hands the player a new address to connect to. Clients from a private
-address get `server.ip` on the LAN, everyone else gets the public
-`transfer.host`. The decision is made from the socket's peer address, which a
-client cannot choose for itself, and `transfer.local_networks` narrows what
-counts as local. The only thing a local client gains is the address it would
-have reached anyway.
+People logging in are limited to the player slots the server itself reports,
+because more players cannot get in anyway, and `limits.max_logins` replaces that
+with a fixed number if you want one. Server list pings get their own pool, five
+times as large, never smaller than 64.
 
-**Nothing is handed to a shell.** The watcher spawns no processes at all in its
-normal operation. SSH and ICMP are libraries compiled into the binary, so there
-is no command line for a config value to break out of. `server.container_name`
-is still checked against what Docker accepts as a name, because it is the one
-value that ends up inside the remote command string.
+Keeping the two apart matters. Sharing one pool would let a handful of
+open server list entries eat every slot a player could have used, and a full
+server would show up as blank in everybody else's list. `limits.max_per_ip`,
+eight by default, applies to each pool on its own, so a household behind one
+internet connection can play and keep the list open at the same time. Without
+any of this a plain flood of connections could run a Raspberry Pi out of memory.
 
-**The config is validated at startup.** A bad MAC, a port outside 1 to 65535, an
-unknown `wol.mode` or a MOTD that is not valid JSON stops the watcher with a
-message naming the field, rather than failing later at the moment a player tries
+### What it sends back has a size limit
+
+A server list ping is answered to anybody who asks, and the question is 30 bytes
+long. If the answer were megabytes, somebody could use the watcher to fling that
+traffic at a target of their choosing. So pictures are capped at 64 kB and have
+to be the 64x64 that Minecraft demands, message files at 8 kB, and anything
+bigger is skipped with a line in the log. The answer from the real server is
+read by the length it announces and capped at 256 kB, rather than trusted to fit
+whatever the watcher happened to read.
+
+### The part that reads packets assumes the worst
+
+Numbers longer than the protocol allows are rejected, a packet that stops
+halfway through returns an error instead of reading past the end, and the first
+exchange has time limits so a connection that says nothing cannot be held open
+forever. Names are held to the 16 characters the protocol allows, have to be
+valid text, have to come with a complete ID, and anything unprintable is
+stripped out before the name reaches a log line.
+
+### A player cannot pick where transfer mode sends them
+
+The watcher hands the client an address to reconnect to: the local one for
+clients coming from inside your network, the public one for everybody else. It
+decides from the address the connection actually came from, which nobody can
+fake by asking nicely, and `transfer.local_networks` narrows what counts as
+inside. The most a local client can gain is the address it could have typed
+itself.
+
+### Nothing is ever handed to a shell
+
+In normal operation the watcher starts no programs at all. SSH and ping are
+libraries built into it, so there is no command line for a config value to
+escape from. `server.container_name` is still checked against what Docker
+accepts, because it is the one value that ends up inside the command sent to the
+server.
+
+### Bad settings stop it at startup
+
+A malformed MAC address, a port outside 1 to 65535, an unknown wake-up mode or a
+message file that is not valid JSON stops the watcher right away with a line
+naming the setting, instead of failing later at the exact moment somebody tries
 to join.
+
+### One slow answer cannot hold up the rest
+
+Every connection is handled on its own, and the question "is the server awake"
+is asked once and remembered for two seconds. Otherwise a few connections a
+second would each start their own check against a PC that is asleep, which is
+its normal state.
 
 ## Your secrets
 
-`config.yml` holds your DuckDNS token, the server's MAC address and your local
-IPs. It is git-ignored and only `config.example.yml` with placeholders is
-tracked. Never move your real values into the example file.
+`config.yml` holds your DuckDNS token, the MAC address of your server and your
+local addresses. It is kept out of git, and only `config.example.yml`, which has
+placeholders in it, is tracked. Do not put your real values into the example
+file.
 
-The installer copies the config to `/opt/mcwod/config.yml`, chowns it to
-the service user and sets mode 600, so the token is not world readable on the
-watcher. `mcwod init` writes it with mode 600 for the same reason, and
-reads the token without echoing it to the screen.
+The file is written so only its owner can read it, mode 600, every time: by the
+installer, by `mcwod init` and by `mcwod config`. That last one matters, because
+writing to a file that already exists leaves its permissions alone, and the token
+has to stay unreadable to other accounts on the watcher. `config` also edits the
+file you have rather than writing a fresh one from scratch, so a comment you put
+next to your own token survives.
 
-`mcwod config` writes the file back with mode 600 explicitly, because
-writing to an existing file leaves its mode alone and the token has to stay
-unreadable to other accounts on the watcher. It edits the parsed YAML rather
-than rewriting the file from the config struct, so a comment you put next to
-your own token is not silently dropped.
+The token is not echoed back to the screen while you type it.
 
-`server/.env` holds the RCON password. Compose refuses to start without it
-rather than falling back to an image default. RCON's port 25575 is not published
-and must stay that way.
+`server/.env` holds the RCON password. Compose refuses to start without one
+instead of falling back to something predictable. RCON's port 25575 is not
+published to the outside, and it should stay that way.
 
-## SSH
+## The SSH key
 
-The watcher holds a private key that can reach your server PC. Restrict what
-that key is allowed to do, on the server, in `~/.ssh/authorized_keys`:
+The watcher holds a key that opens your server PC. That is worth restricting, and
+`mcwod setup-ssh` restricts it for you. The line it writes into `authorized_keys`
+on the server looks like this:
 
 ```
 command="docker compose --project-directory '/srv/minecraft' up -d",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... watcher@host
 ```
 
-Even if the key leaks, it can then only bring that one project up. Without a
-known compose directory the command is `docker start <container>` instead.
-`mcwod setup-ssh` installs the key in exactly this form by default, so
-this is what you get unless you decline it.
+Everything before the key is a fence. Whoever holds that key can bring that one
+project up and do nothing else: no shell, no forwarded ports, no other command,
+however they ask. Without a known compose folder the command is
+`docker start <container>` instead. You get this unless you turn it down.
 
-### When the watcher may also send the PC to sleep
+### If you also let it send the PC to sleep
 
-Answering yes to the sleep question in `setup-ssh` widens what the key can do,
-and that is worth understanding before you agree to it. The forced command
-becomes a script instead of a single command:
+Saying yes to the sleep question in `setup-ssh` widens what the key can do, and
+it is worth understanding before you agree. The fence becomes a small script
+instead of a single command:
 
 ```
 command="/usr/local/bin/mcwod-remote",no-port-forwarding,... ssh-ed25519 AAAA... mcwod
 ```
 
-The script accepts exactly six words and refuses everything else:
+That script knows exactly six words and refuses everything else:
 
-| Word | Runs |
-|------|------|
-| `hello` | prints a marker so `check` can tell the script is really installed |
+| Word | What it runs |
+|------|--------------|
+| `hello` | prints a marker, so `check` can tell the script is really there |
 | `start` | `docker compose up -d`, or `docker start <container>` |
 | `stop` | `docker compose stop`, or `docker stop <container>` |
-| `status` | `docker inspect -f '{{.State.Status}}' <container>` |
-| `players` | `docker exec <container> rcon-cli list` |
+| `status` | asks Docker whether the container is running |
+| `players` | asks Minecraft who is online |
 | `sleep` | the one power command you picked |
 
-`$SSH_ORIGINAL_COMMAND` is only ever compared against those words, never
-executed, so the watcher cannot ask the script for anything that is not on the
-list. The script is installed with `install -o root -g root -m 0755`. That
-matters: if the SSH account could write to it, anyone holding the key could
-rewrite the script and the restriction would be worth nothing.
+Whatever arrives over SSH is only ever compared against those six words, never
+run. There is no seventh thing to ask for. The script is installed owned by root
+and not writable by anybody else, which is the part that makes it work: if the
+account the key logs into could edit the script, the restriction would be worth
+nothing.
 
-The sleep command needs root, because `systemctl suspend` over SSH runs into
-polkit, which does not treat an SSH session as an active local session. The
-sudoers rule is therefore one line naming one exact subcommand:
+Sending the PC to sleep needs root, because `systemctl suspend` over SSH runs
+into the permission system, which does not count an SSH session as somebody
+sitting at the machine. So there is one line allowing exactly one command:
 
 ```
 youruser ALL=(root) NOPASSWD: /usr/bin/systemctl suspend
 ```
 
-No wildcard, so it cannot be talked into running another `systemctl` command.
-It is written to `/etc/sudoers.d/mcwod` only after `visudo -c` accepts
-it, because a malformed file there locks you out of your own machine.
+No wildcard, so it cannot be talked into running some other `systemctl` command.
+It is written to `/etc/sudoers.d/mcwod` only after the system's own checker
+accepts it, because a broken file in that folder locks you out of your own
+machine.
 
-What you are accepting: a watcher that is compromised can now switch the server
-PC off as well as on. The blast radius is annoyance rather than data loss, since
-the same watcher can wake it again, and `docker stop` runs before a hibernate or
-shutdown so the world is written out. If that trade is not worth it to you,
-decline the question and the key stays limited to starting the server.
+What you are agreeing to: if somebody takes over the watcher, they can switch the
+server PC off as well as on. That is annoying rather than dangerous. The same
+watcher can wake it again, and the container is stopped before a hibernate or a
+shutdown so the world is written to disk first. If you would rather not, say no
+and the key stays limited to starting the server.
 
-The password you type during `setup-ssh` is used for that one login, handed to
-`sudo` over stdin so it never appears in the server's process list, and is not
-written anywhere.
+### Where the key comes from
 
-The watcher generates its own key at `~/.ssh/mcwod` and uses no other unless
-`server.ssh_key_path` names one. It never reaches for `~/.ssh/id_ed25519`,
-because a key found at the default path is the one its owner logs in with
-everywhere else, and that does not belong inside a service facing the internet.
-Point the setting at such a key by hand and `check` warns about it.
+The watcher makes its own key at `~/.ssh/mcwod` and uses no other one, unless
+`server.ssh_key_path` points somewhere else. It never picks up `~/.ssh/id_ed25519`.
+A key sitting at that default path is the one its owner logs into everything with,
+and that does not belong to a service facing the internet. Point the setting at
+such a key by hand and `check` will say so.
 
 The key must not be readable by other users and must not have a passphrase. The
-watcher refuses to start otherwise, the first because it is the rule OpenSSH
-applies and the second because an unattended service cannot type one.
+watcher refuses to start otherwise: the first because that is the rule SSH itself
+applies, the second because a program running on its own cannot type one.
 
-### The one password login
+### The one time you type your password
 
-`init` offers to log in to the server once with a password and set everything up
-from there, and `setup-ssh` does the same for the key alone. That login is the
-only time this project handles your server password, and it is handled like
-this:
+`init` offers to log into the server once with your password and set everything
+up from there, and `setup-ssh` does the same for the key alone. That is the only
+moment this project touches your server password, and it is handled like this:
 
-- It is read without echoing to the screen, kept in memory for the life of that
-  one connection, and never written anywhere.
-- It goes to the SSH client and, for the commands that need root, to `sudo` over
-  stdin. It never appears on a command line, because command lines show up in
-  the server's own process list where any other user on that machine can read
-  them.
-- It is never put into a log line or an error message.
+- It is not echoed to the screen, it lives in memory for that one connection,
+  and it is never written to disk.
+- Handed to SSH, and where root is needed, to `sudo` through its input. It never
+  appears on a command line, because command lines are visible to every other
+  account on that machine.
+- Never put in a log line or an error message.
 
-The host key is confirmed before the password is sent. On first contact the
-fingerprint is printed and you have to answer yes, whatever
-`server.ssh_strict_host_key` says, because a password handed to an unverified
-host is a password handed to whoever is in the middle. A key that changed after
-being trusted is a hard failure with no way to click through it.
+The server is identified before the password is sent. On first contact the
+fingerprint is printed and you have to say yes, no matter what
+`server.ssh_strict_host_key` is set to, because a password given to an
+unverified machine is a password given to whoever is in the middle. A
+fingerprint that changed after you trusted it is a hard stop with no way to
+click past it.
 
-What that session changes on your server, all of it announced first:
+What that one session changes on your server, all of it announced first:
 
 | Change | Needs root |
-|--------|-----------|
-| the public key in `authorized_keys` | no |
-| `ethtool -s <iface> wol g` and a systemd unit that re-arms it on boot | yes |
-| `/usr/local/bin/mcwod-remote`, only when you asked for auto-sleep | yes |
+|--------|------------|
+| the public key added to `authorized_keys` | no |
+| Wake-on-LAN armed, plus a small unit that re-arms it after every boot | yes |
+| `/usr/local/bin/mcwod-remote`, only if you asked for auto-sleep | yes |
 | `/etc/sudoers.d/mcwod`, same | yes |
 
-Everything it reads is read only: the MAC address, the interface, the container
-list, the published port, whether RCON is on, what the kernel can do about
-sleeping.
+Everything else it does is reading: the MAC address, the network card, the list
+of containers, the published port, whether RCON is on, what the machine can do
+about sleeping.
 
-### Which SSH implementation
+### Recognising the server again
 
-SSH is `golang.org/x/crypto/ssh`, the Go team's implementation, compiled into
-the binary. The watcher does not implement any cryptography of its own. What it
-does implement is the host key policy below, on top of
-`golang.org/x/crypto/ssh/knownhosts`, which parses the same `known_hosts` format
-OpenSSH writes.
+`server.ssh_strict_host_key` decides how strict that is:
 
-The tradeoff worth knowing about: with the system `ssh` binary, a distro update
-patched a vulnerability for you. Compiled in, it is only patched when a new
-release of this project is built. Dependabot watches `golang.org/x/*` weekly and
-opens a pull request for it, and the release workflow turns that into new
-binaries, but the responsibility now sits with this repository rather than with
-your package manager. If you build from source, pull and rebuild after such an
-update.
+| Value | What happens |
+|-------|--------------|
+| `accept-new` (default) | trust the server the first time and note its fingerprint, refuse if it ever changes |
+| `yes` | only talk to a server whose fingerprint is already noted |
+| `no` | talk to anything, and log the fingerprint of whatever it talked to |
 
-`govulncheck` runs on every push and once a week on a schedule, so a newly
-disclosed vulnerability surfaces without anyone having to commit first. It
-reports only the ones the code actually reaches, which keeps a finding worth
-acting on.
+A changed fingerprint is a hard stop in both `accept-new` and `yes`. That is the
+entire point of the check, and the message names the two things it can mean: the
+server was reinstalled, or somebody is sitting in the middle of the connection.
 
-### Host key checking
-
-Controlled by `server.ssh_strict_host_key`:
-
-| Value | Behaviour |
-|-------|-----------|
-| `accept-new` (default) | trust the key on first sight and log its fingerprint, refuse if it ever changes |
-| `yes` | only accept a key that is already in `known_hosts` |
-| `no` | accept anything, logs the fingerprint of every key it accepts |
-
-A changed host key is a hard failure in both `accept-new` and `yes`. That is the
-case host key checking exists for, and the error names the two things it can
-mean: the server was reinstalled, or someone is intercepting the connection.
-
-`accept-new` still takes the first connection on trust. To close that window,
-pin the key before starting the watcher and switch to `yes`:
+`accept-new` still takes the very first connection on trust. To close that gap,
+note the fingerprint yourself before starting the watcher and switch to `yes`:
 
 ```bash
 ssh-keyscan -H 192.168.1.100 >> ~/.ssh/known_hosts
 ```
 
-`mcwod setup-ssh` closes it differently: it shows you the fingerprint and
-asks before trusting it, so you can compare it against the server.
+`mcwod setup-ssh` closes it another way: it shows you the fingerprint and asks
+before trusting it, so you can compare it against the server.
 
-Where the file lives depends on the deployment. Under systemd it is
-`/opt/mcwod/known_hosts`, so the unit can keep the home directory read
-only. In Docker it is `watcher/state/known_hosts`, on a mounted directory rather
-than a mounted file, because Docker creates a directory in place of a bind
-mounted file that does not exist yet. That is what used to silently throw the
-accepted key away on every container recreate.
+Where that list of fingerprints lives depends on how the watcher runs. Installed
+normally it is `/opt/mcwod/known_hosts`, which lets the service keep its home
+folder read only. In Docker it is `watcher/state/known_hosts`, a mounted folder
+rather than a mounted file, because Docker invents a folder where a mounted file
+does not exist yet. That is what used to throw the accepted fingerprint away
+every time the container was recreated.
 
-## Container hardening
+### Whose SSH this is
 
-The image is built on `scratch` and contains the binary and a CA bundle, nothing
-else. There is no shell, no package manager and no interpreter to abuse if
-something does go wrong. It drops all capabilities and adds back only `NET_RAW`,
-which ICMP needs, runs with `no-new-privileges` and has a read-only root
-filesystem.
+SSH is `golang.org/x/crypto/ssh`, the Go team's own, built into the program. The
+watcher implements no cryptography itself. What it does implement is the
+fingerprint policy above, on top of the library that reads the same
+`known_hosts` file OpenSSH writes.
 
-Host networking is required because Wake-on-LAN broadcasts on the real LAN.
+The trade worth knowing about: if this used your system's `ssh` command, a system
+update would patch it for you. Built in, it is patched when a new release of this
+project is built. Dependabot watches those libraries weekly and opens a pull
+request, and the release workflow turns that into new binaries, but the
+responsibility now sits with this repository instead of your package manager. If
+you build from source, pull and rebuild after such an update.
 
-The systemd unit gets the same treatment: `NoNewPrivileges`,
-`ProtectSystem=strict`, a read only home, a single writable path and `CAP_NET_RAW`
-as an ambient capability so it does not need root to open an ICMP socket.
+`govulncheck` runs on every push and once a week besides, so a freshly published
+weakness shows up without anyone having to commit anything. It only reports the
+ones this code actually reaches, which keeps its findings worth acting on.
+
+## The container and the service
+
+The Docker image is built on nothing at all: the program and a list of
+certificate authorities, and that is the entire image. There is no shell, no
+package manager and no interpreter in there for anybody to make use of. It gives
+up every special permission except the one ping needs, cannot gain new ones, and
+its filesystem is read only.
+
+It has to use the host's network, because a wake-up packet has to go out on the
+real network to be heard.
+
+The service file gets the same treatment: no new permissions, the system
+protected from writes, a read only home, one writable folder, and the one
+capability that lets it ping without being root.
 
 Image tags and the Minecraft version are pinned, so restarting a container never
-pulls a different build than the one you reviewed.
+quietly pulls a different build than the one you looked at.
 
-## Verifying what you install
+## Checking what you install
 
-Release binaries are built by the workflow in `.github/workflows/release.yml`
-and published with a `checksums.txt`. `install.sh` downloads that file and
-refuses to install a binary whose hash does not match, or one that is not listed
-in it at all. If you would rather not trust the release at all, build from
-source with `sudo ./install.sh --build`.
+Release files are built by the workflow in `.github/workflows/release.yml` and
+published with a `checksums.txt`, which is a list of fingerprints. `install.sh`
+downloads that list and refuses to install a file whose fingerprint does not
+match, or one that is not on the list at all. If you would rather not trust the
+release at all, build it yourself with `sudo ./install.sh --build`.
 
-Each binary also carries build provenance, so you can check that a download
-really came out of that workflow and that commit rather than from someone who
-got hold of the release page:
+Every file also carries proof of where it was built, so you can check that your
+download really came out of that workflow and that commit, rather than from
+somebody who got at the release page:
 
 ```bash
 gh attestation verify mcwod_linux_arm64 --repo posch-dev/minecraft-wake-on-demand
 ```
 
-This is not a code signature. Windows will still warn about an unsigned
-executable downloaded from the internet, because signing needs a certificate
-from a certificate authority and this project does not have one.
+That is not the same as a signed program. Windows will still warn you about an
+unsigned download, because signing needs a certificate bought from a certificate
+authority and this project does not have one.
 
-`mcwod update` applies the same rule. It downloads `checksums.txt`
-alongside the asset and refuses to install on a mismatch, or when the asset is
-not listed at all, because that check is the only thing between a release URL
-and running whatever came back. It also refuses to follow a redirect off the
-release host, so a hijacked redirect cannot point the download somewhere else.
-The new binary is written next to the old one and renamed over it, so a failed
-download cannot leave a half written file where the service expects a program.
+`mcwod update` follows the same rule. It fetches the fingerprint list next to the
+file and refuses to install on a mismatch, or when the file is not listed, since
+that check is the only thing standing between a download link and running
+whatever came back. It also refuses to follow a redirect away from the release
+host, so a hijacked link cannot send the download somewhere else. The new program
+is written next to the old one and renamed over it, so a download that dies
+halfway cannot leave a half written file where the service expects a program.
 
 **The watcher never updates itself.** `update` asks before it does anything, and
-nothing in the running proxy will ever replace its own binary.
+the running watcher will never replace its own program.
 
 `install.sh` and `update` both read `MCWOD_REPO`, `MCWOD_API_BASE` and
-`MCWOD_DOWNLOAD_BASE` from the environment if they are set, and `install.sh`
-also reads `MCWOD_INSTALL_DIR`. These are there for mirrors and for testing.
-Anything you point them at is trusted to serve the binary, so only use them with
-a source you control.
+`MCWOD_DOWNLOAD_BASE` from the environment when they are set, and `install.sh`
+also reads `MCWOD_INSTALL_DIR`. They exist for mirrors and for testing. Whatever
+you point them at is trusted completely, so only point them at something you run
+yourself.
 
-### The update check and your IP
+### The update check and your address
 
 `init`, `config` and `check` ask GitHub once a day whether a newer release
-exists and print one line if so. That request tells GitHub the IP the watcher is
-behind, which for most people is their home connection. The answer is cached for
-24 hours in `.update-check.json` next to the config, the request has a two
-second timeout and failing is silent, so nothing depends on it.
+exists, and print one line if there is. That request tells GitHub the address the
+watcher sits behind, which for most people is their home connection. The answer
+is kept for 24 hours in `.update-check.json` next to the config, the request
+gives up after two seconds, and failing is silent, so nothing depends on it.
 
-Set `update.check: false` in `config.yml` to switch it off entirely. `update`
-itself still works when you run it by hand.
+`update.check: false` in `config.yml` switches it off completely. Running
+`mcwod update` by hand still works.
 
 ## Things you can tighten
 
-- Set `watcher.listen_address` to a single LAN IP if the watcher has more than
-  one interface and only one of them should serve Minecraft.
-- Set `watcher.allowed_hostnames` to your public domain (and LAN IP, if both
-  are used). When non-empty, the watcher drops any connection from a non-local
-  IP whose handshake ServerAddress does not match the list. That keeps port
-  scanners and internet crawlers from getting even a sleeping MOTD back, at the
-  cost of rejecting players who connect by raw IP instead of the domain name.
-  When DuckDNS is enabled, this list is populated automatically with your
-  DuckDNS domain. Forge clients and forwarding proxies append their own fields
-  to the address, everything after the first NUL byte is ignored when matching,
-  so they are not affected.
-- Turn on the Minecraft whitelist if the server is meant for a fixed group.
-- Protect the transfer port (25566 in transfer mode) with a host firewall.
-  That port is published directly to the Minecraft container and the watcher
-  cannot filter it, so a port scanner reaches the server without passing
-  through the watcher's hostname check. An iptables rule that only allows new
-  connections to 25566 from IPs that recently connected to 25565 closes the
-  gap:
+- Set `watcher.listen_address` to a single local address, if the watcher has more
+  than one network card and only one of them should be answering Minecraft.
+
+- Set `watcher.allowed_hostnames` to your public domain, and your local address if
+  people use that too. Anybody coming
+  from outside who asks for something else is dropped, so port scanners and
+  crawlers do not even get a sleeping server back. The cost is that players who
+  type your raw IP instead of the name are turned away as well. With DuckDNS
+  switched on, your domain is filled in automatically. Forge and proxies tack
+  their own bits onto the address, which is ignored when matching, so those
+  players are unaffected.
+
+- Switch the Minecraft whitelist on if the server is for a fixed group of people.
+  This is the one that matters most, and it is two clicks in `mcwod players`.
+
+- Put a firewall in front of the transfer port, 25566, if you use transfer mode. That port goes straight
+  to the Minecraft container, so the watcher cannot filter it and a port scanner
+  reaches the server without passing the hostname check. This closes the gap by
+  only opening 25566 to addresses that recently talked to the watcher:
 
   ```bash
-  # IPs that hit the watcher within the last 120 seconds get 25566 opened.
+  # Addresses that hit the watcher in the last 120 seconds get 25566 opened.
   # Everything else is dropped before it reaches the container.
-  # Works with UFW via `ufw insert` or as raw iptables rules on the host.
   iptables -A INPUT -p tcp --dport 25565 -m recent --set --name MCKNOWN
   iptables -A INPUT -p tcp --dport 25566 -m recent --rcheck --seconds 120 --name MCKNOWN -j ACCEPT
   iptables -A INPUT -p tcp --dport 25566 -j DROP
   ```
 
-  UFW does not expose the `recent` match directly, so either use raw iptables
-  rules (saved in `/etc/iptables/rules.v4` or a netfilter-persistent unit) or
-  let UFW manage the broad allow/drop stanzas and append the `recent` rules
-  after with `iptables -A` so they land in the right chain.
-- Pin the SSH host key and switch to `ssh_strict_host_key: "yes"`.
-- Keep the pinned image tags current, they do not update themselves.
-- Watch for Dependabot pull requests on `golang.org/x/crypto` and cut a release
+  UFW cannot express the "recently seen" part, so either write raw iptables rules
+  and save them (`/etc/iptables/rules.v4`, or a netfilter-persistent unit), or let
+  UFW handle the broad allow and drop and append these afterwards with
+  `iptables -A` so they land in the right place.
+
+- Note the server's fingerprint yourself and switch to
+  `ssh_strict_host_key: "yes"`.
+
+- Keep the pinned image tags current. They do not move on their own, which is the
+  point, and which makes updating them your job.
+
+- Watch for Dependabot pull requests on `golang.org/x/crypto`, and cut a release
   when one lands.
 
-## Reporting a vulnerability
+## Reporting something
 
-Open an issue for anything low risk. For something that could be exploited
-against a running deployment, please report it privately through GitHub's
-security advisories rather than in a public issue.
+Open an issue for anything low risk. For something that could actually be used
+against a running setup, please report it privately through GitHub's security
+advisories instead of in a public issue.
