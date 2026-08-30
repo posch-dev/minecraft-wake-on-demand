@@ -353,21 +353,56 @@ func TestLoginSuccessProtocol768OmitsStrictByte(t *testing.T) {
 	}
 }
 
-// Protocol 776 (26.x) must NOT include the strict error handling byte.
-func TestLoginSuccessProtocol776OmitsStrictByte(t *testing.T) {
+// Protocol 770 (1.21.5) sits between the two trailing fields and gets neither.
+func TestLoginSuccessProtocol770OmitsBothTrailingFields(t *testing.T) {
+	uuid := bytes.Repeat([]byte{0x07}, 16)
+	raw := makeLoginSuccess(uuid, "Notch", 770)
+
+	off := afterLoginSuccessProperties(t, raw)
+	if off != len(raw) {
+		t.Errorf("packet has %d bytes after properties, want 0", len(raw)-off)
+	}
+}
+
+// Protocol 776 (26.2) ends in a session id, and leaving it out is what made the
+// client refuse the packet with a decoder error.
+func TestLoginSuccessProtocol776CarriesASessionID(t *testing.T) {
 	uuid := bytes.Repeat([]byte{0x07}, 16)
 	raw := makeLoginSuccess(uuid, "Notch", 776)
 
+	off := afterLoginSuccessProperties(t, raw)
+	if len(raw)-off != 16 {
+		t.Fatalf("packet has %d bytes after properties, want 16", len(raw)-off)
+	}
+	if bytes.Equal(raw[off:], make([]byte, 16)) {
+		t.Error("session id is all zeroes")
+	}
+	// Version 4 and the RFC 4122 variant, the shape a client parses.
+	if raw[off+6]&0xF0 != 0x40 || raw[off+8]&0xC0 != 0x80 {
+		t.Errorf("session id is not a version 4 UUID: %x", raw[off:])
+	}
+}
+
+// Two different logins must not share a session id.
+func TestLoginSuccessSessionIDsDiffer(t *testing.T) {
+	uuid := bytes.Repeat([]byte{0x07}, 16)
+	first := makeLoginSuccess(uuid, "Notch", 776)
+	second := makeLoginSuccess(uuid, "Notch", 776)
+	if bytes.Equal(first, second) {
+		t.Error("session id repeated across logins")
+	}
+}
+
+// Frame length, packet id, uuid, username and the property count, in that order.
+func afterLoginSuccessProperties(t *testing.T, raw []byte) int {
+	t.Helper()
 	_, off, _ := readVarInt(raw, 0)
 	_, off, _ = readVarInt(raw, off)
 	off += 16
 	nameLen, off, _ := readVarInt(raw, off)
 	off += int(nameLen)
 	_, off, _ = readVarInt(raw, off)
-
-	if off != len(raw) {
-		t.Errorf("packet has %d bytes after properties, want 0 (no strict byte)", len(raw)-off)
-	}
+	return off
 }
 
 // A status handshake carries protocol version -1, the case that used to hang.
