@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -126,19 +127,9 @@ func (h *Handler) readHandshake(conn net.Conn) ([]byte, *Handshake) {
 // A live server answers for itself. If it does not, the watcher answers rather
 // than leaving the entry in the server list looking broken.
 func (h *Handler) handleStatus(ctx context.Context, conn net.Conn, initial []byte, hs *Handshake) {
-	if h.waker.MCPortReachable(ctx, false) && h.proxyStatus(ctx, conn, initial) {
-		return
-	}
-	h.answerStatus(ctx, conn, initial, hs)
-}
-
-func (h *Handler) answerStatus(ctx context.Context, conn net.Conn, initial []byte, hs *Handshake) {
-	motd, icon := h.assets.MOTDSleeping(), h.assets.IconSleeping()
-	if h.waker.Booting() {
-		motd, icon = h.assets.MOTDStarting(), h.assets.IconStarting()
-	}
-
-	// Clients can pack handshake, status request, and ping in one segment; read only when nothing followed.
+	// Clients can pack handshake, status request and ping into one segment or
+	// send them apart. Both paths below need the request, so it is read once
+	// here rather than by whichever path happens to run.
 	rest := trailing(initial, hs.End)
 	if len(rest) == 0 {
 		conn.SetReadDeadline(time.Now().Add(statusTimeout))
@@ -148,6 +139,18 @@ func (h *Handler) answerStatus(ctx context.Context, conn net.Conn, initial []byt
 			return
 		}
 		rest = buf[:n]
+	}
+
+	if h.waker.MCPortReachable(ctx, false) && h.proxyStatus(ctx, conn, initial, rest) {
+		return
+	}
+	h.answerStatus(ctx, conn, rest, hs)
+}
+
+func (h *Handler) answerStatus(ctx context.Context, conn net.Conn, rest []byte, hs *Handshake) {
+	motd, icon := h.assets.MOTDSleeping(), h.assets.IconSleeping()
+	if h.waker.Booting() {
+		motd, icon = h.assets.MOTDStarting(), h.assets.IconStarting()
 	}
 
 	// Whatever follows the status request is the ping the client sent along.
@@ -243,7 +246,7 @@ func (h *Handler) handleLogin(ctx context.Context, conn net.Conn, initial []byte
 // Forwards the ping to the real server, then swaps in the watcher's own MOTD
 // and icon if either is overridden. Player count and version stay real.
 // False means nothing reached the client, so the caller can still answer.
-func (h *Handler) proxyStatus(ctx context.Context, conn net.Conn, initial []byte) bool {
+func (h *Handler) proxyStatus(ctx context.Context, conn net.Conn, initial, rest []byte) bool {
 	target := net.JoinHostPort(h.cfg.Server.IP, strconv.Itoa(h.cfg.Server.MCPort))
 	dialer := net.Dialer{Timeout: 10 * time.Second}
 	server, err := dialer.DialContext(ctx, "tcp", target)
@@ -256,6 +259,13 @@ func (h *Handler) proxyStatus(ctx context.Context, conn net.Conn, initial []byte
 	server.SetDeadline(time.Now().Add(statusTimeout))
 	if _, err := server.Write(initial); err != nil {
 		return false
+	}
+	// The server says nothing until it has the request as well, and a client
+	// that sent it in its own packet is why this used to time out.
+	if !bytes.HasSuffix(initial, rest) {
+		if _, err := server.Write(rest); err != nil {
+			return false
+		}
 	}
 	body, err := readFramedPacket(server, maxStatusResponseBytes)
 	if err != nil {
