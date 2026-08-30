@@ -455,7 +455,7 @@ func TestInstallAuthorizedKeyIsIdempotent(t *testing.T) {
 	}
 	defer session.Close()
 
-	if err := appendAuthorizedKey(session, entry); err != nil {
+	if _, err := appendAuthorizedKey(session, entry); err != nil {
 		t.Fatalf("appendAuthorizedKey: %v", err)
 	}
 
@@ -463,17 +463,16 @@ func TestInstallAuthorizedKeyIsIdempotent(t *testing.T) {
 	for _, want := range []string{
 		"mkdir -p ~/.ssh",
 		"chmod 700 ~/.ssh",
-		"chmod 600 ~/.ssh/authorized_keys",
-		"grep -qF",
+		"chmod 600 authorized_keys",
 		"AAAAC3NzaC1lZDI1NTE5AAAAIexample",
 	} {
 		if !strings.Contains(command, want) {
 			t.Errorf("the remote command is missing %q:\n%s", want, command)
 		}
 	}
-	// The guard is what keeps a second run from appending again.
-	if !strings.Contains(command, "||") {
-		t.Errorf("the command has no append guard:\n%s", command)
+	// What the file is replaced with is built beside it and moved into place.
+	if !strings.Contains(command, "mv authorized_keys.mcwod authorized_keys") {
+		t.Errorf("the command does not swap the file in:\n%s", command)
 	}
 }
 
