@@ -25,7 +25,7 @@ func main() {
 	switch command {
 	case "", "run":
 		os.Exit(runProxy())
-	case "check", "init", "setup-ssh", "config", "edit", "settings", "update", "get-server-icon", "learn-server-icon":
+	case "check", "init", "setup-ssh", "config", "edit", "settings", "update", "get-server-icon", "learn-server-icon", "restore-compose":
 		// These print a laid out report, so log lines go to stderr instead of
 		// interleaving with it.
 		log.out = os.Stderr
@@ -40,6 +40,8 @@ func main() {
 			os.Exit(runUpdate())
 		case "get-server-icon", "learn-server-icon":
 			os.Exit(runGetServerIcon())
+		case "restore-compose":
+			os.Exit(runRestoreCompose())
 		default:
 			os.Exit(runConfigEdit())
 		}
@@ -66,6 +68,8 @@ Usage:
   mc-wol-proxy update       install a newer release, after asking
   mc-wol-proxy get-server-icon
                             copy the running server's icon into assets/
+  mc-wol-proxy restore-compose
+                            put back a docker-compose.yml this tool replaced
   mc-wol-proxy version      print the version
   mc-wol-proxy help         print this text
 

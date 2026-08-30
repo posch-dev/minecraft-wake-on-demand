@@ -1,6 +1,12 @@
 package main
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+)
 
 const eulaURL = "https://aka.ms/MinecraftEULA"
 
@@ -184,4 +190,76 @@ func makeDirCommand(s *ServerSession, dir string) string {
 		return "New-Item -ItemType Directory -Force -Path " + powerShellQuote(dir) + " | Out-Null"
 	}
 	return "mkdir -p " + shellQuote(dir)
+}
+
+// Puts a compose file the watcher replaced back, and keeps the current one so
+// the restore itself can be undone.
+func runRestoreCompose() int {
+	cfg, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("Config error: %v\n", err)
+		return 1
+	}
+
+	p := newPrompter()
+	fmt.Printf("Logging in as %s@%s to look for backups.\n", cfg.Server.SSHUser, cfg.Server.IP)
+	fmt.Println("The password is used for this one login and is not stored anywhere.")
+	password := p.secret(fmt.Sprintf("Password for %s@%s", cfg.Server.SSHUser, cfg.Server.IP))
+	if password == "" {
+		fmt.Println("\nNo password given, nothing was changed.")
+		return 1
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	session, err := DialServerSession(ctx, NewSSHRunner(cfg), password, p)
+	if err != nil {
+		fmt.Printf("\n%v\n", err)
+		return 1
+	}
+	defer session.Close()
+	session.Detect()
+
+	dir := p.line("Directory the compose file lives in", defaultComposeDir(session, cfg))
+	backups, _ := listComposeBackups(session, dir)
+	if len(backups) == 0 {
+		fmt.Printf("\nNo backups from mc-wol-proxy in %s.\n", dir)
+		return 1
+	}
+
+	fmt.Println("\nBackups, newest first:")
+	for i, name := range backups {
+		fmt.Printf("  %d) %s\n", i+1, name)
+	}
+	choice := p.validated("Which one to restore", "1", func(v string) error {
+		index, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil || index < 1 || index > len(backups) {
+			return fmt.Errorf("pick a number between 1 and %d", len(backups))
+		}
+		return nil
+	})
+	index, _ := strconv.Atoi(strings.TrimSpace(choice))
+	chosen := backups[index-1]
+
+	target := inspectComposeTarget(session, dir)
+	if _, err := backupComposeFile(session, target); err != nil {
+		fmt.Printf("\nCannot keep the current file first: %v\n", err)
+		return 1
+	}
+
+	body, err := readRemoteFile(session, joinRemote(session, dir, chosen))
+	if err != nil || strings.TrimSpace(body) == "" {
+		fmt.Printf("\nCannot read %s\n", chosen)
+		return 1
+	}
+	if err := writeRemoteFile(session, target.File, body); err != nil {
+		fmt.Printf("\n%v\n", err)
+		return 1
+	}
+
+	fmt.Printf("\nRestored %s to %s\n", chosen, target.File)
+	fmt.Println("The version that was there was kept as another backup first.")
+	fmt.Printf("Apply it with: cd %s && %s up -d\n", dir, target.Command)
+	return 0
 }

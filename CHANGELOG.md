@@ -66,6 +66,10 @@ notes, so a version has to be listed here before it is tagged.
   service name that already exists is refused rather than overwritten. An
   existing `.env` gets three appended lines and nothing else, under
   `MC_WOL_RCON_PASSWORD` so a foreign `RCON_PASSWORD` cannot be shadowed.
+- `mc-wol-proxy restore-compose` puts back a compose file the watcher replaced.
+  The version it replaces is kept as a backup on the way, so the restore is
+  itself undoable. It uses the password login, not the restricted key, which
+  keeps that key at its six verbs.
 - The Docker warning now says what is actually different per platform. On
   Windows it points out that Docker Desktop only runs while a user is logged in,
   so a resumed PC can come back without its container.
