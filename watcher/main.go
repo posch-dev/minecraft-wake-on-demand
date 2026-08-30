@@ -1,17 +1,13 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"fmt"
-	"net"
 	"os"
-	"os/signal"
-	"strconv"
-	"strings"
-	"sync"
-	"syscall"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/cli"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/proxy"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/update"
 	"golang.org/x/term"
 )
 
@@ -19,6 +15,8 @@ import (
 var version = "dev"
 
 func main() {
+	update.Current = version
+
 	command := ""
 	if len(os.Args) > 1 {
 		command = os.Args[1]
@@ -29,37 +27,37 @@ func main() {
 		// systemd calls the binary with no argument, so a menu here would
 		// replace the service with a prompt nobody ever answers.
 		if !attachedToTerminal() {
-			os.Exit(runProxy())
+			os.Exit(proxy.Run())
 		}
-		log.out = os.Stderr
-		os.Exit(runHome())
+		logging.SetOutput(os.Stderr)
+		os.Exit(cli.RunHome())
 	case "run":
-		os.Exit(runProxy())
+		os.Exit(proxy.Run())
 	case "install", "check", "init", "setup-ssh", "config", "edit", "settings", "update", "get-server-icon", "learn-server-icon", "restore-compose", "players", "whitelist", "worlds", "world":
 		// These print a laid out report, so log lines go to stderr instead of
 		// interleaving with it.
-		log.out = os.Stderr
+		logging.SetOutput(os.Stderr)
 		switch command {
 		case "install":
-			os.Exit(runInstall())
+			os.Exit(cli.RunInstall())
 		case "check":
-			os.Exit(runCheck())
+			os.Exit(cli.RunCheck())
 		case "init":
-			os.Exit(runInit())
+			os.Exit(cli.RunInit())
 		case "setup-ssh":
-			os.Exit(runSetupSSH())
+			os.Exit(cli.RunSetupSSH())
 		case "update":
-			os.Exit(runUpdate())
+			os.Exit(cli.RunUpdate())
 		case "get-server-icon", "learn-server-icon":
-			os.Exit(runGetServerIcon())
+			os.Exit(cli.RunGetServerIcon())
 		case "restore-compose":
-			os.Exit(runRestoreCompose())
+			os.Exit(cli.RunRestoreCompose())
 		case "players", "whitelist":
-			os.Exit(runPlayers())
+			os.Exit(cli.RunPlayers())
 		case "worlds", "world":
-			os.Exit(runWorlds())
+			os.Exit(cli.RunWorlds())
 		default:
-			os.Exit(runConfigEdit())
+			os.Exit(cli.RunConfigEdit())
 		}
 	case "version", "--version", "-v":
 		fmt.Printf("mcwod %s\n", version)
@@ -104,109 +102,4 @@ When init sets the server up over SSH, setup-ssh is already done.
 The config is read from MCWOD_CONFIG, then config.yml next to the binary
 or one directory above it.
 `)
-}
-
-func runProxy() int {
-	cfg, err := LoadConfig()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Config error: %v\n", err)
-		return 1
-	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	waker := NewWaker(cfg)
-	handler := NewHandler(cfg, waker)
-
-	address := net.JoinHostPort(cfg.Watcher.ListenAddress, strconv.Itoa(cfg.Watcher.ListenPort))
-	listener, err := net.Listen("tcp", address)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot listen on %s: %v\n", address, err)
-		return 1
-	}
-
-	logStartup(cfg)
-
-	var tasks sync.WaitGroup
-	if cfg.DuckDNS.Enabled {
-		log.Infof("DuckDNS updater enabled for %s.duckdns.org (every %dh)",
-			cfg.DuckDNS.Domain, cfg.DuckDNS.UpdateIntervalHours)
-		tasks.Add(1)
-		go func() {
-			defer tasks.Done()
-			runDuckDNSUpdater(ctx, cfg)
-		}()
-	}
-
-	if cfg.Sleep.Enabled {
-		tasks.Add(1)
-		go func() {
-			defer tasks.Done()
-			runSleepMonitor(ctx, cfg, waker)
-		}()
-	}
-
-	tasks.Add(1)
-	go func() {
-		defer tasks.Done()
-		handler.assets.KeepFresh(ctx)
-	}()
-
-	// Unblocks the Accept call below when a signal arrives.
-	go func() {
-		<-ctx.Done()
-		log.Infof("Shutting down...")
-		listener.Close()
-	}()
-
-	var conns sync.WaitGroup
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
-				break
-			}
-			log.Warnf("Accept failed: %v", err)
-			continue
-		}
-		conns.Add(1)
-		go func() {
-			defer conns.Done()
-			handler.Handle(ctx, conn)
-		}()
-	}
-
-	conns.Wait()
-	tasks.Wait()
-	log.Infof("Proxy stopped")
-	return 0
-}
-
-func logStartup(cfg *Config) {
-	log.Infof("Minecraft Wake-on-Demand Proxy %s listening on %s:%d",
-		version, cfg.Watcher.ListenAddress, cfg.Watcher.ListenPort)
-	log.Infof("Server: %s (%s) port %d, container '%s'",
-		cfg.Server.IP, cfg.Server.MAC, cfg.Server.MCPort, cfg.Server.ContainerName)
-	log.Infof("WoL mode: %s", cfg.WoL.Mode)
-	if cfg.Sleep.Enabled {
-		log.Infof("Auto-sleep: %s after %ds without players", cfg.Sleep.Action, cfg.Sleep.IdleAfter)
-	}
-
-	if !cfg.Transfer.Enabled {
-		log.Infof("Proxy mode: full connection forwarding")
-		return
-	}
-	log.Infof("Transfer mode: %s:%d", cfg.Transfer.Host, cfg.Transfer.Port)
-
-	networks := "any private IP"
-	if nets := cfg.ParsedLocalNetworks(); len(nets) > 0 {
-		parts := make([]string, 0, len(nets))
-		for _, n := range nets {
-			parts = append(parts, n.String())
-		}
-		networks = strings.Join(parts, ", ")
-	}
-	log.Infof("Local players are transferred to %s:%d instead (local networks: %s)",
-		cfg.Server.IP, cfg.Server.MCPort, networks)
 }
