@@ -12,7 +12,7 @@ running, everything technical lives here.
 |-----------|----------------|----------------|
 | Watcher, port 25565 | the internet, via your router | none, by design |
 | Minecraft server | the watcher, or the internet in transfer mode | Mojang account (online mode) |
-| SSH on the server PC | the watcher, on the LAN | key only, restricted command |
+| SSH on the server PC | the watcher, on the LAN | key only, forced command |
 | RCON | the docker network on the server PC | password from `server/.env` |
 
 The watcher cannot authenticate anyone. A Minecraft client speaks its handshake
@@ -114,6 +114,55 @@ command="docker start minecraft",no-port-forwarding,no-X11-forwarding,no-agent-f
 Even if the key leaks, it can then only start that one container.
 `mc-wol-proxy setup-ssh` installs the key in exactly this form by default, so
 this is what you get unless you decline it.
+
+### When the watcher may also send the PC to sleep
+
+Answering yes to the sleep question in `setup-ssh` widens what the key can do,
+and that is worth understanding before you agree to it. The forced command
+becomes a script instead of a single command:
+
+```
+command="/usr/local/bin/mc-wol-remote",no-port-forwarding,... ssh-ed25519 AAAA... mc-wol-proxy
+```
+
+The script accepts exactly six words and refuses everything else:
+
+| Word | Runs |
+|------|------|
+| `hello` | prints a marker so `check` can tell the script is really installed |
+| `start` | `docker start <container>` |
+| `stop` | `docker stop <container>` |
+| `status` | `docker inspect -f '{{.State.Status}}' <container>` |
+| `players` | `docker exec <container> rcon-cli list` |
+| `sleep` | the one power command you picked |
+
+`$SSH_ORIGINAL_COMMAND` is only ever compared against those words, never
+executed, so the watcher cannot ask the script for anything that is not on the
+list. The script is installed with `install -o root -g root -m 0755`. That
+matters: if the SSH account could write to it, anyone holding the key could
+rewrite the script and the restriction would be worth nothing.
+
+The sleep command needs root, because `systemctl suspend` over SSH runs into
+polkit, which does not treat an SSH session as an active local session. The
+sudoers rule is therefore one line naming one exact subcommand:
+
+```
+youruser ALL=(root) NOPASSWD: /usr/bin/systemctl suspend
+```
+
+No wildcard, so it cannot be talked into running another `systemctl` command.
+It is written to `/etc/sudoers.d/mc-wol-proxy` only after `visudo -c` accepts
+it, because a malformed file there locks you out of your own machine.
+
+What you are accepting: a watcher that is compromised can now switch the server
+PC off as well as on. The blast radius is annoyance rather than data loss, since
+the same watcher can wake it again, and `docker stop` runs before a hibernate or
+shutdown so the world is written out. If that trade is not worth it to you,
+decline the question and the key stays limited to `docker start`.
+
+The password you type during `setup-ssh` is used for that one login, handed to
+`sudo` over stdin so it never appears in the server's process list, and is not
+written anywhere.
 
 The key must not be readable by other users and must not have a passphrase. The
 watcher refuses to start otherwise, the first because it is the rule OpenSSH

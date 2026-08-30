@@ -43,8 +43,7 @@ func TestSetupSSHAsksBeforeTrustingAnUnknownHost(t *testing.T) {
 
 	// Answering no has to abort and leave known_hosts empty.
 	refuse := newPrompterFrom(strings.NewReader("n\n"))
-	err := installAuthorizedKeyVia(ctx, runner, "correct-horse", "ssh-ed25519 AAAAtest key", refuse)
-	if err == nil {
+	if _, err := DialServerSession(ctx, runner, "correct-horse", refuse); err == nil {
 		t.Fatal("a refused host key must abort the setup")
 	}
 	if data, _ := os.ReadFile(knownHosts); len(strings.TrimSpace(string(data))) != 0 {
@@ -53,9 +52,12 @@ func TestSetupSSHAsksBeforeTrustingAnUnknownHost(t *testing.T) {
 
 	// Answering yes has to accept it and remember the key.
 	accept := newPrompterFrom(strings.NewReader("y\n"))
-	if err := installAuthorizedKeyVia(ctx, runner, "correct-horse", "ssh-ed25519 AAAAtest key", accept); err != nil {
+	session, err := DialServerSession(ctx, runner, "correct-horse", accept)
+	if err != nil {
 		t.Fatalf("accepting the host key should succeed: %v", err)
 	}
+	session.Close()
+
 	verify, err := knownhosts.New(knownHosts)
 	if err != nil {
 		t.Fatalf("known_hosts does not parse: %v", err)
@@ -83,8 +85,14 @@ func TestSetupSSHDoesNotAskForAKnownHost(t *testing.T) {
 
 	// An empty prompter would block or refuse if a question were asked.
 	silent := newPrompterFrom(strings.NewReader(""))
-	if err := installAuthorizedKeyVia(ctx, runner, "correct-horse", "ssh-ed25519 AAAAtest key", silent); err != nil {
+	session, err := DialServerSession(ctx, runner, "correct-horse", silent)
+	if err != nil {
 		t.Fatalf("a known host should not be questioned: %v", err)
+	}
+	defer session.Close()
+
+	if err := appendAuthorizedKey(session, "ssh-ed25519 AAAAtest mc-wol-proxy"); err != nil {
+		t.Errorf("appending the key should work over an open session: %v", err)
 	}
 }
 
@@ -107,7 +115,7 @@ func TestSetupSSHRefusesAChangedHostKey(t *testing.T) {
 
 	// Answering yes must not help here.
 	eager := newPrompterFrom(strings.NewReader("y\ny\ny\n"))
-	err := installAuthorizedKeyVia(ctx, runner, "correct-horse", "ssh-ed25519 AAAAtest key", eager)
+	_, err := DialServerSession(ctx, runner, "correct-horse", eager)
 	if err == nil {
 		t.Fatal("a changed host key must abort even when confirmed")
 	}
@@ -132,7 +140,7 @@ func TestSetupSSHRefusesAWrongPassword(t *testing.T) {
 	defer cancel()
 
 	p := newPrompterFrom(strings.NewReader(""))
-	err := installAuthorizedKeyVia(ctx, runner, "wrong-password", "ssh-ed25519 AAAAtest key", p)
+	_, err := DialServerSession(ctx, runner, "wrong-password", p)
 	if err == nil {
 		t.Fatal("a wrong password must not install the key")
 	}

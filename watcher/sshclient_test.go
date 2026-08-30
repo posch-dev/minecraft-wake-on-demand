@@ -449,8 +449,14 @@ func TestInstallAuthorizedKeyIsIdempotent(t *testing.T) {
 	defer cancel()
 
 	p := newPrompterFrom(strings.NewReader(""))
-	if err := installAuthorizedKeyVia(ctx, runner, "correct-horse", entry, p); err != nil {
-		t.Fatalf("installAuthorizedKey: %v", err)
+	session, err := DialServerSession(ctx, runner, "correct-horse", p)
+	if err != nil {
+		t.Fatalf("DialServerSession: %v", err)
+	}
+	defer session.Close()
+
+	if err := appendAuthorizedKey(session, entry); err != nil {
+		t.Fatalf("appendAuthorizedKey: %v", err)
 	}
 
 	command := server.lastCommand()

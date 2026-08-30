@@ -19,6 +19,23 @@ notes, so a version has to be listed here before it is tagged.
   not locked out. A rejected login gets `motd.server_full`.
 - `motd.server_full`, shown to a player who arrives when the login pool is
   full.
+- `setup-ssh` can now install `mc-wol-remote` on the server, a helper script
+  owned by root that accepts only the fixed words `hello`, `start`, `stop`,
+  `status`, `players` and `sleep` and refuses everything else. The key in
+  `authorized_keys` is bound to that script, so the watcher can stop the
+  container and suspend the PC without the key ever being able to run an
+  arbitrary command. On Linux the matching `sudoers` rule is installed too,
+  checked with `visudo -c` before it goes anywhere near `/etc`, and it names one
+  exact `systemctl` subcommand without a wildcard.
+- `setup-ssh` detects whether the server runs Linux or Windows and whether it
+  has docker, systemctl and passwordless sudo, instead of asking. On Windows it
+  prints the PowerShell helper, the `icacls` calls that keep it writable only by
+  administrators, and a note that OpenSSH reads
+  `administrators_authorized_keys` rather than the profile for admin accounts.
+- `server.remote_helper` and the `sleep` config block. The watcher refuses to
+  start with `sleep.enabled` and no helper, because an older forced command
+  would silently run `docker start` for every verb it is sent, including
+  `sleep`.
 - Optional `watcher.allowed_hostnames` list. When non-empty, the watcher drops
   connections from non-local IPs whose handshake ServerAddress is not in the
   list, keeping port scanners and internet crawlers from getting any response.
