@@ -100,3 +100,9 @@ func stripANSI(text string) string {
 		text = text[:start] + text[start+end+1:]
 	}
 }
+
+// Nobody to answer a question means nobody to read one either, which is how
+// the service start is told apart from a person at a keyboard.
+func AttachedToTerminal() bool {
+	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+}
