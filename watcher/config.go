@@ -151,6 +151,11 @@ const (
 	defaultMOTDServerFull = "{\"text\":\"Server is full. Please try again in a moment.\",\"color\":\"red\"}"
 )
 
+const (
+	watcherKeyName = "mc-wol-proxy"
+	sharedKeyName  = "id_ed25519"
+)
+
 var strictHostKeyModes = []string{"accept-new", "yes", "no"}
 
 var sleepActions = []string{"suspend", "hibernate", "shutdown", "custom"}
@@ -513,15 +518,34 @@ func (c *Config) ServerInfoPath() string {
 }
 
 // Empty means the platform default, matching what the ssh client would pick.
+// Its own key, so the watcher never adopts the personal one the user logs in
+// with everywhere else. An install from before this stays on the old path.
 func (c *Config) ResolvedSSHKeyPath() string {
 	if c.Server.SSHKeyPath != "" {
 		return expandHome(c.Server.SSHKeyPath)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "id_ed25519"
+		return watcherKeyName
 	}
-	return filepath.Join(home, ".ssh", "id_ed25519")
+	own := filepath.Join(home, ".ssh", watcherKeyName)
+	if _, err := os.Stat(own); err == nil {
+		return own
+	}
+	if shared := filepath.Join(home, ".ssh", sharedKeyName); fileExists(shared) {
+		return shared
+	}
+	return own
+}
+
+// True only for a key the watcher would rather not be using.
+func (c *Config) UsesSharedSSHKey() bool {
+	return filepath.Base(c.ResolvedSSHKeyPath()) == sharedKeyName
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func (c *Config) ResolvedKnownHostsPath() string {

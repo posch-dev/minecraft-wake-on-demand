@@ -8,7 +8,7 @@ server:
   ip: "192.168.1.100"                 # local IP (static or DHCP reserved)
   mc_port: 25565
   ssh_user: "your-username"
-  ssh_key_path: ""                    # empty = platform default
+  ssh_key_path: ""                    # empty = ~/.ssh/mc-wol-proxy, its own key
   ssh_strict_host_key: "accept-new"   # "accept-new" | "yes" | "no", see SECURITY.md
   ssh_known_hosts: ""                 # empty = ssh default (~/.ssh/known_hosts)
   container_name: "minecraft"

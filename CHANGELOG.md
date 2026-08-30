@@ -141,6 +141,12 @@ notes, so a version has to be listed here before it is tagged.
 
 ### Fixed
 
+- The watcher generates its own SSH key at `~/.ssh/mc-wol-proxy` instead of
+  reusing `~/.ssh/id_ed25519`. Finding a key already at the default path meant
+  adopting it, so an internet facing service ended up holding the key its owner
+  logs in with everywhere else. Existing installs keep using the key they have
+  and `check` points out how to move off it.
+
 - The status response from the real server is now read by its length prefix
   instead of from a single 4096 byte read. A response carrying a server icon is
   around 10 kB and never arrives in one segment, so version learning silently
