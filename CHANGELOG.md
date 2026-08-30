@@ -129,6 +129,9 @@ notes, so a version has to be listed here before it is tagged.
   Everyone else has nothing to forward.
 - Transfer mode needs 1.20.5 (protocol 766), the first version with the
   Transfer packet. Proxy mode still supports 1.7.6+.
+- The source is split into packages under `watcher/internal/`, one per subject,
+  and `main.go` is the dispatch and nothing else. Nothing about running the
+  watcher changes. It matters if you build it yourself or send a patch.
 
 ### Fixed
 
