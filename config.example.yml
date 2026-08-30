@@ -12,6 +12,7 @@ server:
   ssh_strict_host_key: "accept-new"   # "accept-new" | "yes" | "no", see SECURITY.md
   ssh_known_hosts: ""                 # empty = ssh default (~/.ssh/known_hosts)
   container_name: "minecraft"
+  compose_dir: ""                     # where the server's compose file lives, remembered on setup
   remote_helper: false                # true once setup-ssh installed mcwod-remote on the server
 
 wol:

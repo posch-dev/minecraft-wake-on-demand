@@ -33,6 +33,13 @@ notes, so a version has to be listed here before it is tagged.
 
 ### Added
 
+- `mcwod players`, also reachable from the menu and as `mcwod whitelist`. It
+  turns the whitelist on and off, adds and removes names, and toggles who is an
+  admin from the same list. Taking away the last admin asks first, since a
+  server with none can only be repaired by editing files on the PC.
+- `server.compose_dir` remembers where the server's compose file lives, so
+  `restore-compose` and `players` no longer ask for it.
+
 - Server version and player slots are now learned from a status probe on first
   boot and cached in `.server-info.json` next to the config. The server list
   ping while the server is asleep reports the real version instead of protocol

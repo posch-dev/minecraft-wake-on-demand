@@ -325,6 +325,7 @@ func (e *configEditor) setUpContainer() {
 	}
 	e.set(e.cfg.Server.ContainerName, "server", "container_name")
 	e.set(e.cfg.Server.MCPort, "server", "mc_port")
+	e.set(e.cfg.Server.ComposeDir, "server", "compose_dir")
 }
 
 // Only ever reports, installing is what the update command is for.

@@ -64,6 +64,7 @@ func offerContainerSetup(p *prompter, s *ServerSession, cfg *Config, facts Serve
 
 	cfg.Server.ContainerName = spec.ServiceName
 	cfg.Server.MCPort = spec.MCPort
+	cfg.Server.ComposeDir = target.Dir
 	return true
 }
 
@@ -313,7 +314,10 @@ func runRestoreCompose() int {
 	defer session.Close()
 	session.Detect()
 
-	dir := p.line("Directory the compose file lives in", defaultComposeDir(session, cfg))
+	dir := cfg.Server.ComposeDir
+	if dir == "" {
+		dir = p.line("Where does your server live on that PC?", defaultComposeDir(session, cfg))
+	}
 	backups, _ := listComposeBackups(session, dir)
 	if len(backups) == 0 {
 		fmt.Printf("\nNo backups from mcwod in %s.\n", dir)
