@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	"golang.org/x/term"
 )
 
 // Set via ldflags in the release build.
@@ -23,7 +25,15 @@ func main() {
 	}
 
 	switch command {
-	case "", "run":
+	case "":
+		// systemd calls the binary with no argument, so a menu here would
+		// replace the service with a prompt nobody ever answers.
+		if !attachedToTerminal() {
+			os.Exit(runProxy())
+		}
+		printUsage(os.Stdout)
+		os.Exit(0)
+	case "run":
 		os.Exit(runProxy())
 	case "check", "init", "setup-ssh", "config", "edit", "settings", "update", "get-server-icon", "learn-server-icon", "restore-compose":
 		// These print a laid out report, so log lines go to stderr instead of
@@ -56,11 +66,16 @@ func main() {
 	}
 }
 
+func attachedToTerminal() bool {
+	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+}
+
 func printUsage(w *os.File) {
 	fmt.Fprint(w, `mc-wol-proxy, Minecraft Wake-on-Demand watcher
 
 Usage:
-  mc-wol-proxy              start the watcher, the same as "run"
+  mc-wol-proxy              a menu, or the watcher itself when run as a service
+  mc-wol-proxy run          start the watcher
   mc-wol-proxy init         answer a few questions and write config.yml
   mc-wol-proxy config       change the configuration, guided
   mc-wol-proxy setup-ssh    create the SSH key and install it on the server

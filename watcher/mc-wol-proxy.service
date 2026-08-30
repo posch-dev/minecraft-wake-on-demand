@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=MC_WOL_USER
 Group=MC_WOL_USER
-ExecStart=/opt/mc-wol-proxy/mc-wol-proxy
+ExecStart=/opt/mc-wol-proxy/mc-wol-proxy run
 Environment=MC_WOL_CONFIG=/opt/mc-wol-proxy/config.yml
 Environment=SERVER_SSH_KNOWN_HOSTS=/opt/mc-wol-proxy/known_hosts
 Restart=always
