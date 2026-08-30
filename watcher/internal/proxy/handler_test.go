@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -41,24 +42,33 @@ func serveOnce(t *testing.T, h *Handler) net.Conn {
 	return client
 }
 
+// Reads exactly one packet and not a byte more, so the next call still finds
+// what came after it. Reading in chunks swallowed the pong whenever it arrived
+// in the same segment as the status response, which is what Linux does.
 func readFrame(t *testing.T, conn net.Conn) []byte {
 	t.Helper()
-	buf := make([]byte, 0, readBufferSize)
-	chunk := make([]byte, readBufferSize)
+	prefix := make([]byte, 0, 5)
+	one := make([]byte, 1)
+	var length int32
 	for {
-		n, err := conn.Read(chunk)
-		if n > 0 {
-			buf = append(buf, chunk[:n]...)
-			if length, off, err := mcproto.ReadVarInt(buf, 0); err == nil {
-				if len(buf) >= off+int(length) {
-					return buf[:off+int(length)]
-				}
-			}
+		if _, err := io.ReadFull(conn, one); err != nil {
+			t.Fatalf("read failed after %d bytes: %v", len(prefix), err)
 		}
-		if err != nil {
-			t.Fatalf("read failed after %d bytes: %v", len(buf), err)
+		prefix = append(prefix, one[0])
+		if value, _, err := mcproto.ReadVarInt(prefix, 0); err == nil {
+			length = value
+			break
+		}
+		if len(prefix) == 5 {
+			t.Fatal("the length prefix never ended")
 		}
 	}
+
+	body := make([]byte, length)
+	if _, err := io.ReadFull(conn, body); err != nil {
+		t.Fatalf("read failed inside a frame of %d bytes: %v", length, err)
+	}
+	return append(prefix, body...)
 }
 
 func decodeStatus(t *testing.T, frame []byte) mcproto.StatusPayload {
