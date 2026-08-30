@@ -254,6 +254,73 @@ func TestSaveAndLoadServerInfoRoundTrip(t *testing.T) {
 	}
 }
 
+// Two worlds run two Minecraft versions, so one must not answer for the other.
+func TestServerInfoIsKeptPerWorld(t *testing.T) {
+	dir := t.TempDir()
+	cfg := defaultConfig()
+	cfg.Path = filepath.Join(dir, "config.yml")
+	cfg.Worlds.List = []World{{Name: "survival"}, {Name: "creative"}}
+
+	cfg.Worlds.Active = "survival"
+	NewWaker(&cfg).saveServerInfo(&ServerInfo{Name: "1.21.4", Protocol: 769})
+	cfg.Worlds.Active = "creative"
+	NewWaker(&cfg).saveServerInfo(&ServerInfo{Name: "26.2", Protocol: 776})
+
+	cfg.Worlds.Active = "survival"
+	if got := NewWaker(&cfg).CachedInfo(); got == nil || got.Protocol != 769 {
+		t.Errorf("survival = %+v, want protocol 769", got)
+	}
+	cfg.Worlds.Active = "creative"
+	if got := NewWaker(&cfg).CachedInfo(); got == nil || got.Protocol != 776 {
+		t.Errorf("creative = %+v, want protocol 776", got)
+	}
+}
+
+// Changing a world's version invalidates what was learned about it, the other
+// world keeps its entry.
+func TestForgetServerInfoDropsOnlyOneWorld(t *testing.T) {
+	dir := t.TempDir()
+	cfg := defaultConfig()
+	cfg.Path = filepath.Join(dir, "config.yml")
+	cfg.Worlds.List = []World{{Name: "survival"}, {Name: "creative"}}
+
+	cfg.Worlds.Active = "survival"
+	NewWaker(&cfg).saveServerInfo(&ServerInfo{Name: "1.21.4", Protocol: 769})
+	cfg.Worlds.Active = "creative"
+	NewWaker(&cfg).saveServerInfo(&ServerInfo{Name: "26.2", Protocol: 776})
+
+	forgetServerInfo(&cfg, "survival")
+
+	cfg.Worlds.Active = "survival"
+	if got := NewWaker(&cfg).CachedInfo(); got != nil {
+		t.Errorf("survival = %+v, want nothing", got)
+	}
+	cfg.Worlds.Active = "creative"
+	if got := NewWaker(&cfg).CachedInfo(); got == nil || got.Protocol != 776 {
+		t.Errorf("creative = %+v, want protocol 776", got)
+	}
+}
+
+// A cache written before worlds is not read, it is replaced by learning again.
+func TestServerInfoFromAnOlderVersionIsIgnored(t *testing.T) {
+	dir := t.TempDir()
+	cfg := defaultConfig()
+	cfg.Path = filepath.Join(dir, "config.yml")
+	old := []byte(`{"name":"1.21.4","protocol":769,"max_players":20}`)
+	if err := os.WriteFile(cfg.ServerInfoPath(), old, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := NewWaker(&cfg).CachedInfo(); got != nil {
+		t.Errorf("cached = %+v, want nothing", got)
+	}
+
+	NewWaker(&cfg).saveServerInfo(&ServerInfo{Name: "26.2", Protocol: 776})
+	if got := NewWaker(&cfg).CachedInfo(); got == nil || got.Protocol != 776 {
+		t.Errorf("cached = %+v, want protocol 776", got)
+	}
+}
+
 func TestLoadServerInfoNoFile(t *testing.T) {
 	dir := t.TempDir()
 	cfg := defaultConfig()

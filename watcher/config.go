@@ -541,6 +541,15 @@ func (c *Config) AssetsDir() string {
 
 // Version and player slots from the last status probe, cached so the watcher can
 // answer for the server while it sleeps.
+// Each world runs its own Minecraft version, so what was learned for one says
+// nothing about the next. Installations without worlds share the one key.
+func (c *Config) ServerInfoKey() string {
+	if world := c.ActiveWorldName(); world != "" {
+		return world
+	}
+	return "default"
+}
+
 func (c *Config) ServerInfoPath() string {
 	const name = ".server-info.json"
 	if c.Path != "" {

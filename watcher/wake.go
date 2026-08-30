@@ -71,26 +71,42 @@ func NewWaker(cfg *Config) *Waker {
 }
 
 func (w *Waker) loadServerInfo() {
-	path := w.cfg.ServerInfoPath()
-	data, err := os.ReadFile(path)
-	if err != nil {
+	cache := readServerInfoCache(w.cfg.ServerInfoPath())
+	info, ok := cache[w.cfg.ServerInfoKey()]
+	if !ok {
 		return
 	}
-	var info ServerInfo
-	if err := json.Unmarshal(data, &info); err != nil {
-		log.Warnf("Ignoring corrupt server info cache %s: %v", path, err)
-		return
-	}
-	w.info = &info
+	w.info = info
 	log.Infof("Loaded cached server info: %s (protocol %d, max players %d)",
 		info.Name, info.Protocol, info.MaxPlayers)
 }
 
-// The cache holds nothing secret, 0600 only keeps other accounts on the watcher
-// from feeding the proxy a version it never probed.
 func (w *Waker) saveServerInfo(info *ServerInfo) {
 	path := w.cfg.ServerInfoPath()
-	data, err := json.MarshalIndent(info, "", "  ")
+	cache := readServerInfoCache(path)
+	cache[w.cfg.ServerInfoKey()] = info
+	writeServerInfoCache(path, cache)
+}
+
+// Empty rather than nil on any problem, so a caller can always write into it.
+// An older single world file does not fit the shape and is left to be replaced.
+func readServerInfoCache(path string) map[string]*ServerInfo {
+	cache := map[string]*ServerInfo{}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return cache
+	}
+	if err := json.Unmarshal(data, &cache); err != nil {
+		log.Infof("Replacing the server info cache %s, it is from an older version", path)
+		return map[string]*ServerInfo{}
+	}
+	return cache
+}
+
+// The cache holds nothing secret, 0600 only keeps other accounts on the watcher
+// from feeding the proxy a version it never probed.
+func writeServerInfoCache(path string, cache map[string]*ServerInfo) {
+	data, err := json.MarshalIndent(cache, "", "  ")
 	if err != nil {
 		log.Warnf("Cannot encode server info cache: %v", err)
 		return
@@ -104,6 +120,18 @@ func (w *Waker) saveServerInfo(info *ServerInfo) {
 		log.Warnf("Cannot update server info cache %s: %v", path, err)
 		os.Remove(tmpPath)
 	}
+}
+
+// A world that changed its Minecraft version would otherwise keep claiming the
+// old one until someone connects.
+func forgetServerInfo(cfg *Config, world string) {
+	path := cfg.ServerInfoPath()
+	cache := readServerInfoCache(path)
+	if _, ok := cache[world]; !ok {
+		return
+	}
+	delete(cache, world)
+	writeServerInfoCache(path, cache)
 }
 
 func (w *Waker) CachedInfo() *ServerInfo {
