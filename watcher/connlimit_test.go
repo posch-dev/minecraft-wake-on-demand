@@ -4,6 +4,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/serverinfo"
 )
 
@@ -82,7 +83,7 @@ func TestConnectionLimiterSetMaxTakesEffect(t *testing.T) {
 func TestLoginLimitFollowsLearnedPlayerSlots(t *testing.T) {
 	cfg := sleepingConfig()
 	cfg.MOTD.MaxPlayers = 10
-	waker := NewWaker(cfg)
+	waker := boot.NewWaker(cfg)
 	h := NewHandler(cfg, waker)
 
 	if got := h.loginConnections.max; got != 10 {
@@ -92,9 +93,7 @@ func TestLoginLimitFollowsLearnedPlayerSlots(t *testing.T) {
 		t.Errorf("status limit = %d, want the floor of %d", got, minStatusConnections)
 	}
 
-	waker.infoMu.Lock()
-	waker.info = &serverinfo.Info{Name: "1.21.4", Protocol: 769, MaxPlayers: 40}
-	waker.infoMu.Unlock()
+	waker.SetInfo(&serverinfo.Info{Name: "1.21.4", Protocol: 769, MaxPlayers: 40})
 	h.refreshConnectionLimits()
 
 	if got := h.loginConnections.max; got != 40 {
@@ -108,8 +107,8 @@ func TestLoginLimitFollowsLearnedPlayerSlots(t *testing.T) {
 func TestConfiguredLoginLimitWinsOverLearnedSlots(t *testing.T) {
 	cfg := sleepingConfig()
 	cfg.Limits.MaxLogins = 3
-	waker := NewWaker(cfg)
-	waker.info = &serverinfo.Info{Name: "1.21.4", Protocol: 769, MaxPlayers: 40}
+	waker := boot.NewWaker(cfg)
+	waker.SetInfo(&serverinfo.Info{Name: "1.21.4", Protocol: 769, MaxPlayers: 40})
 	h := NewHandler(cfg, waker)
 
 	if got := h.loginConnections.max; got != 3 {

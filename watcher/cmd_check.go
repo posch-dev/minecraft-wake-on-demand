@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/assets"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/netprobe"
@@ -211,7 +212,7 @@ func checkServer(c *checker, cfg *config.Config, ctx context.Context) bool {
 	c.ok("%s answers", cfg.Server.IP)
 
 	mcAddress := net.JoinHostPort(cfg.Server.IP, strconv.Itoa(cfg.Server.MCPort))
-	if dialSucceeds(ctx, mcAddress, 3*time.Second) {
+	if boot.DialSucceeds(ctx, mcAddress, 3*time.Second) {
 		c.ok("Minecraft is listening on %s", mcAddress)
 	} else {
 		c.info("nothing on %s yet, the container is stopped", mcAddress)

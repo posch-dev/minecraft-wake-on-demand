@@ -1,186 +1,20 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
-	"net"
-	"os"
-	"path/filepath"
-	"strconv"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
-	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/serverinfo"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/testsupport"
 )
-
-// Stands in for the real Minecraft server so the paths that only run when the
-// server is up can be exercised.
-type fakeMCServer struct {
-	port     int
-	mu       sync.Mutex
-	received []byte
-}
-
-// answerStatus false accepts the connection and stays silent, which is what a
-// container looks like while it is still starting.
-func startFakeMCServer(t *testing.T, answerStatus bool, echo []byte) *fakeMCServer {
-	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { listener.Close() })
-
-	_, portString, _ := net.SplitHostPort(listener.Addr().String())
-	port, _ := strconv.Atoi(portString)
-	server := &fakeMCServer{port: port}
-
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			go func() {
-				defer conn.Close()
-				conn.SetDeadline(time.Now().Add(10 * time.Second))
-				buf := make([]byte, 4096)
-				n, err := conn.Read(buf)
-				if err != nil {
-					return
-				}
-				// The watcher probes readiness with protocol version -1, which
-				// no client sends. A real server answers it, so this one does.
-				hs, hsErr := mcproto.ParseHandshake(buf[:n])
-				if echo != nil && hsErr == nil && hs.ProtocolVersion == -1 {
-					probe, _ := mcproto.MakeStatusResponse(config.DefaultMOTDSleeping, 42, 0, "", "1.21.4", 769)
-					conn.Write(probe)
-					conn.Read(buf)
-					return
-				}
-
-				server.mu.Lock()
-				server.received = append(server.received, buf[:n]...)
-				server.mu.Unlock()
-
-				if answerStatus {
-					motd := "{\"text\":\"the real server\",\"color\":\"green\"}"
-					response, _ := mcproto.MakeStatusResponse(motd, 42, 7, "", "1.21.4", 769)
-					conn.Write(response)
-				}
-				if echo != nil {
-					conn.Write(echo)
-				}
-				if answerStatus || echo != nil {
-					// Closing straight after the write races the proxy copying
-					// it on, so the peer is left to hang up first.
-					conn.Read(buf)
-				}
-				if !answerStatus && echo == nil {
-					// Hold the connection open without ever answering.
-					time.Sleep(6 * time.Second)
-				}
-			}()
-		}
-	}()
-	return server
-}
-
-func (s *fakeMCServer) got() []byte {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]byte{}, s.received...)
-}
-
-func wakerFor(server *fakeMCServer) (*config.Config, *Waker) {
-	cfg := config.Default()
-	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
-	cfg.Server.IP = "127.0.0.1"
-	cfg.Server.MCPort = server.port
-	cfg.Server.SSHUser = "tester"
-	cfg.WoL.BroadcastAddress = "127.0.0.1"
-	return &cfg, NewWaker(&cfg)
-}
-
-func TestMCAcceptsStatusAgainstARunningServer(t *testing.T) {
-	server := startFakeMCServer(t, true, nil)
-	cfg, waker := wakerFor(server)
-	_ = cfg
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if !waker.mcAcceptsStatus(ctx) {
-		t.Fatal("a server that answers a status request counts as ready")
-	}
-
-	// It has to send a well formed handshake, not just open a socket.
-	handshake, err := mcproto.ParseHandshake(server.got())
-	if err != nil {
-		t.Fatalf("the probe sent something unparseable: %v", err)
-	}
-	if handshake.NextState != 1 {
-		t.Errorf("next state = %d, want 1 for a status probe", handshake.NextState)
-	}
-}
-
-// An open port is not enough, this is the case the probe exists for.
-func TestMCAcceptsStatusRejectsASilentPort(t *testing.T) {
-	server := startFakeMCServer(t, false, nil)
-	_, waker := wakerFor(server)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	start := time.Now()
-	if waker.mcAcceptsStatus(ctx) {
-		t.Fatal("a port that never answers must not count as ready")
-	}
-	if elapsed := time.Since(start); elapsed > 8*time.Second {
-		t.Errorf("the probe took %v, it has to give up on its own deadline", elapsed)
-	}
-}
-
-func TestMCPortReachableIsCached(t *testing.T) {
-	server := startFakeMCServer(t, true, nil)
-	_, waker := wakerFor(server)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if !waker.MCPortReachable(ctx, false) {
-		t.Fatal("the fake server is listening")
-	}
-	checkedAt := waker.reachChecked
-
-	// A second call inside the TTL must not probe again.
-	if !waker.MCPortReachable(ctx, false) {
-		t.Fatal("the cached answer should still be true")
-	}
-	if !waker.reachChecked.Equal(checkedAt) {
-		t.Error("the second call probed again instead of using the cache")
-	}
-
-	// The cache is pushed into the past first, two calls microseconds apart
-	// can read the same wall clock on a coarse timer.
-	waker.reachChecked = time.Now().Add(-time.Hour)
-	stale := waker.reachChecked
-	if !waker.MCPortReachable(ctx, true) {
-		t.Fatal("forced probe should still find the server")
-	}
-	if !waker.reachChecked.After(stale) {
-		t.Error("force did not refresh the cache")
-	}
-}
 
 // When the server is up, a status ping is answered by the server itself and
 // not by the watcher's own MOTD.
 func TestStatusPingIsProxiedWhenTheServerIsUp(t *testing.T) {
-	server := startFakeMCServer(t, true, nil)
+	server := testsupport.StartFakeMCServer(t, true, nil)
 	cfg, waker := wakerFor(server)
 
 	handler := NewHandler(cfg, waker)
@@ -210,7 +44,7 @@ func TestStatusPingIsProxiedWhenTheServerIsUp(t *testing.T) {
 // the server sees a truncated login.
 func TestProxyForwardsTheHandshakeAndTheAnswer(t *testing.T) {
 	reply := []byte("HELLO-FROM-THE-SERVER")
-	server := startFakeMCServer(t, false, reply)
+	server := testsupport.StartFakeMCServer(t, false, reply)
 	cfg, waker := wakerFor(server)
 
 	handler := NewHandler(cfg, waker)
@@ -223,7 +57,7 @@ func TestProxyForwardsTheHandshakeAndTheAnswer(t *testing.T) {
 
 	buf := make([]byte, len(reply))
 	client.SetReadDeadline(time.Now().Add(10 * time.Second))
-	n, err := readFull(client, buf)
+	n, err := testsupport.ReadFull(client, buf)
 	if err != nil {
 		t.Fatalf("the server's answer did not come back: %v", err)
 	}
@@ -231,259 +65,18 @@ func TestProxyForwardsTheHandshakeAndTheAnswer(t *testing.T) {
 		t.Errorf("got %q, want %q", buf[:n], reply)
 	}
 
-	got := server.got()
+	got := server.Got()
 	if len(got) < len(handshake) || string(got[:len(handshake)]) != string(handshake) {
 		t.Errorf("the server received %d bytes, not the original handshake", len(got))
 	}
 }
 
-func readFull(conn net.Conn, buf []byte) (int, error) {
-	total := 0
-	for total < len(buf) {
-		n, err := conn.Read(buf[total:])
-		total += n
-		if err != nil {
-			return total, err
-		}
-	}
-	return total, nil
-}
-
-// Changing a world's version invalidates what was learned about it, the other
-// world keeps its entry.
-func TestForgetServerInfoDropsOnlyOneWorld(t *testing.T) {
-	dir := t.TempDir()
-	cfg := config.Default()
-	cfg.Path = filepath.Join(dir, "config.yml")
-	cfg.Worlds.List = []config.World{{Name: "survival"}, {Name: "creative"}}
-
-	cfg.Worlds.Active = "survival"
-	serverinfo.Save(&cfg, &serverinfo.Info{Name: "1.21.4", Protocol: 769})
-	cfg.Worlds.Active = "creative"
-	serverinfo.Save(&cfg, &serverinfo.Info{Name: "26.2", Protocol: 776})
-
-	serverinfo.Forget(&cfg, "survival")
-
-	cfg.Worlds.Active = "survival"
-	if got := NewWaker(&cfg).CachedInfo(); got != nil {
-		t.Errorf("survival = %+v, want nothing", got)
-	}
-	cfg.Worlds.Active = "creative"
-	if got := NewWaker(&cfg).CachedInfo(); got == nil || got.Protocol != 776 {
-		t.Errorf("creative = %+v, want protocol 776", got)
-	}
-}
-
-// A cache written before worlds is not read, it is replaced by learning again.
-func TestServerInfoFromAnOlderVersionIsIgnored(t *testing.T) {
-	dir := t.TempDir()
-	cfg := config.Default()
-	cfg.Path = filepath.Join(dir, "config.yml")
-	old := []byte(`{"name":"1.21.4","protocol":769,"max_players":20}`)
-	if err := os.WriteFile(cfg.ServerInfoPath(), old, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := NewWaker(&cfg).CachedInfo(); got != nil {
-		t.Errorf("cached = %+v, want nothing", got)
-	}
-
-	serverinfo.Save(&cfg, &serverinfo.Info{Name: "26.2", Protocol: 776})
-	if got := NewWaker(&cfg).CachedInfo(); got == nil || got.Protocol != 776 {
-		t.Errorf("cached = %+v, want protocol 776", got)
-	}
-}
-
-func TestLoadServerInfoNoFile(t *testing.T) {
-	dir := t.TempDir()
-	cfg := config.Default()
-	cfg.Path = filepath.Join(dir, "config.yml")
-
-	waker := NewWaker(&cfg)
-	if waker.CachedInfo() != nil {
-		t.Error("expected nil version when no cache file exists")
-	}
-}
-
-func TestLoadServerInfoCorruptFile(t *testing.T) {
-	dir := t.TempDir()
-	cachePath := filepath.Join(dir, ".server-info.json")
-	if err := os.WriteFile(cachePath, []byte("not valid json"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	cfg := config.Default()
-	cfg.Path = filepath.Join(dir, "config.yml")
-
-	waker := NewWaker(&cfg)
-	if waker.CachedInfo() != nil {
-		t.Error("expected nil version when cache file is corrupt")
-	}
-}
-
-func TestLearnServerInfoCachesInMemory(t *testing.T) {
-	server := startFakeMCServer(t, true, nil)
-	_, waker := wakerFor(server)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if !waker.mcAcceptsStatus(ctx) {
-		t.Fatal("server should be reachable")
-	}
-
-	cached := waker.CachedInfo()
-	if cached == nil {
-		t.Fatal("version was not learned from the status response")
-	}
-	if cached.Name != "1.21.4" || cached.Protocol != 769 {
-		t.Errorf("cached = %+v, want name=1.21.4 protocol=769", cached)
-	}
-}
-
-func TestLearnServerInfoIgnoresEmptyVersion(t *testing.T) {
-	server := startFakeMCServer(t, true, nil)
-	_, waker := wakerFor(server)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if !waker.mcAcceptsStatus(ctx) {
-		t.Fatal("server should be reachable")
-	}
-
-	waker.infoMu.Lock()
-	waker.info = nil
-	waker.infoMu.Unlock()
-
-	response, _ := mcproto.MakeStatusResponse("{\"text\":\"x\"}", 10, 0, "", "", 0)
-	waker.learnServerInfo(statusBody(t, response))
-
-	if waker.CachedInfo() != nil {
-		t.Error("empty version should not be cached")
-	}
-}
-
-func TestLearnServerInfoDoesNotUpdateWhenSame(t *testing.T) {
-	server := startFakeMCServer(t, true, nil)
-	_, waker := wakerFor(server)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if !waker.mcAcceptsStatus(ctx) {
-		t.Fatal("server should be reachable")
-	}
-
-	first := waker.CachedInfo()
-	if first == nil {
-		t.Fatal("version should have been learned")
-	}
-
-	// Same version and same player slots as the fake server reported.
-	response, _ := mcproto.MakeStatusResponse("{\"text\":\"x\"}", 42, 0, "", "1.21.4", 769)
-	waker.learnServerInfo(statusBody(t, response))
-
-	cached := waker.CachedInfo()
-	if !cached.Updated.Equal(first.Updated) {
-		t.Error("learning the same info should not bump Updated")
-	}
-}
-
-func TestLearnServerInfoPicksUpChangedPlayerSlots(t *testing.T) {
-	server := startFakeMCServer(t, true, nil)
-	_, waker := wakerFor(server)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if !waker.mcAcceptsStatus(ctx) {
-		t.Fatal("server should be reachable")
-	}
-	if got := waker.CachedInfo().MaxPlayers; got != 42 {
-		t.Fatalf("max players = %d, want 42", got)
-	}
-
-	response, _ := mcproto.MakeStatusResponse("{\"text\":\"x\"}", 60, 0, "", "1.21.4", 769)
-	waker.learnServerInfo(statusBody(t, response))
-
-	if got := waker.CachedInfo().MaxPlayers; got != 60 {
-		t.Errorf("max players = %d, want 60 after the server raised the slots", got)
-	}
-}
-
-func TestServerInfoCachesToFile(t *testing.T) {
-	dir := t.TempDir()
-	server := startFakeMCServer(t, true, nil)
+func wakerFor(server *testsupport.FakeMCServer) (*config.Config, *boot.Waker) {
 	cfg := config.Default()
 	cfg.Server.MAC = "AA:BB:CC:DD:EE:FF"
 	cfg.Server.IP = "127.0.0.1"
-	cfg.Server.MCPort = server.port
+	cfg.Server.MCPort = server.Port
 	cfg.Server.SSHUser = "tester"
 	cfg.WoL.BroadcastAddress = "127.0.0.1"
-	cfg.Path = filepath.Join(dir, "config.yml")
-	waker := NewWaker(&cfg)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if !waker.mcAcceptsStatus(ctx) {
-		t.Fatal("server should be reachable")
-	}
-
-	time.Sleep(100 * time.Millisecond)
-
-	waker2 := NewWaker(&cfg)
-	cached := waker2.CachedInfo()
-	if cached == nil {
-		t.Fatal("version was not persisted to disk")
-	}
-	if cached.Name != "1.21.4" || cached.Protocol != 769 {
-		t.Errorf("cached = %+v, want name=1.21.4 protocol=769", cached)
-	}
-}
-
-// learnServerInfo works on the packet body, the test helpers build whole frames.
-func statusBody(t *testing.T, frame []byte) []byte {
-	t.Helper()
-	body, err := mcproto.ReadFramedPacket(bytes.NewReader(frame), mcproto.MaxStatusResponseBytes)
-	if err != nil {
-		t.Fatalf("readFramedPacket: %v", err)
-	}
-	return body
-}
-
-// Same fake, but the status response carries a favicon.
-func startFakeMCServerWithIcon(t *testing.T, favicon string) *fakeMCServer {
-	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { listener.Close() })
-
-	_, portString, _ := net.SplitHostPort(listener.Addr().String())
-	port, _ := strconv.Atoi(portString)
-	server := &fakeMCServer{port: port}
-
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			go func() {
-				defer conn.Close()
-				conn.SetDeadline(time.Now().Add(10 * time.Second))
-				buf := make([]byte, 4096)
-				if _, err := conn.Read(buf); err != nil {
-					return
-				}
-				response, _ := mcproto.MakeStatusResponse(config.DefaultMOTDSleeping, 20, 0, favicon, "1.21.4", 769)
-				conn.Write(response)
-				conn.Read(buf)
-			}()
-		}
-	}()
-	return server
+	return &cfg, boot.NewWaker(&cfg)
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
@@ -20,7 +21,7 @@ const proxyTickInterval = 30 * time.Second
 
 type SleepMonitor struct {
 	cfg   *config.Config
-	waker *Waker
+	waker *boot.Waker
 
 	// Fields, not methods, so tests can drive the machine without a server.
 	now           func() time.Time
@@ -36,7 +37,7 @@ type SleepMonitor struct {
 	counterDistrusted bool
 }
 
-func NewSleepMonitor(cfg *config.Config, waker *Waker) *SleepMonitor {
+func NewSleepMonitor(cfg *config.Config, waker *boot.Waker) *SleepMonitor {
 	runner := sshx.NewSSHRunner(cfg)
 	return &SleepMonitor{
 		cfg:             cfg,
@@ -49,7 +50,7 @@ func NewSleepMonitor(cfg *config.Config, waker *Waker) *SleepMonitor {
 	}
 }
 
-func runSleepMonitor(ctx context.Context, cfg *config.Config, waker *Waker) {
+func runSleepMonitor(ctx context.Context, cfg *config.Config, waker *boot.Waker) {
 	monitor := NewSleepMonitor(cfg, waker)
 	logging.Infof("Sleep monitor active, %s after %ds without players",
 		cfg.Sleep.Action, cfg.Sleep.IdleAfter)

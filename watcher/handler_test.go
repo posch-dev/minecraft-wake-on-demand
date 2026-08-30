@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/serverinfo"
@@ -93,7 +94,7 @@ func decodeStatus(t *testing.T, frame []byte) mcproto.StatusPayload {
 
 func TestStatusPingWhileSleeping(t *testing.T) {
 	cfg := sleepingConfig()
-	h := NewHandler(cfg, NewWaker(cfg))
+	h := NewHandler(cfg, boot.NewWaker(cfg))
 	client := serveOnce(t, h)
 
 	if _, err := client.Write(mcproto.MakeHandshake(770, "watcher.local", 25565, 1)); err != nil {
@@ -115,7 +116,7 @@ func TestStatusPingWhileSleeping(t *testing.T) {
 // The client is allowed to send everything in one write, which used to be a bug.
 func TestStatusPingInOneSegment(t *testing.T) {
 	cfg := sleepingConfig()
-	h := NewHandler(cfg, NewWaker(cfg))
+	h := NewHandler(cfg, boot.NewWaker(cfg))
 	client := serveOnce(t, h)
 
 	combined := append(mcproto.MakeHandshake(770, "watcher.local", 25565, 1), mcproto.MakeStatusRequest()...)
@@ -145,8 +146,8 @@ func TestLoginWhileSleepingSendsWaitMessage(t *testing.T) {
 	cfg := sleepingConfig()
 	// Keep the boot attempt from actually sending WoL and waiting for SSH.
 	cfg.Limits.BootCooldown = 3600
-	waker := NewWaker(cfg)
-	waker.lastAttempt = time.Now()
+	waker := boot.NewWaker(cfg)
+	waker.SetLastAttempt(time.Now())
 
 	h := NewHandler(cfg, waker)
 	client := serveOnce(t, h)
@@ -185,7 +186,7 @@ func TestStatusPingWhileSleepingShowsCachedInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	waker := NewWaker(cfg)
+	waker := boot.NewWaker(cfg)
 	h := NewHandler(cfg, waker)
 	client := serveOnce(t, h)
 
@@ -207,7 +208,7 @@ func TestStatusPingWhileSleepingShowsCachedInfo(t *testing.T) {
 
 func TestIsLocalClient(t *testing.T) {
 	cfg := sleepingConfig()
-	h := NewHandler(cfg, NewWaker(cfg))
+	h := NewHandler(cfg, boot.NewWaker(cfg))
 
 	local := []string{"192.168.1.20:5000", "10.1.2.3:5000", "127.0.0.1:5000", "172.16.0.5:5000"}
 	for _, a := range local {
@@ -228,7 +229,7 @@ func TestIsLocalClient(t *testing.T) {
 func TestIsLocalClientHonoursConfiguredNetworks(t *testing.T) {
 	cfg := sleepingConfig()
 	cfg.Transfer.LocalNetworks = config.StringList{"192.168.1.0/24"}
-	h := NewHandler(cfg, NewWaker(cfg))
+	h := NewHandler(cfg, boot.NewWaker(cfg))
 
 	inside, _ := net.ResolveTCPAddr("tcp", "192.168.1.50:5000")
 	if !h.isLocalClient(inside) {
@@ -245,7 +246,7 @@ func TestIsLocalClientHonoursConfiguredNetworks(t *testing.T) {
 // A handshake arriving in pieces was dropped with no answer at all.
 func TestHandshakeSplitAcrossReads(t *testing.T) {
 	cfg := sleepingConfig()
-	h := NewHandler(cfg, NewWaker(cfg))
+	h := NewHandler(cfg, boot.NewWaker(cfg))
 	client := serveOnce(t, h)
 
 	combined := append(mcproto.MakeHandshake(770, "watcher.local", 25565, 1), mcproto.MakeStatusRequest()...)
@@ -270,7 +271,7 @@ func TestHandshakeSplitAtEveryOffset(t *testing.T) {
 
 	for split := 1; split < len(handshake); split++ {
 		cfg := sleepingConfig()
-		h := NewHandler(cfg, NewWaker(cfg))
+		h := NewHandler(cfg, boot.NewWaker(cfg))
 		client := serveOnce(t, h)
 
 		if _, err := client.Write(handshake[:split]); err != nil {
@@ -291,7 +292,7 @@ func TestHandshakeSplitAtEveryOffset(t *testing.T) {
 
 func TestAllowedHostnamesEmptyPermitsAll(t *testing.T) {
 	cfg := sleepingConfig()
-	h := NewHandler(cfg, NewWaker(cfg))
+	h := NewHandler(cfg, boot.NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
 	hs := &mcproto.Handshake{ServerAddress: "1.2.3.4", NextState: 1}
@@ -303,7 +304,7 @@ func TestAllowedHostnamesEmptyPermitsAll(t *testing.T) {
 func TestAllowedHostnamesBlocksUnknownRemote(t *testing.T) {
 	cfg := sleepingConfig()
 	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org"}
-	h := NewHandler(cfg, NewWaker(cfg))
+	h := NewHandler(cfg, boot.NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
 	hs := &mcproto.Handshake{ServerAddress: "1.2.3.4", NextState: 1}
@@ -315,7 +316,7 @@ func TestAllowedHostnamesBlocksUnknownRemote(t *testing.T) {
 func TestAllowedHostnamesAllowsMatchingRemote(t *testing.T) {
 	cfg := sleepingConfig()
 	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org", "192.168.1.100"}
-	h := NewHandler(cfg, NewWaker(cfg))
+	h := NewHandler(cfg, boot.NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
 	hs := &mcproto.Handshake{ServerAddress: "mc.example.org", NextState: 1}
@@ -327,7 +328,7 @@ func TestAllowedHostnamesAllowsMatchingRemote(t *testing.T) {
 func TestAllowedHostnamesLocalBypassesCheck(t *testing.T) {
 	cfg := sleepingConfig()
 	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org"}
-	h := NewHandler(cfg, NewWaker(cfg))
+	h := NewHandler(cfg, boot.NewWaker(cfg))
 
 	loopback, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:5000")
 	hs := &mcproto.Handshake{ServerAddress: "scanner.ip", NextState: 1}
@@ -339,7 +340,7 @@ func TestAllowedHostnamesLocalBypassesCheck(t *testing.T) {
 func TestAllowedHostnamesMatchIsCaseInsensitive(t *testing.T) {
 	cfg := sleepingConfig()
 	cfg.Watcher.AllowedHostnames = config.StringList{"MC.Example.Org"}
-	h := NewHandler(cfg, NewWaker(cfg))
+	h := NewHandler(cfg, boot.NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
 	hs := &mcproto.Handshake{ServerAddress: "mc.example.org", NextState: 1}
@@ -363,7 +364,7 @@ func TestAllowedHostnamesAutoPopulatedFromDuckDNS(t *testing.T) {
 		t.Errorf("expected my-world.duckdns.org, got %q", cfg.Watcher.AllowedHostnames[0])
 	}
 
-	h := NewHandler(cfg, NewWaker(cfg))
+	h := NewHandler(cfg, boot.NewWaker(cfg))
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
 	hs := &mcproto.Handshake{ServerAddress: "my-world.duckdns.org", NextState: 1}
 	if !h.isAllowedHostname(hs, remote) {
@@ -374,7 +375,7 @@ func TestAllowedHostnamesAutoPopulatedFromDuckDNS(t *testing.T) {
 func TestAllowedHostnamesIgnoreForgeMarker(t *testing.T) {
 	cfg := sleepingConfig()
 	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org"}
-	h := NewHandler(cfg, NewWaker(cfg))
+	h := NewHandler(cfg, boot.NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
 	for _, address := range []string{
@@ -393,7 +394,7 @@ func TestAllowedHostnamesIgnoreForgeMarker(t *testing.T) {
 func TestAllowedHostnamesStillBlockOtherNames(t *testing.T) {
 	cfg := sleepingConfig()
 	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org"}
-	h := NewHandler(cfg, NewWaker(cfg))
+	h := NewHandler(cfg, boot.NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
 	for _, address := range []string{

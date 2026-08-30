@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 )
 
@@ -18,7 +19,7 @@ type fakeServerAnswers struct {
 	stopCalls      int
 }
 
-func sleepMonitorFor(t *testing.T, answers *fakeServerAnswers, transfer bool) (*SleepMonitor, *Waker, *time.Time) {
+func sleepMonitorFor(t *testing.T, answers *fakeServerAnswers, transfer bool) (*SleepMonitor, *boot.Waker, *time.Time) {
 	t.Helper()
 	cfg := sleepingConfig()
 	cfg.Server.RemoteHelper = true
@@ -33,7 +34,7 @@ func sleepMonitorFor(t *testing.T, answers *fakeServerAnswers, transfer bool) (*
 		cfg.Transfer.Host = "mc.example.org"
 	}
 
-	waker := NewWaker(cfg)
+	waker := boot.NewWaker(cfg)
 	clock := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
 
 	monitor := &SleepMonitor{
@@ -69,7 +70,7 @@ func sleepMonitorFor(t *testing.T, answers *fakeServerAnswers, transfer bool) (*
 func TestSleepMonitorLeavesAConnectedPlayerAlone(t *testing.T) {
 	answers := &fakeServerAnswers{containerState: "running", playerOutput: "There are 1 of a max of 20 players online: eliah"}
 	monitor, waker, clock := sleepMonitorFor(t, answers, false)
-	waker.lastBootAt = clock.Add(-2 * time.Hour)
+	waker.SetLastBoot(clock.Add(-2 * time.Hour))
 	waker.SessionStarted()
 
 	for range 5 {
@@ -85,8 +86,8 @@ func TestSleepMonitorLeavesAConnectedPlayerAlone(t *testing.T) {
 func TestSleepMonitorWaitsForTheIdleWindow(t *testing.T) {
 	answers := &fakeServerAnswers{containerState: "running", playerOutput: "There are 0 of a max of 20 players online:"}
 	monitor, waker, clock := sleepMonitorFor(t, answers, false)
-	waker.lastBootAt = clock.Add(-2 * time.Hour)
-	waker.lastSessionEnd = clock.Add(-time.Minute)
+	waker.SetLastBoot(clock.Add(-2 * time.Hour))
+	waker.SetLastSessionEnd(clock.Add(-time.Minute))
 
 	monitor.tick(context.Background())
 
@@ -101,8 +102,8 @@ func TestSleepMonitorWaitsForTheIdleWindow(t *testing.T) {
 func TestSleepMonitorConfirmsBeforeSleeping(t *testing.T) {
 	answers := &fakeServerAnswers{containerState: "running", playerOutput: "There are 0 of a max of 20 players online:"}
 	monitor, waker, clock := sleepMonitorFor(t, answers, false)
-	waker.lastBootAt = clock.Add(-2 * time.Hour)
-	waker.lastSessionEnd = clock.Add(-time.Hour)
+	waker.SetLastBoot(clock.Add(-2 * time.Hour))
+	waker.SetLastSessionEnd(clock.Add(-time.Hour))
 
 	monitor.tick(context.Background())
 	if monitor.pendingSince.IsZero() {
@@ -129,8 +130,8 @@ func TestSleepMonitorConfirmsBeforeSleeping(t *testing.T) {
 func TestSleepMonitorCancelsWhenAPlayerReturns(t *testing.T) {
 	answers := &fakeServerAnswers{containerState: "running", playerOutput: "There are 0 of a max of 20 players online:"}
 	monitor, waker, clock := sleepMonitorFor(t, answers, false)
-	waker.lastBootAt = clock.Add(-2 * time.Hour)
-	waker.lastSessionEnd = clock.Add(-time.Hour)
+	waker.SetLastBoot(clock.Add(-2 * time.Hour))
+	waker.SetLastSessionEnd(clock.Add(-time.Hour))
 
 	monitor.tick(context.Background())
 	if monitor.pendingSince.IsZero() {
@@ -152,9 +153,9 @@ func TestSleepMonitorCancelsWhenAPlayerReturns(t *testing.T) {
 func TestSleepMonitorRespectsTheGracePeriod(t *testing.T) {
 	answers := &fakeServerAnswers{containerState: "running", playerOutput: "There are 0 of a max of 20 players online:"}
 	monitor, waker, clock := sleepMonitorFor(t, answers, false)
-	waker.lastSessionEnd = clock.Add(-time.Hour)
+	waker.SetLastSessionEnd(clock.Add(-time.Hour))
 	// The PC finished booting a minute ago, the first player is still loading.
-	waker.lastBootAt = clock.Add(-time.Minute)
+	waker.SetLastBoot(clock.Add(-time.Minute))
 
 	monitor.tick(context.Background())
 
@@ -168,8 +169,8 @@ func TestSleepMonitorRespectsTheGracePeriod(t *testing.T) {
 func TestSleepMonitorTreatsAnUnreadableCountAsBusy(t *testing.T) {
 	answers := &fakeServerAnswers{containerState: "running", playerOutput: "rcon: connection refused"}
 	monitor, waker, clock := sleepMonitorFor(t, answers, false)
-	waker.lastBootAt = clock.Add(-2 * time.Hour)
-	waker.lastSessionEnd = clock.Add(-time.Hour)
+	waker.SetLastBoot(clock.Add(-2 * time.Hour))
+	waker.SetLastSessionEnd(clock.Add(-time.Hour))
 
 	for range 5 {
 		monitor.tick(context.Background())
@@ -184,8 +185,8 @@ func TestSleepMonitorTreatsAnUnreadableCountAsBusy(t *testing.T) {
 func TestSleepMonitorTreatsAFailedQueryAsBusy(t *testing.T) {
 	answers := &fakeServerAnswers{containerState: "running", playersErr: errors.New("rcon unreachable")}
 	monitor, waker, clock := sleepMonitorFor(t, answers, false)
-	waker.lastBootAt = clock.Add(-2 * time.Hour)
-	waker.lastSessionEnd = clock.Add(-time.Hour)
+	waker.SetLastBoot(clock.Add(-2 * time.Hour))
+	waker.SetLastSessionEnd(clock.Add(-time.Hour))
 
 	for range 5 {
 		monitor.tick(context.Background())
@@ -201,8 +202,8 @@ func TestSleepMonitorTreatsAFailedQueryAsBusy(t *testing.T) {
 func TestSleepMonitorSleepsWhenTheContainerIsStopped(t *testing.T) {
 	answers := &fakeServerAnswers{containerState: "exited", playersErr: errors.New("container is not running")}
 	monitor, waker, clock := sleepMonitorFor(t, answers, false)
-	waker.lastBootAt = clock.Add(-2 * time.Hour)
-	waker.lastSessionEnd = clock.Add(-time.Hour)
+	waker.SetLastBoot(clock.Add(-2 * time.Hour))
+	waker.SetLastSessionEnd(clock.Add(-time.Hour))
 
 	monitor.tick(context.Background())
 	*clock = clock.Add(2 * time.Minute)
@@ -218,7 +219,7 @@ func TestSleepMonitorSleepsWhenTheContainerIsStopped(t *testing.T) {
 func TestSleepMonitorStopsTrustingAStuckSessionCounter(t *testing.T) {
 	answers := &fakeServerAnswers{containerState: "running", playerOutput: "There are 0 of a max of 20 players online:"}
 	monitor, waker, clock := sleepMonitorFor(t, answers, false)
-	waker.lastBootAt = clock.Add(-4 * time.Hour)
+	waker.SetLastBoot(clock.Add(-4 * time.Hour))
 	waker.SessionStarted()
 
 	// While the last answer is fresh, the counter is believed.
@@ -246,8 +247,8 @@ func TestSleepMonitorStopsTheContainerBeforeHibernating(t *testing.T) {
 	answers := &fakeServerAnswers{containerState: "running", playerOutput: "There are 0 of a max of 20 players online:"}
 	monitor, waker, clock := sleepMonitorFor(t, answers, false)
 	monitor.cfg.Sleep.Action = "hibernate"
-	waker.lastBootAt = clock.Add(-2 * time.Hour)
-	waker.lastSessionEnd = clock.Add(-time.Hour)
+	waker.SetLastBoot(clock.Add(-2 * time.Hour))
+	waker.SetLastSessionEnd(clock.Add(-time.Hour))
 
 	monitor.tick(context.Background())
 	*clock = clock.Add(2 * time.Minute)
@@ -264,8 +265,8 @@ func TestSleepMonitorStopsTheContainerBeforeHibernating(t *testing.T) {
 func TestSleepMonitorDoesNotStopTheContainerBeforeSuspending(t *testing.T) {
 	answers := &fakeServerAnswers{containerState: "running", playerOutput: "There are 0 of a max of 20 players online:"}
 	monitor, waker, clock := sleepMonitorFor(t, answers, false)
-	waker.lastBootAt = clock.Add(-2 * time.Hour)
-	waker.lastSessionEnd = clock.Add(-time.Hour)
+	waker.SetLastBoot(clock.Add(-2 * time.Hour))
+	waker.SetLastSessionEnd(clock.Add(-time.Hour))
 
 	monitor.tick(context.Background())
 	*clock = clock.Add(2 * time.Minute)
@@ -283,7 +284,7 @@ func TestSleepMonitorDoesNotStopTheContainerBeforeSuspending(t *testing.T) {
 func TestSleepMonitorInTransferModeWaitsOutTheIdleWindow(t *testing.T) {
 	answers := &fakeServerAnswers{containerState: "running", playerOutput: "There are 0 of a max of 20 players online:"}
 	monitor, waker, clock := sleepMonitorFor(t, answers, true)
-	waker.lastBootAt = clock.Add(-2 * time.Hour)
+	waker.SetLastBoot(clock.Add(-2 * time.Hour))
 
 	monitor.tick(context.Background())
 	if answers.sleepCalls != 0 {

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
 )
 
@@ -15,7 +16,7 @@ import (
 // reset, which it reports as a socket error instead of showing the message.
 func TestColdStartLoginIsClosedCleanly(t *testing.T) {
 	cfg := sleepingConfig()
-	handler := NewHandler(cfg, NewWaker(cfg))
+	handler := NewHandler(cfg, boot.NewWaker(cfg))
 	client := serveOnce(t, handler)
 
 	if _, err := client.Write(mcproto.MakeHandshake(770, "watcher.local", 25565, 2)); err != nil {

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/assets"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
@@ -30,7 +31,7 @@ const (
 
 type Handler struct {
 	cfg       *config.Config
-	waker     *Waker
+	waker     *boot.Waker
 	assets    *assets.Assets
 	localNets []*net.IPNet
 
@@ -38,7 +39,7 @@ type Handler struct {
 	loginConnections  *ConnectionLimiter
 }
 
-func NewHandler(cfg *config.Config, waker *Waker) *Handler {
+func NewHandler(cfg *config.Config, waker *boot.Waker) *Handler {
 	h := &Handler{
 		cfg:               cfg,
 		waker:             waker,

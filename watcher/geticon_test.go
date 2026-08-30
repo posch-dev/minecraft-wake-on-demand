@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/assets"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/testsupport"
 )
 
 func iconDataURI(t *testing.T, width, height int) (string, []byte) {
@@ -169,11 +170,11 @@ func TestFetchedIconGoesThroughTheSameValidation(t *testing.T) {
 
 func TestFetchServerStatusReadsTheFavicon(t *testing.T) {
 	uri, _ := iconDataURI(t, 64, 64)
-	server := startFakeMCServerWithIcon(t, uri)
+	server := testsupport.StartFakeMCServerWithIcon(t, uri)
 
 	cfg := sleepingConfig()
 	cfg.Server.IP = "127.0.0.1"
-	cfg.Server.MCPort = server.port
+	cfg.Server.MCPort = server.Port
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

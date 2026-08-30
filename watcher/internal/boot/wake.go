@@ -1,4 +1,4 @@
-package main
+package boot
 
 import (
 	"context"
@@ -93,7 +93,7 @@ func (w *Waker) MCPortReachable(ctx context.Context, force bool) bool {
 	return value
 }
 
-func (w *Waker) markReachable() {
+func (w *Waker) MarkReachable() {
 	w.reachMu.Lock()
 	defer w.reachMu.Unlock()
 	w.reachValue = true
@@ -101,10 +101,10 @@ func (w *Waker) markReachable() {
 }
 
 func (w *Waker) SSHPortReachable(ctx context.Context) bool {
-	return dialSucceeds(ctx, w.ssh.Address(), 2*time.Second)
+	return DialSucceeds(ctx, w.ssh.Address(), 2*time.Second)
 }
 
-func dialSucceeds(ctx context.Context, address string, timeout time.Duration) bool {
+func DialSucceeds(ctx context.Context, address string, timeout time.Duration) bool {
 	dialer := net.Dialer{Timeout: timeout}
 	conn, err := dialer.DialContext(ctx, "tcp", address)
 	if err != nil {
@@ -348,7 +348,36 @@ func (w *Waker) FullBoot(ctx context.Context) bool {
 
 	ok = w.waitForMC(ctx)
 	if ok {
-		w.markReachable()
+		w.MarkReachable()
 	}
 	return ok
+}
+
+// A test can hand the waker what a probe would have learned.
+func (w *Waker) SetInfo(info *serverinfo.Info) {
+	w.infoMu.Lock()
+	defer w.infoMu.Unlock()
+	w.info = info
+}
+
+// A test drives the cooldown by hand rather than waiting it out.
+func (w *Waker) SetLastAttempt(t time.Time) {
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	w.lastAttempt = t
+}
+
+// A test moves the last boot into the past instead of waiting for the grace
+// period to run out.
+func (w *Waker) SetLastBoot(t time.Time) {
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	w.lastBootAt = t
+}
+
+// The sleep tests need an idle server without playing a session out.
+func (w *Waker) SetLastSessionEnd(t time.Time) {
+	w.sessionMu.Lock()
+	defer w.sessionMu.Unlock()
+	w.lastSessionEnd = t
 }

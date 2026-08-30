@@ -6,13 +6,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/testsupport"
 )
 
 // Docker publishes the port the moment the container starts, so a bare dial
 // says yes while Minecraft is still loading its world.
 func TestAnOpenPortWithoutAnAnswerIsNotLive(t *testing.T) {
-	silent := startFakeMCServer(t, false, nil)
+	silent := testsupport.StartFakeMCServer(t, false, nil)
 	_, waker := wakerFor(silent)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -22,7 +24,7 @@ func TestAnOpenPortWithoutAnAnswerIsNotLive(t *testing.T) {
 		t.Error("a port that never answers must not count as live")
 	}
 
-	answering := startFakeMCServer(t, true, nil)
+	answering := testsupport.StartFakeMCServer(t, true, nil)
 	_, ready := wakerFor(answering)
 	if !ready.MCPortReachable(ctx, true) {
 		t.Error("a server that answers a status request is live")
@@ -32,9 +34,9 @@ func TestAnOpenPortWithoutAnAnswerIsNotLive(t *testing.T) {
 // The server went away between the readiness check and the ping, which is what
 // happens when the machine suspends. The entry must not look broken.
 func TestStatusPingFallsBackWhenTheServerGoesQuiet(t *testing.T) {
-	silent := startFakeMCServer(t, false, nil)
+	silent := testsupport.StartFakeMCServer(t, false, nil)
 	cfg, waker := wakerFor(silent)
-	waker.markReachable()
+	waker.MarkReachable()
 
 	handler := NewHandler(cfg, waker)
 	client := serveOnce(t, handler)
@@ -88,7 +90,7 @@ func TestAStatusResponseWithoutOverridesIsPassedOnUnchanged(t *testing.T) {
 	body := append(mcproto.WriteVarInt(mcproto.PacketIDStatus), mcproto.WriteString(original)...)
 
 	cfg := sleepingConfig()
-	handler := NewHandler(cfg, NewWaker(cfg))
+	handler := NewHandler(cfg, boot.NewWaker(cfg))
 
 	framed, err := handler.dressStatusResponse(body)
 	if err != nil {

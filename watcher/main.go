@@ -12,6 +12,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"golang.org/x/term"
@@ -118,7 +119,7 @@ func runProxy() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	waker := NewWaker(cfg)
+	waker := boot.NewWaker(cfg)
 	handler := NewHandler(cfg, waker)
 
 	address := net.JoinHostPort(cfg.Watcher.ListenAddress, strconv.Itoa(cfg.Watcher.ListenPort))

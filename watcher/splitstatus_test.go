@@ -9,11 +9,12 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/testsupport"
 )
 
 // Answers only once it has both the handshake and the request, which is what a
 // real Minecraft server does.
-func startPatientMCServer(t *testing.T, motd string) *fakeMCServer {
+func startPatientMCServer(t *testing.T, motd string) *testsupport.FakeMCServer {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -23,7 +24,7 @@ func startPatientMCServer(t *testing.T, motd string) *fakeMCServer {
 
 	_, portString, _ := net.SplitHostPort(listener.Addr().String())
 	port, _ := strconv.Atoi(portString)
-	server := &fakeMCServer{port: port}
+	server := &testsupport.FakeMCServer{Port: port}
 
 	go func() {
 		for {
@@ -65,7 +66,7 @@ func startPatientMCServer(t *testing.T, motd string) *fakeMCServer {
 func TestStatusPingIsProxiedWhenTheRequestArrivesSeparately(t *testing.T) {
 	server := startPatientMCServer(t, `{"text":"the real server"}`)
 	cfg, waker := wakerFor(server)
-	waker.markReachable()
+	waker.MarkReachable()
 
 	handler := NewHandler(cfg, waker)
 	client := serveOnce(t, handler)
