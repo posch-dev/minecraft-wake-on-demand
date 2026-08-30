@@ -119,7 +119,7 @@ mc-wol-proxy setup-ssh   # creates the SSH key and installs it on the server
 mc-wol-proxy check       # confirms everything is wired up
 ```
 
-**`init`** asks for the server's IP, your login name on it, and your DuckDNS details if you want them. If the server PC is switched on it reads the MAC address off the network itself, otherwise it asks you for the one you noted down in step 1. The broadcast address it works out from the IP. Everything else has a sensible default, so pressing Enter is usually the right answer.
+**`init`** asks for the server's address, the user to log in as, and your DuckDNS details if you want them. Then it offers to log in once with that user's password and set the rest up itself: it reads the MAC address and broadcast address off the server, lists the containers so you can pick one instead of typing the name, checks whether Wake-on-LAN is armed in the network driver and offers to turn it on, and installs its own SSH key. The password is used for that one login and is not stored anywhere. Say no and it asks the questions instead, which works just as well.
 
 **`setup-ssh`** creates the key, shows you the server's host key fingerprint so you can confirm it is the right machine, asks for your server password once, and installs the key. By default it restricts the key so it can only run `docker start`, which means a leaked key cannot do anything else. The password is used for that one login and is not stored.
 

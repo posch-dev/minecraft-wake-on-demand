@@ -19,6 +19,20 @@ notes, so a version has to be listed here before it is tagged.
   not locked out. A rejected login gets `motd.server_full`.
 - `motd.server_full`, shown to a player who arrives when the login pool is
   full.
+- `init` can set the server up over SSH. It asks for the address and the user
+  separately, logs in once with a password and then finds out the rest instead
+  of asking: the MAC address and broadcast address off the interface carrying
+  the default route, the containers and which port the Minecraft one publishes,
+  whether RCON is on, whether the kernel can suspend or hibernate, and whether
+  Wake-on-LAN is armed in the network driver. It installs its own key and, if
+  asked, the sleep helper. Everything found is shown before it is used, and
+  answering no falls back to the questions.
+- A network card left at `Wake-on: d` is offered a fix on the spot, both
+  immediately and through a small systemd unit that re-arms it after every boot,
+  because most distributions reset the setting. That single line is the most
+  common reason this project appears to do nothing at all.
+- `server.ip` accepts a hostname as well as an IP now. It has to resolve, since
+  the MAC lookup and unicast WoL need an address.
 - The watcher brings its own server list icon. Three blue Z that grow, with the
   largest turning into a red exclamation mark while the PC boots. They ship
   inside the binary, so a fresh install shows them without any files being put

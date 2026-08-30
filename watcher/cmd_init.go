@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
@@ -105,35 +106,45 @@ func runInit() int {
 	cfg := defaultConfig()
 
 	fmt.Println("\n--- Server PC ---")
-	cfg.Server.IP = p.validated("Local IP of the server PC", "", func(v string) error {
-		if net.ParseIP(v) == nil {
-			return fmt.Errorf("that is not an IP address, it looks like 192.168.1.100")
-		}
-		return nil
-	})
-
-	cfg.Server.MAC = askMAC(p, cfg.Server.IP)
-
-	cfg.Server.SSHUser = p.validated("Your login name on the server PC", currentUserName(), func(v string) error {
-		if v == "" {
+	cfg.Server.IP = p.validated("IP address or hostname of the server PC", "", validateHostOrIP)
+	cfg.Server.SSHUser = p.validated("Which user should the watcher log in as", currentUserName(), func(v string) error {
+		if strings.TrimSpace(v) == "" {
 			return fmt.Errorf("this cannot be empty")
 		}
 		return nil
 	})
-	cfg.Server.ContainerName = p.validated("Name of the Minecraft container", "minecraft", func(v string) error {
-		if !containerNamePattern.MatchString(v) {
-			return fmt.Errorf("use letters, digits, underscore, dot or dash")
-		}
-		return nil
-	})
 
-	fmt.Println("\n--- Network ---")
-	cfg.WoL.BroadcastAddress = p.validated("Broadcast address of your network", guessBroadcast(cfg.Server.IP), func(v string) error {
-		if net.ParseIP(v) == nil {
-			return fmt.Errorf("that is not an IP address")
+	fmt.Println("\nThe watcher can log in once with a password and set the rest up itself:")
+	fmt.Println("MAC address, broadcast address, the container, Wake-on-LAN in the network")
+	fmt.Println("driver and its own SSH key. The password is used once and not stored.")
+	provisioned := false
+	if p.yesNo("Set the server up over SSH", true) {
+		signer, err := ensureKeyPair(cfg.ResolvedSSHKeyPath())
+		if err != nil {
+			fmt.Printf("\nCannot prepare the SSH key: %v\n", err)
+			return 1
 		}
-		return nil
-	})
+		publicKey := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		provisioned = provisionServer(ctx, p, &cfg, publicKey)
+		cancel()
+	}
+
+	if !provisioned {
+		cfg.Server.MAC = askMAC(p, cfg.Server.IP)
+		cfg.Server.ContainerName = p.validated("Name of the Minecraft container", "minecraft", validateContainerName)
+	}
+
+	if cfg.WoL.BroadcastAddress == "" {
+		fmt.Println("\n--- Network ---")
+		cfg.WoL.BroadcastAddress = p.validated("Broadcast address of your network", guessBroadcast(cfg.Server.IP), func(v string) error {
+			if net.ParseIP(v) == nil {
+				return fmt.Errorf("that is not an IP address")
+			}
+			return nil
+		})
+	}
 
 	fmt.Println("\n--- DuckDNS ---")
 	fmt.Println("DuckDNS gives you a hostname that follows your changing public IP.")
@@ -184,6 +195,10 @@ func runInit() int {
 
 	fmt.Printf("\nWritten to %s\n", target)
 	fmt.Println("\nNext steps:")
+	if provisioned {
+		fmt.Println("  mc-wol-proxy check           confirm everything is wired up")
+		return 0
+	}
 	fmt.Println("  1. mc-wol-proxy setup-ssh    give the watcher access to the server PC")
 	fmt.Println("  2. mc-wol-proxy check        confirm everything is wired up")
 	return 0
@@ -261,4 +276,20 @@ func writeConfig(path string, cfg *Config) error {
 	header := "# Written by 'mc-wol-proxy init'.\n" +
 		"# See config.example.yml in the repository for what every setting does.\n"
 	return os.WriteFile(path, append([]byte(header), data...), 0o600)
+}
+
+// A hostname is accepted, but WoL and the MAC lookup need the address, so it is
+// resolved once here rather than failing later.
+func validateHostOrIP(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fmt.Errorf("this cannot be empty")
+	}
+	if net.ParseIP(value) != nil {
+		return nil
+	}
+	if _, err := net.LookupHost(value); err != nil {
+		return fmt.Errorf("%q is neither an IP address nor a name that resolves", value)
+	}
+	return nil
 }
