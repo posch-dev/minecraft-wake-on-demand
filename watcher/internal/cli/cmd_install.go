@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"fmt"
@@ -19,7 +19,7 @@ const installedBinaryName = "mcwod" + exeSuffix
 
 // Everything the shell installer used to do, in the binary itself, so that
 // downloading one file and running it is a complete installation.
-func runInstall() int {
+func RunInstall() int {
 	dir := installDir()
 	if err := checkInstallPermission(); err != nil {
 		ui.PrintError(err.Error())

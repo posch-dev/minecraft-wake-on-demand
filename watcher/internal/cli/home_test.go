@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"strings"
@@ -10,7 +10,7 @@ import (
 // Every number the menu prints has to lead somewhere, and every branch has to
 // be printed, or somebody types a number that silently does nothing.
 func TestHomeMenuAndItsBranchesAgree(t *testing.T) {
-	source := testsupport.ReadRepoFile(t, "watcher", "cmd_home.go")
+	source := testsupport.ReadRepoFile(t, "watcher", "internal", "cli", "cmd_home.go")
 
 	printed := []string{}
 	for _, line := range strings.Split(source, "\n") {
@@ -41,7 +41,7 @@ func TestHomeMenuAndItsBranchesAgree(t *testing.T) {
 }
 
 func TestHomeMenuAlwaysOffersAWayOut(t *testing.T) {
-	source := testsupport.ReadRepoFile(t, "watcher", "cmd_home.go")
+	source := testsupport.ReadRepoFile(t, "watcher", "internal", "cli", "cmd_home.go")
 
 	if !strings.Contains(source, `case "q", "quit", "exit", "":`) {
 		t.Error("pressing enter or typing q has to leave the menu")

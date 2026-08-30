@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -25,7 +25,7 @@ import (
 
 // Reads without echoing when stdin is a terminal, so tokens stay off the screen.
 
-func runInit() int {
+func RunInit() int {
 	target := configTargetPath()
 	fmt.Printf("This writes a config file to %s\n", target)
 	if _, err := os.Stat(target); err == nil {

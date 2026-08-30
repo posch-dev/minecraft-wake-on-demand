@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func runSetupSSH() int {
+func RunSetupSSH() int {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Printf("Config error: %v\n", err)

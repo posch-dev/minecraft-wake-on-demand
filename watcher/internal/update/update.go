@@ -19,7 +19,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
-// Set from main, which is where the linker writes the release Current.
+// Set from main, which is where the linker writes the release version.
 var Current = "dev"
 
 // Overridable so the update path can be tested without publishing a release,

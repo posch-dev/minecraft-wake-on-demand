@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -311,7 +311,7 @@ func makeDirCommand(s *remote.ServerSession, dir string) string {
 
 // Puts a compose file the watcher replaced back, and keeps the current one so
 // the restore itself can be undone.
-func runRestoreCompose() int {
+func RunRestoreCompose() int {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Printf("Config error: %v\n", err)

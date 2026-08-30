@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -14,12 +14,12 @@ import (
 
 // What running mcwod with no argument does at a terminal. Nothing set up yet
 // leads into the wizard, otherwise it asks what you came to do.
-func runHome() int {
+func RunHome() int {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Println("Minecraft Wake-on-Demand")
 		fmt.Println("")
-		return runInit()
+		return RunInit()
 	}
 
 	p := ui.NewPrompter()
@@ -30,17 +30,17 @@ func runHome() int {
 
 		switch strings.ToLower(strings.TrimSpace(p.Line("Choose", "q"))) {
 		case "1":
-			runCheck()
+			RunCheck()
 		case "2":
-			runConfigEdit()
+			RunConfigEdit()
 		case "3":
-			runWorlds()
+			RunWorlds()
 		case "4":
-			runPlayers()
+			RunPlayers()
 		case "5":
-			runGetServerIcon()
+			RunGetServerIcon()
 		case "6":
-			runUpdate()
+			RunUpdate()
 		case "q", "quit", "exit", "":
 			return 0
 		default:

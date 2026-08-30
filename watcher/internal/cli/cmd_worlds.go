@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/yamledit"
 )
 
-func runWorlds() int {
+func RunWorlds() int {
 	cfg, err := config.Load()
 	if err != nil {
 		ui.PrintError("Config error: " + err.Error())

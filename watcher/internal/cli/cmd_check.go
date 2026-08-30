@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -55,7 +55,7 @@ func (c *checker) hint(format string, args ...any) {
 
 // Walks the setup in the order things depend on each other and stops digging
 // once a step fails, so the first FAIL is the one worth fixing.
-func runCheck() int {
+func RunCheck() int {
 	cfg, err := config.Load()
 
 	c := &checker{}

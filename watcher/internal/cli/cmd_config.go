@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -25,7 +25,7 @@ type configEditor struct {
 	dirty bool
 }
 
-func runConfigEdit() int {
+func RunConfigEdit() int {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Printf("Config error: %v\n", err)
@@ -340,14 +340,14 @@ func (e *configEditor) setUpContainer() {
 
 // Only ever reports, installing is what the update command is for.
 func (e *configEditor) checkForUpdate() {
-	fmt.Printf("\nInstalled version: %s\n", version)
+	fmt.Printf("\nInstalled version: %s\n", update.Current)
 	release, err := update.FetchLatestReleaseNow()
 	if err != nil {
 		fmt.Printf("Could not reach the release API: %v\n", err)
 		return
 	}
 	fmt.Printf("Latest release:    %s\n", release.Tag)
-	if update.IsNewerVersion(release.Tag, version) {
+	if update.IsNewerVersion(release.Tag, update.Current) {
 		fmt.Println("\nInstall it with: sudo mcwod update")
 		return
 	}
@@ -360,7 +360,7 @@ func (e *configEditor) saveAndCheck() int {
 	}
 	e.dirty = false
 	fmt.Println()
-	runCheck()
+	RunCheck()
 	return 0
 }
 

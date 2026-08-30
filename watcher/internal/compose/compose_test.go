@@ -1,13 +1,12 @@
 package compose
 
 import (
-	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/testsupport"
 	"gopkg.in/yaml.v3"
 )
 
@@ -267,12 +266,9 @@ func TestGeneratedPasswordNeedsNoQuoting(t *testing.T) {
 
 // Two files naming the same images drift apart the moment one is bumped alone.
 func TestGeneratorAgreesWithTheShippedCompose(t *testing.T) {
-	shipped, err := os.ReadFile(filepath.Join("..", "server", "docker-compose.yml"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	shipped := testsupport.ReadRepoFile(t, "server", "docker-compose.yml")
 	for _, image := range []string{minecraftImage, backupImage} {
-		if !strings.Contains(string(shipped), image) {
+		if !strings.Contains(shipped, image) {
 			t.Errorf("server/docker-compose.yml does not use %s, bump both together", image)
 		}
 	}

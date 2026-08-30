@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -17,9 +17,9 @@ import (
 
 // Always asks first. An unattended service replacing its own binary without
 // being told to is exactly what nobody wants from a thing that guards a PC.
-func runUpdate() int {
-	fmt.Printf("Installed version: %s\n", version)
-	if version == "dev" {
+func RunUpdate() int {
+	fmt.Printf("Installed version: %s\n", update.Current)
+	if update.Current == "dev" {
 		fmt.Println("\nThis is a development build, there is nothing to compare it against.")
 		fmt.Println("Build from source or install a release first.")
 		return 1
@@ -32,7 +32,7 @@ func runUpdate() int {
 	}
 
 	fmt.Printf("Latest release:    %s\n", release.Tag)
-	if !update.IsNewerVersion(release.Tag, version) {
+	if !update.IsNewerVersion(release.Tag, update.Current) {
 		fmt.Println("\nAlready up to date.")
 		return 0
 	}

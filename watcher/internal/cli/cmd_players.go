@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
 
-func runPlayers() int {
+func RunPlayers() int {
 	cfg, err := config.Load()
 	if err != nil {
 		ui.PrintError("Config error: " + err.Error())

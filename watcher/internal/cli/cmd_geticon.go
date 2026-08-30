@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -22,7 +22,7 @@ const iconDataURIPrefix = "data:image/png;base64,"
 
 // A command, not something the proxy learns: answering an unauthenticated
 // status ping must never write to disk.
-func runGetServerIcon() int {
+func RunGetServerIcon() int {
 	cfg, err := config.Load()
 	if err != nil {
 		ui.PrintError("Config error: " + err.Error())
