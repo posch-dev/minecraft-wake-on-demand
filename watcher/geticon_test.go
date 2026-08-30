@@ -172,7 +172,7 @@ func TestFetchServerStatusReadsTheFavicon(t *testing.T) {
 	uri, _ := iconDataURI(t, 64, 64)
 	server := testsupport.StartFakeMCServerWithIcon(t, uri)
 
-	cfg := sleepingConfig()
+	cfg := testsupport.SleepingConfig()
 	cfg.Server.IP = "127.0.0.1"
 	cfg.Server.MCPort = server.Port
 
@@ -189,7 +189,7 @@ func TestFetchServerStatusReadsTheFavicon(t *testing.T) {
 }
 
 func TestFetchServerStatusFailsWhenTheServerIsAsleep(t *testing.T) {
-	cfg := sleepingConfig()
+	cfg := testsupport.SleepingConfig()
 	cfg.Server.IP = "127.0.0.1"
 	cfg.Server.MCPort = 1
 

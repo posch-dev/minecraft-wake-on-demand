@@ -15,6 +15,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/proxy"
 	"golang.org/x/term"
 )
 
@@ -120,7 +121,7 @@ func runProxy() int {
 	defer stop()
 
 	waker := boot.NewWaker(cfg)
-	handler := NewHandler(cfg, waker)
+	handler := proxy.NewHandler(cfg, waker)
 
 	address := net.JoinHostPort(cfg.Watcher.ListenAddress, strconv.Itoa(cfg.Watcher.ListenPort))
 	listener, err := net.Listen("tcp", address)
@@ -153,7 +154,7 @@ func runProxy() int {
 	tasks.Add(1)
 	go func() {
 		defer tasks.Done()
-		handler.assets.KeepFresh(ctx)
+		handler.KeepAssetsFresh(ctx)
 	}()
 
 	// Unblocks the Accept call below when a signal arrives.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/testsupport"
 )
 
 // Stands in for the server so the state machine can be driven without SSH.
@@ -21,7 +22,7 @@ type fakeServerAnswers struct {
 
 func sleepMonitorFor(t *testing.T, answers *fakeServerAnswers, transfer bool) (*SleepMonitor, *boot.Waker, *time.Time) {
 	t.Helper()
-	cfg := sleepingConfig()
+	cfg := testsupport.SleepingConfig()
 	cfg.Server.RemoteHelper = true
 	cfg.Sleep.Enabled = true
 	cfg.Sleep.Action = "suspend"
@@ -302,8 +303,8 @@ func TestSleepMonitorInTransferModeWaitsOutTheIdleWindow(t *testing.T) {
 }
 
 func TestSleepMonitorTickIntervalFollowsTheMode(t *testing.T) {
-	proxy, _, _ := sleepMonitorFor(t, &fakeServerAnswers{}, false)
-	if got := proxy.tickInterval(); got != proxyTickInterval {
+	monitor, _, _ := sleepMonitorFor(t, &fakeServerAnswers{}, false)
+	if got := monitor.tickInterval(); got != proxyTickInterval {
 		t.Errorf("proxy mode interval = %v, want %v", got, proxyTickInterval)
 	}
 

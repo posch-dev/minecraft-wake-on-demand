@@ -1,4 +1,4 @@
-package main
+package proxy
 
 import (
 	"context"
@@ -89,7 +89,7 @@ func TestAStatusResponseWithoutOverridesIsPassedOnUnchanged(t *testing.T) {
 		`"description":{"text":"theirs"},"enforcesSecureChat":false}`
 	body := append(mcproto.WriteVarInt(mcproto.PacketIDStatus), mcproto.WriteString(original)...)
 
-	cfg := sleepingConfig()
+	cfg := testsupport.SleepingConfig()
 	handler := NewHandler(cfg, boot.NewWaker(cfg))
 
 	framed, err := handler.dressStatusResponse(body)

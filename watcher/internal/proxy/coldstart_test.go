@@ -1,4 +1,4 @@
-package main
+package proxy
 
 import (
 	"bytes"
@@ -10,12 +10,13 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/mcproto"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/testsupport"
 )
 
 // A client that sends the login packet on its own must not be cut off with a
 // reset, which it reports as a socket error instead of showing the message.
 func TestColdStartLoginIsClosedCleanly(t *testing.T) {
-	cfg := sleepingConfig()
+	cfg := testsupport.SleepingConfig()
 	handler := NewHandler(cfg, boot.NewWaker(cfg))
 	client := serveOnce(t, handler)
 

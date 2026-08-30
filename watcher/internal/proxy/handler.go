@@ -1,4 +1,4 @@
-package main
+package proxy
 
 import (
 	"bytes"
@@ -482,3 +482,7 @@ func trailing(data []byte, offset int) []byte {
 	}
 	return data[offset:]
 }
+
+// The assets refresh runs for as long as the watcher does, so whoever owns the
+// process starts it.
+func (h *Handler) KeepAssetsFresh(ctx context.Context) { h.assets.KeepFresh(ctx) }
