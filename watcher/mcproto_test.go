@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
+	"testing/iotest"
 )
 
 func TestVarIntRoundTrip(t *testing.T) {
@@ -399,5 +402,65 @@ func TestStatusResponseEchoesClientProtocol(t *testing.T) {
 	}
 	if decoded.Version.Protocol != 770 {
 		t.Errorf("protocol = %d, want 770", decoded.Version.Protocol)
+	}
+}
+
+// The bug this replaces: a status response with an icon is around 10 kB and
+// never arrives in one Read, so the old single Read parser learned nothing from
+// any server that had an icon configured.
+func TestReadFramedPacketReassemblesASplitResponse(t *testing.T) {
+	icon := "data:image/png;base64," + strings.Repeat("A", 12000)
+	frame, err := makeStatusResponse(defaultMOTDSleeping, 20, 3, icon, "1.21.4", 769)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(frame) < 12000 {
+		t.Fatalf("frame is only %d bytes, the test needs one that spans segments", len(frame))
+	}
+
+	body, err := readFramedPacket(iotest.OneByteReader(bytes.NewReader(frame)), maxStatusResponseBytes)
+	if err != nil {
+		t.Fatalf("readFramedPacket: %v", err)
+	}
+
+	payload, err := parseStatusPayload(body)
+	if err != nil {
+		t.Fatalf("parseStatusPayload: %v", err)
+	}
+	if payload.Version.Name != "1.21.4" || payload.Version.Protocol != 769 {
+		t.Errorf("version = %+v", payload.Version)
+	}
+	if payload.Players.Max != 20 || payload.Players.Online != 3 {
+		t.Errorf("players = %+v", payload.Players)
+	}
+}
+
+func TestReadFramedPacketRejectsAnOversizedLength(t *testing.T) {
+	frame := append(writeVarInt(int32(maxStatusResponseBytes+1)), 0x00)
+
+	if _, err := readFramedPacket(bytes.NewReader(frame), maxStatusResponseBytes); !errors.Is(err, ErrPacketTooBig) {
+		t.Errorf("err = %v, want ErrPacketTooBig", err)
+	}
+}
+
+func TestReadFramedPacketRejectsAnEmptyPacket(t *testing.T) {
+	if _, err := readFramedPacket(bytes.NewReader([]byte{0x00}), maxStatusResponseBytes); !errors.Is(err, ErrShortPacket) {
+		t.Errorf("err = %v, want ErrShortPacket", err)
+	}
+}
+
+func TestReadFramedPacketFailsOnATruncatedBody(t *testing.T) {
+	frame := append(writeVarInt(10), 1, 2, 3)
+
+	if _, err := readFramedPacket(bytes.NewReader(frame), maxStatusResponseBytes); err == nil {
+		t.Error("a body shorter than its length prefix should fail")
+	}
+}
+
+func TestParseStatusPayloadRejectsAnotherPacketID(t *testing.T) {
+	body := append(writeVarInt(packetIDPing), writeString("{}")...)
+
+	if _, err := parseStatusPayload(body); !errors.Is(err, ErrWrongPacketID) {
+		t.Errorf("err = %v, want ErrWrongPacketID", err)
 	}
 }

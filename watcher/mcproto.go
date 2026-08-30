@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"unicode/utf8"
 )
 
@@ -13,6 +15,7 @@ var (
 	ErrVarIntTooBig     = errors.New("VarInt too big")
 	ErrShortPacket      = errors.New("packet ended early")
 	ErrWrongPacketID    = errors.New("unexpected packet id")
+	ErrPacketTooBig     = errors.New("packet larger than the allowed limit")
 )
 
 const (
@@ -45,9 +48,7 @@ func readVarInt(data []byte, offset int) (int32, int, error) {
 	return int32(result), offset, nil
 }
 
-// Negative values encode as five bytes in two's complement, the same as the
-// reference implementation. Shifting a negative int instead would never
-// terminate, which is what the Python version did.
+// Negative values need the unsigned shift, shifting a signed int never ends.
 func writeVarInt(value int32) []byte {
 	v := uint32(value)
 	out := make([]byte, 0, 5)
@@ -169,6 +170,62 @@ func makeStatusResponse(motdJSON string, maxPlayers, online int, icon string, ve
 
 	body := append(writeVarInt(packetIDStatus), writeString(string(encoded))...)
 	return framePacket(body), nil
+}
+
+// A status response carrying a server icon is around 10 kB and never arrives in
+// a single Read, so the length prefix has to be honoured instead of hoping the
+// whole packet fits one segment. Returns the packet body without the prefix.
+func readFramedPacket(r io.Reader, maxLen int) ([]byte, error) {
+	var length int32
+	var shift uint
+	one := make([]byte, 1)
+	for {
+		if _, err := io.ReadFull(r, one); err != nil {
+			return nil, err
+		}
+		length |= int32(one[0]&0x7F) << shift
+		if one[0]&0x80 == 0 {
+			break
+		}
+		shift += 7
+		if shift >= 35 {
+			return nil, ErrVarIntTooBig
+		}
+	}
+	if length <= 0 {
+		return nil, ErrShortPacket
+	}
+	if int(length) > maxLen {
+		return nil, fmt.Errorf("%w: %d bytes", ErrPacketTooBig, length)
+	}
+	body := make([]byte, length)
+	if _, err := io.ReadFull(r, body); err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+// Body of a status response packet, so packet id followed by the JSON string.
+func parseStatusPayload(body []byte) (*statusPayload, error) {
+	pktID, off, err := readVarInt(body, 0)
+	if err != nil {
+		return nil, err
+	}
+	if pktID != packetIDStatus {
+		return nil, ErrWrongPacketID
+	}
+	jsonLen, off, err := readVarInt(body, off)
+	if err != nil {
+		return nil, err
+	}
+	if jsonLen <= 0 || off+int(jsonLen) > len(body) {
+		return nil, ErrShortPacket
+	}
+	var payload statusPayload
+	if err := json.Unmarshal(body[off:off+int(jsonLen)], &payload); err != nil {
+		return nil, err
+	}
+	return &payload, nil
 }
 
 func makePingResponse(payload int64) []byte {

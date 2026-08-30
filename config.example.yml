@@ -37,11 +37,14 @@ limits:
   boot_cooldown: 10                   # minimum seconds between wake attempts
   boot_failure_backoff: 60            # seconds after a failed wake, doubles each failure
   boot_max_backoff: 900               # upper limit for the failure backoff
+  max_logins: 0                       # 0 = use the server's own player slots, or set a hard number
+  max_per_ip: 8                       # per pool, so a household behind one NAT is not locked out
 
 motd:
   # \n splits the two lines the server list shows.
   sleeping: '{"text":"Server currently asleep","color":"gray","extra":[{"text":"\nJoin to wake it up","color":"green"}]}'
   starting: '{"text":"Server is starting","color":"gold","extra":[{"text":"\nGive it a moment, then join","color":"gray"}]}'
   login_wait: '{"text":"Server is waking up. Please reconnect in a moment.","color":"gold"}'
-  max_players: 10
-# .server-version.json appears next to this file after the first successful status probe.
+  server_full: '{"text":"Server is full. Please try again in a moment.","color":"red"}'
+  max_players: 10                     # only shown until the real number is learned from the server
+# .server-info.json appears next to this file after the first successful status probe.

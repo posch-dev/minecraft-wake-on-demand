@@ -168,13 +168,13 @@ func TestLoginWhileSleepingSendsWaitMessage(t *testing.T) {
 	}
 }
 
-func TestStatusPingWhileSleepingShowsCachedVersion(t *testing.T) {
+func TestStatusPingWhileSleepingShowsCachedInfo(t *testing.T) {
 	dir := t.TempDir()
 	cfg := sleepingConfig()
 	cfg.Path = filepath.Join(dir, "config.yml")
 
-	cachePath := filepath.Join(dir, ".server-version.json")
-	sv := &ServerVersion{Name: "1.21.4", Protocol: 769, Updated: time.Now()}
+	cachePath := filepath.Join(dir, ".server-info.json")
+	sv := &ServerInfo{Name: "1.21.4", Protocol: 769, Updated: time.Now()}
 	data, _ := json.Marshal(sv)
 	if err := os.WriteFile(cachePath, data, 0644); err != nil {
 		t.Fatal(err)

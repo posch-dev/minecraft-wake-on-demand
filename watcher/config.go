@@ -73,12 +73,15 @@ type LimitsConfig struct {
 	BootCooldown       int `yaml:"boot_cooldown"`
 	BootFailureBackoff int `yaml:"boot_failure_backoff"`
 	BootMaxBackoff     int `yaml:"boot_max_backoff"`
+	MaxLogins          int `yaml:"max_logins"`
+	MaxPerIP           int `yaml:"max_per_ip"`
 }
 
 type MOTDConfig struct {
 	Sleeping   string `yaml:"sleeping"`
 	Starting   string `yaml:"starting"`
 	LoginWait  string `yaml:"login_wait"`
+	ServerFull string `yaml:"server_full"`
 	MaxPlayers int    `yaml:"max_players"`
 }
 
@@ -119,7 +122,8 @@ const (
 		"\"extra\":[{\"text\":\"\\nJoin to wake it up\",\"color\":\"green\"}]}"
 	defaultMOTDStarting = "{\"text\":\"Server is starting\",\"color\":\"gold\"," +
 		"\"extra\":[{\"text\":\"\\nGive it a moment, then join\",\"color\":\"gray\"}]}"
-	defaultMOTDLoginWait = "{\"text\":\"Server is waking up. Please reconnect in a moment.\",\"color\":\"gold\"}"
+	defaultMOTDLoginWait  = "{\"text\":\"Server is waking up. Please reconnect in a moment.\",\"color\":\"gold\"}"
+	defaultMOTDServerFull = "{\"text\":\"Server is full. Please try again in a moment.\",\"color\":\"red\"}"
 )
 
 var strictHostKeyModes = []string{"accept-new", "yes", "no"}
@@ -138,11 +142,15 @@ func defaultConfig() Config {
 		DuckDNS:  DuckDNSConfig{UpdateIntervalHours: 6},
 		Transfer: TransferConfig{Port: 25566},
 		Timeouts: TimeoutsConfig{BootTimeout: 60, MCReadyTimeout: 30},
-		Limits:   LimitsConfig{BootCooldown: 10, BootFailureBackoff: 60, BootMaxBackoff: 900},
+		Limits: LimitsConfig{
+			BootCooldown: 10, BootFailureBackoff: 60, BootMaxBackoff: 900,
+			MaxLogins: 0, MaxPerIP: 8,
+		},
 		MOTD: MOTDConfig{
 			Sleeping:   defaultMOTDSleeping,
 			Starting:   defaultMOTDStarting,
 			LoginWait:  defaultMOTDLoginWait,
+			ServerFull: defaultMOTDServerFull,
 			MaxPlayers: 10,
 		},
 	}
@@ -244,6 +252,8 @@ func applyEnvOverrides(cfg *Config) {
 	setInt("BOOT_COOLDOWN", &cfg.Limits.BootCooldown)
 	setInt("BOOT_FAILURE_BACKOFF", &cfg.Limits.BootFailureBackoff)
 	setInt("BOOT_MAX_BACKOFF", &cfg.Limits.BootMaxBackoff)
+	setInt("MAX_LOGINS", &cfg.Limits.MaxLogins)
+	setInt("MAX_PER_IP", &cfg.Limits.MaxPerIP)
 	setBool("TRANSFER_ENABLED", &cfg.Transfer.Enabled)
 	setString("TRANSFER_HOST", &cfg.Transfer.Host)
 	setInt("TRANSFER_PORT", &cfg.Transfer.Port)
@@ -304,6 +314,14 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("wol.mode is %q, it has to be 'broadcast' or 'unicast'", c.WoL.Mode)
 	}
 
+	if c.Limits.MaxLogins < 0 {
+		return fmt.Errorf("limits.max_logins is %d, use 0 to take the limit from the server", c.Limits.MaxLogins)
+	}
+	if c.Limits.MaxPerIP < 1 {
+		log.Warnf("limits.max_per_ip is %d, falling back to 8", c.Limits.MaxPerIP)
+		c.Limits.MaxPerIP = 8
+	}
+
 	c.Server.SSHStrictHostKey = strings.ToLower(strings.TrimSpace(c.Server.SSHStrictHostKey))
 	if !contains(strictHostKeyModes, c.Server.SSHStrictHostKey) {
 		log.Warnf("Invalid server.ssh_strict_host_key %q, falling back to 'accept-new'", c.Server.SSHStrictHostKey)
@@ -355,6 +373,7 @@ func (c *Config) Validate() error {
 		{"motd.sleeping", c.MOTD.Sleeping},
 		{"motd.starting", c.MOTD.Starting},
 		{"motd.login_wait", c.MOTD.LoginWait},
+		{"motd.server_full", c.MOTD.ServerFull},
 	} {
 		if !json.Valid([]byte(m.value)) {
 			return fmt.Errorf("%s is not valid JSON, it has to look like %s", m.name, defaultMOTDSleeping)
@@ -404,17 +423,19 @@ func (c *Config) AssetsDir() string {
 	return "assets"
 }
 
-// Last-seen server version, cached so the status ping advertises a compatible protocol while the server sleeps.
-func (c *Config) VersionCachePath() string {
+// Version and player slots from the last status probe, cached so the watcher can
+// answer for the server while it sleeps.
+func (c *Config) ServerInfoPath() string {
+	const name = ".server-info.json"
 	if c.Path != "" {
 		if abs, err := filepath.Abs(c.Path); err == nil {
-			return filepath.Join(filepath.Dir(abs), ".server-version.json")
+			return filepath.Join(filepath.Dir(abs), name)
 		}
 	}
 	if exe, err := os.Executable(); err == nil {
-		return filepath.Join(filepath.Dir(exe), ".server-version.json")
+		return filepath.Join(filepath.Dir(exe), name)
 	}
-	return ".server-version.json"
+	return name
 }
 
 // Empty means the platform default, matching what the ssh client would pick.
