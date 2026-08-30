@@ -31,6 +31,10 @@ func provisionServer(ctx context.Context, p *prompter, cfg *Config, publicKey st
 	facts := discoverServer(session)
 	applyFacts(p, session, cfg, facts)
 	offerWakeOnLANFix(p, session, facts)
+	if offerContainerSetup(p, session, cfg, facts) {
+		facts.Containers = append(facts.Containers, cfg.Server.ContainerName)
+		facts.RCONEnabled = true
+	}
 
 	action := offerSleep(p, facts)
 	entry := authorizedKeyEntry(publicKey, cfg.Server.ContainerName, true)
@@ -98,9 +102,27 @@ func applyFacts(p *prompter, session *ServerSession, cfg *Config, facts ServerFa
 		fmt.Println("count players, so auto-sleep will not be able to tell an empty server")
 		fmt.Println("from a busy one. Set ENABLE_RCON=true in docker-compose.yml.")
 	}
-	if !facts.Platform.HasDocker {
-		fmt.Println("\nNo docker on the server. Install it before running check.")
+	reportDockerState(facts)
+}
+
+// Docker Desktop only runs while somebody is logged in, so a resumed PC can
+// come back without its container. Nothing here fixes that, but it explains it.
+func reportDockerState(facts ServerFacts) {
+	if facts.Platform.HasDocker {
+		if facts.Platform.Windows {
+			fmt.Println("\nDocker answers. Note that Docker Desktop only runs while a user is")
+			fmt.Println("logged in on the server, so after a suspend the container may not come")
+			fmt.Println("back until someone signs in. Set it to start with Windows, or run the")
+			fmt.Println("server in WSL, if the PC is meant to be headless.")
+		}
+		return
 	}
+	if facts.Platform.Windows {
+		fmt.Println("\nDocker did not answer on the server. Install Docker Desktop and make")
+		fmt.Println("sure it is running, it has to be started before the watcher can reach it.")
+		return
+	}
+	fmt.Println("\nNo docker on the server. Install it before running check.")
 }
 
 func pickContainer(p *prompter, facts ServerFacts) string {
