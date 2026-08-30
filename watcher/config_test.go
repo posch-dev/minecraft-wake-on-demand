@@ -27,7 +27,7 @@ func loadFrom(t *testing.T, body string) *Config {
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("MC_WOL_CONFIG", path)
+	t.Setenv("MCWOD_CONFIG", path)
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -129,7 +129,7 @@ func TestValidationRejectsBadValues(t *testing.T) {
 			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			t.Setenv("MC_WOL_CONFIG", path)
+			t.Setenv("MCWOD_CONFIG", path)
 			if _, err := LoadConfig(); err == nil {
 				t.Error("expected an error, got none")
 			}
@@ -191,9 +191,8 @@ func motdLines(t *testing.T, raw string) []string {
 	return strings.Split(text, "\n")
 }
 
-// config.example.yml is the file people copy, so it has to agree with the
-// built in defaults. Otherwise the example quietly documents something the
-// watcher does not do.
+// The example is what people copy, so it has to agree with the defaults.
+// Otherwise it documents something the watcher does not do.
 func TestExampleConfigMatchesTheDefaults(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "config.example.yml"))
 	if err != nil {

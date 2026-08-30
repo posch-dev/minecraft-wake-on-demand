@@ -21,7 +21,7 @@ func runSetupSSH() int {
 	cfg, err := LoadConfig()
 	if err != nil {
 		fmt.Printf("Config error: %v\n", err)
-		fmt.Println("\nRun 'mc-wol-proxy init' first.")
+		fmt.Println("\nRun 'mcwod init' first.")
 		return 1
 	}
 
@@ -89,9 +89,9 @@ func runSetupSSH() int {
 		fmt.Println(windowsHelperInstructions(cfg, publicKey))
 		if wantSleep {
 			fmt.Println("Set server.remote_helper: true and the sleep block in config.yml once the")
-			fmt.Println("script is in place, then run: mc-wol-proxy check")
+			fmt.Println("script is in place, then run: mcwod check")
 		} else {
-			fmt.Println("Then run: mc-wol-proxy check")
+			fmt.Println("Then run: mcwod check")
 		}
 		return 0
 	}
@@ -141,7 +141,7 @@ func runSetupSSH() int {
 		} else {
 			fmt.Println("Login works.")
 		}
-		fmt.Println("\nNext step: mc-wol-proxy check")
+		fmt.Println("\nNext step: mcwod check")
 		return 0
 	}
 
@@ -152,7 +152,7 @@ func runSetupSSH() int {
 	}
 	if strings.TrimSpace(out) != remoteHelperMarker {
 		fmt.Printf("The helper answered %q instead of %q.\n", sanitizeForLog(out, 80), remoteHelperMarker)
-		fmt.Println("An older mc-wol-proxy line in authorized_keys is still bound to the key.")
+		fmt.Println("An older mcwod line in authorized_keys is still bound to the key.")
 		fmt.Println("Remove it and run setup-ssh again.")
 		return 1
 	}
@@ -164,7 +164,7 @@ func runSetupSSH() int {
 	fmt.Println("  sleep:")
 	fmt.Println("    enabled: true")
 	fmt.Printf("    action: %s\n", sleepAction)
-	fmt.Println("\nNext step: mc-wol-proxy check")
+	fmt.Println("\nNext step: mcwod check")
 	return 0
 }
 
@@ -193,7 +193,7 @@ func ensureKeyPair(path string) (ssh.Signer, error) {
 	if err != nil {
 		return nil, err
 	}
-	block, err := ssh.MarshalPrivateKey(private, "mc-wol-proxy")
+	block, err := ssh.MarshalPrivateKey(private, "mcwod")
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +281,7 @@ func printManualInstructions(cfg *Config, publicKey string) {
 	fmt.Println("\nOn a Windows server, add this to authorized_keys by hand.")
 	fmt.Printf("The file lives in C:\\Users\\%s\\.ssh\\authorized_keys\n\n", cfg.Server.SSHUser)
 	fmt.Printf("command=\"C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe start %s\","+
-		"no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty %s mc-wol-proxy\n\n",
+		"no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty %s mcwod\n\n",
 		cfg.Server.ContainerName, publicKey)
-	fmt.Println("Then run: mc-wol-proxy check")
+	fmt.Println("Then run: mcwod check")
 }

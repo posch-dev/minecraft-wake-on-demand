@@ -55,8 +55,7 @@ jobs:
       - uses: actions/checkout@v7
 
       # install.sh runs as root on other people's machines, so it gets linted.
-      # The version is pinned because the checks differ between releases and a
-      # distribution upgrade should not turn this red on its own.
+      # Pinned, a distribution upgrade should not turn this red on its own.
       - name: ShellCheck
         env:
           SHELLCHECK_VERSION: v0.11.0
@@ -84,12 +83,12 @@ jobs:
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
             -trimpath -ldflags="-s -w -X main.version=v0.0.0-test" \
-            -o "$RUNNER_TEMP/mc-wol-proxy" .
+            -o "$RUNNER_TEMP/mcwod" .
 
       # Exercises the whole systemd path: download, checksum, unit, service,
       # a real status ping, the two refusal cases and the uninstall.
       - name: Install, verify, uninstall
-        run: sudo -E TEST_BINARY="$RUNNER_TEMP/mc-wol-proxy" .github/scripts/test-install.sh
+        run: sudo -E TEST_BINARY="$RUNNER_TEMP/mcwod" .github/scripts/test-install.sh
 
   image:
     runs-on: ubuntu-latest

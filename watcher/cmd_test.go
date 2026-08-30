@@ -94,7 +94,7 @@ func TestWrittenConfigLoadsBack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("MC_WOL_CONFIG", path)
+	t.Setenv("MCWOD_CONFIG", path)
 	loaded, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("the written config does not load: %v", err)

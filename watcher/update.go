@@ -20,9 +20,9 @@ import (
 // Overridable so the update path can be tested without publishing a release,
 // the same knobs install.sh uses.
 var (
-	updateRepo        = envOr("MC_WOL_REPO", "posch-dev/minecraft-wake-on-demand")
-	updateAPIBase     = envOr("MC_WOL_API_BASE", "https://api.github.com")
-	updateDownloadURL = envOr("MC_WOL_DOWNLOAD_BASE", "https://github.com")
+	updateRepo        = envOr("MCWOD_REPO", "posch-dev/minecraft-wake-on-demand")
+	updateAPIBase     = envOr("MCWOD_API_BASE", "https://api.github.com")
+	updateDownloadURL = envOr("MCWOD_DOWNLOAD_BASE", "https://github.com")
 )
 
 const (
@@ -39,7 +39,7 @@ type releaseInfo struct {
 }
 
 func envOr(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
+	if value := renamedEnv(key); value != "" {
 		return value
 	}
 	return fallback
@@ -58,7 +58,7 @@ func printUpdateHint(cfg *Config) {
 	if !isNewerVersion(release.Tag, version) {
 		return
 	}
-	fmt.Printf("\nVersion %s is available, you have %s. Update with: sudo mc-wol-proxy update\n",
+	fmt.Printf("\nVersion %s is available, you have %s. Update with: sudo mcwod update\n",
 		release.Tag, version)
 }
 
@@ -128,7 +128,7 @@ func fetchLatestRelease(ctx context.Context) (*releaseInfo, error) {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "mc-wol-proxy/"+version)
+	req.Header.Set("User-Agent", "mcwod/"+version)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -180,15 +180,19 @@ func versionParts(tag string) [3]int {
 	return parts
 }
 
-// The published asset names, matching what the release workflow uploads.
 func releaseAssetName() (string, error) {
-	switch runtime.GOOS {
+	return assetNameFor(runtime.GOOS, runtime.GOARCH)
+}
+
+// Must match what release.yml uploads, a test holds the two together.
+func assetNameFor(goos, goarch string) (string, error) {
+	switch goos {
 	case "linux":
-		return "mc-wol-proxy_linux_" + runtime.GOARCH, nil
+		return "mcwod_linux_" + goarch, nil
 	case "windows":
-		return "mc-wol-proxy_windows_" + runtime.GOARCH + ".exe", nil
+		return "mcwod_windows_" + goarch + ".exe", nil
 	}
-	return "", fmt.Errorf("no published build for %s", runtime.GOOS)
+	return "", fmt.Errorf("no published build for %s", goos)
 }
 
 // The checksum is the only thing between a release URL and running whatever
@@ -238,7 +242,7 @@ func fetchBytes(ctx context.Context, endpoint string, limit int64) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "mc-wol-proxy/"+version)
+	req.Header.Set("User-Agent", "mcwod/"+version)
 
 	client := &http.Client{
 		Timeout: 5 * time.Minute,

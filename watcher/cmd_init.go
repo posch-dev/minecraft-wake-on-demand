@@ -200,12 +200,12 @@ func runInit() int {
 	fmt.Printf("\nWritten to %s\n", target)
 	fmt.Println("\nNext steps:")
 	if provisioned {
-		fmt.Println("  mc-wol-proxy check           confirm everything is wired up")
+		fmt.Println("  mcwod check           confirm everything is wired up")
 		printUpdateHint(&cfg)
 		return 0
 	}
-	fmt.Println("  1. mc-wol-proxy setup-ssh    give the watcher access to the server PC")
-	fmt.Println("  2. mc-wol-proxy check        confirm everything is wired up")
+	fmt.Println("  1. mcwod setup-ssh    give the watcher access to the server PC")
+	fmt.Println("  2. mcwod check        confirm everything is wired up")
 	printUpdateHint(&cfg)
 	return 0
 }
@@ -307,7 +307,7 @@ func currentUserName() string {
 }
 
 func configTargetPath() string {
-	if env := os.Getenv("MC_WOL_CONFIG"); env != "" {
+	if env := os.Getenv("MCWOD_CONFIG"); env != "" {
 		return env
 	}
 	if exe, err := os.Executable(); err == nil {
@@ -322,7 +322,7 @@ func writeConfig(path string, cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	header := "# Written by 'mc-wol-proxy init'.\n" +
+	header := "# Written by 'mcwod init'.\n" +
 		"# See config.example.yml in the repository for what every setting does.\n"
 	return os.WriteFile(path, append([]byte(header), data...), 0o600)
 }

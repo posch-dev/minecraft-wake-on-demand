@@ -163,7 +163,7 @@ func checkSSHKey(c *checker, cfg *Config) bool {
 	signer, err := loadPrivateKey(path)
 	if err != nil {
 		c.fail("%v", err)
-		c.hint("run: mc-wol-proxy setup-ssh")
+		c.hint("run: mcwod setup-ssh")
 		return false
 	}
 	c.ok("%s, type %s", path, signer.PublicKey().Type())
@@ -226,7 +226,7 @@ func checkSSHLogin(c *checker, cfg *Config, ctx context.Context) {
 		if isAuthFailure(err) {
 			c.fail("SSH login as %s failed: %v", cfg.Server.SSHUser, err)
 			c.hint("the public key is missing from authorized_keys on the server")
-			c.hint("run: mc-wol-proxy setup-ssh")
+			c.hint("run: mcwod setup-ssh")
 			return
 		}
 		// A restricted key refuses everything except its forced command, which
@@ -250,22 +250,28 @@ func checkRemoteHelper(c *checker, cfg *Config, runner *SSHRunner, ctx context.C
 		if isAuthFailure(err) {
 			c.fail("SSH login as %s failed: %v", cfg.Server.SSHUser, err)
 			c.hint("the public key is missing from authorized_keys on the server")
-			c.hint("run: mc-wol-proxy setup-ssh")
+			c.hint("run: mcwod setup-ssh")
 			return
 		}
 		c.fail("the helper did not answer: %v", err)
 		c.hint("server.remote_helper is true but %s is missing or not bound to the key", remoteHelperPathUnix)
-		c.hint("run: mc-wol-proxy setup-ssh")
+		c.hint("run: mcwod setup-ssh")
 		return
 	}
 	c.ok("SSH login as %s works", cfg.Server.SSHUser)
 
-	if strings.TrimSpace(out) != remoteHelperMarker {
+	if answer := strings.TrimSpace(out); answer != remoteHelperMarker {
+		if answer == legacyHelperMarker {
+			c.fail("the server still runs the helper from before the rename")
+			c.hint("it works, but the paths and the marker changed with mcwod 2.1")
+			c.hint("run: mcwod setup-ssh")
+			return
+		}
 		// An older forced command runs docker start for every word it is sent,
 		// so a wrong answer here means sleep would start the container instead.
-		c.fail("the helper answered %q instead of %q", sanitizeForLog(out, 60), remoteHelperMarker)
-		c.hint("an older mc-wol-proxy line in authorized_keys is still bound to the key")
-		c.hint("remove it on the server, then run: mc-wol-proxy setup-ssh")
+		c.fail("the helper answered %q instead of %q", sanitizeForLog(answer, 60), remoteHelperMarker)
+		c.hint("an older mcwod line in authorized_keys is still bound to the key")
+		c.hint("remove it on the server, then run: mcwod setup-ssh")
 		return
 	}
 	c.ok("helper answered, the key is bound to %s", remoteHelperPathUnix)
@@ -348,7 +354,7 @@ func checkSleepAction(c *checker, cfg *Config) {
 	}
 	if !cfg.Server.RemoteHelper {
 		c.fail("server.remote_helper is false, the watcher cannot send the sleep command")
-		c.hint("run: mc-wol-proxy setup-ssh")
+		c.hint("run: mcwod setup-ssh")
 	}
 
 	c.info("the sleep command itself is not run here, that would switch the PC off")

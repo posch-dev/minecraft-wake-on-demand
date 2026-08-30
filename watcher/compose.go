@@ -12,9 +12,9 @@ import (
 
 // The RCON password lives in .env under our own name, never as RCON_PASSWORD.
 // A foreign .env may already define that one, and the last definition wins.
-const rconPasswordVar = "MC_WOL_RCON_PASSWORD"
+const rconPasswordVar = "MCWOD_RCON_PASSWORD"
 
-const composeBackupPrefix = "docker-compose.yml.mcwol-bak-"
+const composeBackupPrefix = "docker-compose.yml.mcwod-bak-"
 
 // Pinned, so the same compose file keeps producing the same server. Bump these
 // together with server/docker-compose.yml, a test holds them to it.
@@ -121,7 +121,7 @@ func newComposeFile(spec ComposeSpec) (string, error) {
 
 	root := mapping()
 	addNode(root, "services", services)
-	root.Content[0].HeadComment = "Written by mc-wol-proxy. " +
+	root.Content[0].HeadComment = "Written by mcwod. " +
 		"The RCON password lives in .env next to this file."
 
 	data, err := yaml.Marshal(root)

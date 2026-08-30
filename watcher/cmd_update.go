@@ -55,7 +55,7 @@ func runUpdate() int {
 	}
 	if !canWriteBinary(target) {
 		fmt.Printf("\nNo permission to replace %s.\n", target)
-		fmt.Println("Run it again with: sudo mc-wol-proxy update")
+		fmt.Println("Run it again with: sudo mcwod update")
 		return 1
 	}
 
@@ -77,7 +77,7 @@ func runUpdate() int {
 	fmt.Printf("Installed %s to %s\n", release.Tag, target)
 
 	restartService()
-	fmt.Println("\nConfirm the result with: mc-wol-proxy check")
+	fmt.Println("\nConfirm the result with: mcwod check")
 	return 0
 }
 
@@ -100,7 +100,7 @@ func printReleaseNotes(body string) {
 // cannot leave a half written file where the service expects a program.
 func replaceBinary(target string, binary []byte) error {
 	dir := filepath.Dir(target)
-	staged, err := os.CreateTemp(dir, ".mc-wol-proxy-update-*")
+	staged, err := os.CreateTemp(dir, ".mcwod-update-*")
 	if err != nil {
 		return fmt.Errorf("cannot write to %s: %w", dir, err)
 	}
@@ -158,10 +158,10 @@ func restartService() {
 		return
 	}
 
-	fmt.Println("Restarting mc-wol-proxy...")
-	if out, err := exec.Command("systemctl", "restart", "mc-wol-proxy").CombinedOutput(); err != nil {
+	fmt.Println("Restarting mcwod...")
+	if out, err := exec.Command("systemctl", "restart", "mcwod").CombinedOutput(); err != nil {
 		fmt.Printf("  could not restart it: %v: %s\n", err, sanitizeForLog(string(out), 200))
-		fmt.Println("  restart it yourself with: sudo systemctl restart mc-wol-proxy")
+		fmt.Println("  restart it yourself with: sudo systemctl restart mcwod")
 		return
 	}
 	fmt.Println("  restarted.")

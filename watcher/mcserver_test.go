@@ -21,8 +21,7 @@ type fakeMCServer struct {
 	received []byte
 }
 
-// answerStatus replies to a status request the way a running server would.
-// When false the connection is accepted and then left silent, which is what a
+// answerStatus false accepts the connection and stays silent, which is what a
 // container looks like while it is still starting.
 func startFakeMCServer(t *testing.T, answerStatus bool, echo []byte) *fakeMCServer {
 	t.Helper()
@@ -152,9 +151,8 @@ func TestMCPortReachableIsCached(t *testing.T) {
 		t.Error("the second call probed again instead of using the cache")
 	}
 
-	// force has to bypass it, which is what the boot sequence relies on. The
-	// cache is pushed into the past first, because two calls microseconds
-	// apart can read the same wall clock on a coarse timer.
+	// The cache is pushed into the past first, two calls microseconds apart
+	// can read the same wall clock on a coarse timer.
 	waker.reachChecked = time.Now().Add(-time.Hour)
 	stale := waker.reachChecked
 	if !waker.MCPortReachable(ctx, true) {

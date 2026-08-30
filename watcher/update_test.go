@@ -53,15 +53,15 @@ func TestPrereleaseSuffixIsIgnored(t *testing.T) {
 }
 
 func TestChecksumForHandlesBothSumFormats(t *testing.T) {
-	checksums := "abc123  mc-wol-proxy_linux_amd64\ndef456 *mc-wol-proxy_linux_arm64\n"
+	checksums := "abc123  mcwod_linux_amd64\ndef456 *mcwod_linux_arm64\n"
 
-	if sum, ok := checksumFor(checksums, "mc-wol-proxy_linux_amd64"); !ok || sum != "abc123" {
+	if sum, ok := checksumFor(checksums, "mcwod_linux_amd64"); !ok || sum != "abc123" {
 		t.Errorf("text mode entry = %q, %v", sum, ok)
 	}
-	if sum, ok := checksumFor(checksums, "mc-wol-proxy_linux_arm64"); !ok || sum != "def456" {
+	if sum, ok := checksumFor(checksums, "mcwod_linux_arm64"); !ok || sum != "def456" {
 		t.Errorf("binary mode entry = %q, %v", sum, ok)
 	}
-	if _, ok := checksumFor(checksums, "mc-wol-proxy_windows_amd64.exe"); ok {
+	if _, ok := checksumFor(checksums, "mcwod_windows_amd64.exe"); ok {
 		t.Error("an asset that is not listed must not report a checksum")
 	}
 }
@@ -210,7 +210,7 @@ func TestReleaseAssetNameMatchesThePublishedFiles(t *testing.T) {
 	if err != nil {
 		t.Skipf("no published build for this platform: %v", err)
 	}
-	if !strings.HasPrefix(name, "mc-wol-proxy_") {
+	if !strings.HasPrefix(name, "mcwod_") {
 		t.Errorf("asset name = %q", name)
 	}
 }

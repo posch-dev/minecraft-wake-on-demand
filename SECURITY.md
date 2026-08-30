@@ -93,12 +93,12 @@ to join.
 IPs. It is git-ignored and only `config.example.yml` with placeholders is
 tracked. Never move your real values into the example file.
 
-The installer copies the config to `/opt/mc-wol-proxy/config.yml`, chowns it to
+The installer copies the config to `/opt/mcwod/config.yml`, chowns it to
 the service user and sets mode 600, so the token is not world readable on the
-watcher. `mc-wol-proxy init` writes it with mode 600 for the same reason, and
+watcher. `mcwod init` writes it with mode 600 for the same reason, and
 reads the token without echoing it to the screen.
 
-`mc-wol-proxy config` writes the file back with mode 600 explicitly, because
+`mcwod config` writes the file back with mode 600 explicitly, because
 writing to an existing file leaves its mode alone and the token has to stay
 unreadable to other accounts on the watcher. It edits the parsed YAML rather
 than rewriting the file from the config struct, so a comment you put next to
@@ -118,7 +118,7 @@ command="docker start minecraft",no-port-forwarding,no-X11-forwarding,no-agent-f
 ```
 
 Even if the key leaks, it can then only start that one container.
-`mc-wol-proxy setup-ssh` installs the key in exactly this form by default, so
+`mcwod setup-ssh` installs the key in exactly this form by default, so
 this is what you get unless you decline it.
 
 ### When the watcher may also send the PC to sleep
@@ -128,7 +128,7 @@ and that is worth understanding before you agree to it. The forced command
 becomes a script instead of a single command:
 
 ```
-command="/usr/local/bin/mc-wol-remote",no-port-forwarding,... ssh-ed25519 AAAA... mc-wol-proxy
+command="/usr/local/bin/mcwod-remote",no-port-forwarding,... ssh-ed25519 AAAA... mcwod
 ```
 
 The script accepts exactly six words and refuses everything else:
@@ -157,7 +157,7 @@ youruser ALL=(root) NOPASSWD: /usr/bin/systemctl suspend
 ```
 
 No wildcard, so it cannot be talked into running another `systemctl` command.
-It is written to `/etc/sudoers.d/mc-wol-proxy` only after `visudo -c` accepts
+It is written to `/etc/sudoers.d/mcwod` only after `visudo -c` accepts
 it, because a malformed file there locks you out of your own machine.
 
 What you are accepting: a watcher that is compromised can now switch the server
@@ -170,7 +170,7 @@ The password you type during `setup-ssh` is used for that one login, handed to
 `sudo` over stdin so it never appears in the server's process list, and is not
 written anywhere.
 
-The watcher generates its own key at `~/.ssh/mc-wol-proxy` rather than using
+The watcher generates its own key at `~/.ssh/mcwod` rather than using
 `~/.ssh/id_ed25519`. That matters: an install that found a key already sitting
 at the default path would have adopted it, so the key its owner logs in with
 everywhere else would have ended up inside a service that faces the internet.
@@ -208,8 +208,8 @@ What that session changes on your server, all of it announced first:
 |--------|-----------|
 | the public key in `authorized_keys` | no |
 | `ethtool -s <iface> wol g` and a systemd unit that re-arms it on boot | yes |
-| `/usr/local/bin/mc-wol-remote`, only when you asked for auto-sleep | yes |
-| `/etc/sudoers.d/mc-wol-proxy`, same | yes |
+| `/usr/local/bin/mcwod-remote`, only when you asked for auto-sleep | yes |
+| `/etc/sudoers.d/mcwod`, same | yes |
 
 Everything it reads is read only: the MAC address, the interface, the container
 list, the published port, whether RCON is on, what the kernel can do about
@@ -257,11 +257,11 @@ pin the key before starting the watcher and switch to `yes`:
 ssh-keyscan -H 192.168.1.100 >> ~/.ssh/known_hosts
 ```
 
-`mc-wol-proxy setup-ssh` closes it differently: it shows you the fingerprint and
+`mcwod setup-ssh` closes it differently: it shows you the fingerprint and
 asks before trusting it, so you can compare it against the server.
 
 Where the file lives depends on the deployment. Under systemd it is
-`/opt/mc-wol-proxy/known_hosts`, so the unit can keep the home directory read
+`/opt/mcwod/known_hosts`, so the unit can keep the home directory read
 only. In Docker it is `watcher/state/known_hosts`, on a mounted directory rather
 than a mounted file, because Docker creates a directory in place of a bind
 mounted file that does not exist yet. That is what used to silently throw the
@@ -297,14 +297,14 @@ really came out of that workflow and that commit rather than from someone who
 got hold of the release page:
 
 ```bash
-gh attestation verify mc-wol-proxy_linux_arm64 --repo posch-dev/minecraft-wake-on-demand
+gh attestation verify mcwod_linux_arm64 --repo posch-dev/minecraft-wake-on-demand
 ```
 
 This is not a code signature. Windows will still warn about an unsigned
 executable downloaded from the internet, because signing needs a certificate
 from a certificate authority and this project does not have one.
 
-`mc-wol-proxy update` applies the same rule. It downloads `checksums.txt`
+`mcwod update` applies the same rule. It downloads `checksums.txt`
 alongside the asset and refuses to install on a mismatch, or when the asset is
 not listed at all, because that check is the only thing between a release URL
 and running whatever came back. It also refuses to follow a redirect off the
@@ -315,9 +315,9 @@ download cannot leave a half written file where the service expects a program.
 **The watcher never updates itself.** `update` asks before it does anything, and
 nothing in the running proxy will ever replace its own binary.
 
-`install.sh` and `update` both read `MC_WOL_REPO`, `MC_WOL_API_BASE` and
-`MC_WOL_DOWNLOAD_BASE` from the environment if they are set, and `install.sh`
-also reads `MC_WOL_INSTALL_DIR`. These are there for mirrors and for testing.
+`install.sh` and `update` both read `MCWOD_REPO`, `MCWOD_API_BASE` and
+`MCWOD_DOWNLOAD_BASE` from the environment if they are set, and `install.sh`
+also reads `MCWOD_INSTALL_DIR`. These are there for mirrors and for testing.
 Anything you point them at is trusted to serve the binary, so only use them with
 a source you control.
 

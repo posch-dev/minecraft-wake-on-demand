@@ -20,7 +20,7 @@ func runGetServerIcon() int {
 	cfg, err := LoadConfig()
 	if err != nil {
 		fmt.Printf("Config error: %v\n", err)
-		fmt.Println("\nRun 'mc-wol-proxy init' first.")
+		fmt.Println("\nRun 'mcwod init' first.")
 		return 1
 	}
 

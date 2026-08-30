@@ -236,9 +236,8 @@ func TestIsLocalClientHonoursConfiguredNetworks(t *testing.T) {
 	}
 }
 
-// TCP is free to split a write anywhere. The handler used to parse only what
-// the first read returned, so a handshake arriving in pieces was dropped and
-// the client saw the connection close with no answer.
+// TCP may split a write anywhere, and only the first read used to be parsed.
+// A handshake arriving in pieces was dropped with no answer at all.
 func TestHandshakeSplitAcrossReads(t *testing.T) {
 	cfg := sleepingConfig()
 	h := NewHandler(cfg, NewWaker(cfg))

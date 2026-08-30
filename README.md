@@ -97,8 +97,8 @@ sudo ./watcher/install.sh
 
 **Windows:**
 
-1. Download `mc-wol-proxy_windows_amd64.exe` from the [releases page](https://github.com/posch-dev/minecraft-wake-on-demand/releases)
-2. Rename it to `mc-wol-proxy.exe` and put it in the `watcher` folder
+1. Download `mcwod_windows_amd64.exe` from the [releases page](https://github.com/posch-dev/minecraft-wake-on-demand/releases)
+2. Rename it to `mcwod.exe` and put it in the `watcher` folder
 3. For autostart later, put a shortcut to `watcher\windows-start.vbs` in your `shell:startup` folder
 
 **Docker:**
@@ -114,9 +114,9 @@ Fill in `config.yml` by hand, then `cd watcher && docker compose up -d`. The thr
 Now let the watcher set itself up. On Linux, `install.sh` prints these three lines with the right paths already filled in:
 
 ```bash
-mc-wol-proxy init        # asks a handful of questions and writes config.yml
-mc-wol-proxy setup-ssh   # creates the SSH key and installs it on the server
-mc-wol-proxy check       # confirms everything is wired up
+mcwod init        # asks a handful of questions and writes config.yml
+mcwod setup-ssh   # creates the SSH key and installs it on the server
+mcwod check       # confirms everything is wired up
 ```
 
 **`init`** asks for the server's address, the user to log in as, and your DuckDNS details if you want them. Then it offers to log in once with that user's password and set the rest up itself: it reads the MAC address and broadcast address off the server, lists the containers so you can pick one instead of typing the name, checks whether Wake-on-LAN is armed in the network driver and offers to turn it on, and installs its own SSH key. The password is used for that one login and is not stored anywhere. Say no and it asks the questions instead, which works just as well.
@@ -168,13 +168,13 @@ Only the first player after a sleep goes through this. Everyone joining while th
 
 | Command | What it does |
 |---------|--------------|
-| `mc-wol-proxy` | starts the watcher, this is what the service runs |
-| `mc-wol-proxy init` | asks for your settings and writes `config.yml` |
-| `mc-wol-proxy setup-ssh` | creates the SSH key and installs it on the server |
-| `mc-wol-proxy check` | tests the setup and reports what is missing |
-| `mc-wol-proxy version` | prints the version |
+| `mcwod` | starts the watcher, this is what the service runs |
+| `mcwod init` | asks for your settings and writes `config.yml` |
+| `mcwod setup-ssh` | creates the SSH key and installs it on the server |
+| `mcwod check` | tests the setup and reports what is missing |
+| `mcwod version` | prints the version |
 
-The config is looked for in `MC_WOL_CONFIG`, then next to the binary, then one directory above it.
+The config is looked for in `MCWOD_CONFIG`, then next to the binary, then one directory above it.
 
 ## Extra options
 
@@ -193,7 +193,7 @@ transfer:
   port: 25566
 ```
 
-`mc-wol-proxy init` offers this as a question, so you can also set it up there.
+`mcwod init` offers this as a question, so you can also set it up there.
 
 Players still connect to the watcher as described in step 6, the redirect happens by itself.
 
@@ -235,7 +235,7 @@ Everything below is optional and goes in `watcher/assets/`. Ready to copy exampl
 
 A file beats the matching `motd.*` entry in `config.yml`, which beats the built-in default. The `-live` files are the ones that let you set the MOTD and the icon in one place instead of configuring them on the Minecraft server, and leaving them out keeps the server's own, which is the default.
 
-`mc-wol-proxy get-server-icon` copies the icon your running Minecraft server already serves into `assets/server-icon.png`, so you do not have to find the file yourself. `learn-server-icon` is the same command. The server has to be awake for it, and anything that was there is kept as `.bak`.
+`mcwod get-server-icon` copies the icon your running Minecraft server already serves into `assets/server-icon.png`, so you do not have to find the file yourself. `learn-server-icon` is the same command. The server has to be awake for it, and anything that was there is kept as `.bak`.
 
 Icons have to be exactly 64x64 and under 64 kB. Anything else is skipped with a line in the log, because clients drop the whole server list entry over a wrongly sized icon.
 
@@ -247,9 +247,9 @@ Assets are read fresh when they change, so editing one takes effect without rest
 
 It asks which server you want. `VANILLA` is the unmodified game, `PAPER` and `PURPUR` are faster and take plugins, and `FABRIC`, `FORGE`, `NEOFORGE` and `QUILT` run mods, which every player then needs installed too. The Minecraft version is asked for as well, with a concrete number rather than `LATEST`, because `LATEST` means the next image pull can move your server to a new version on its own. The container images themselves are pinned for the same reason.
 
-If there is already a compose file in that directory, the two services are added to it. Everything else in the file, other services, the top level keys, your comments, stays exactly as it was. Before anything is written a copy is kept as `docker-compose.yml.mcwol-bak-<time>`, the result has to pass `docker compose config`, and a service name that is already taken is refused rather than overwritten.
+If there is already a compose file in that directory, the two services are added to it. Everything else in the file, other services, the top level keys, your comments, stays exactly as it was. Before anything is written a copy is kept as `docker-compose.yml.mcwod-bak-<time>`, the result has to pass `docker compose config`, and a service name that is already taken is refused rather than overwritten.
 
-`mc-wol-proxy restore-compose` puts one of those backups back, and keeps the current file as a backup on the way, so the restore itself is undoable.
+`mcwod restore-compose` puts one of those backups back, and keeps the current file as a backup on the way, so the restore itself is undoable.
 
 It also asks for a whitelist. Name the players who may join and only they can, with the first name becoming the server operator. Leave it empty and anyone who knows the address can connect, which is how a fresh Minecraft server behaves. Worth setting if the address is reachable from the internet.
 
@@ -257,7 +257,7 @@ Accepting the Minecraft EULA is a separate question. Saying yes writes `EULA=TRU
 
 ### Auto-sleep
 
-The watcher can send the server PC back to sleep once nobody is playing. It is off by default. Turn it on in `mc-wol-proxy config`, or set `sleep.enabled: true` after `setup-ssh` has installed the helper script on the server.
+The watcher can send the server PC back to sleep once nobody is playing. It is off by default. Turn it on in `mcwod config`, or set `sleep.enabled: true` after `setup-ssh` has installed the helper script on the server.
 
 The operating system cannot do this for you, which is why it lives here. Windows counts user input and power requests when it decides to sleep, and a running Java process issues neither, so it would suspend in the middle of a game. Linux `logind` counts login sessions, which on a headless box means either always idle or never. Whether anyone is playing is the one fact only the watcher knows.
 
@@ -292,7 +292,7 @@ The binary is built from `watcher/`. With Go installed:
 
 ```bash
 cd watcher
-go build -o mc-wol-proxy .
+go build -o mcwod .
 ```
 
 `sudo ./watcher/install.sh --build` does the same thing and installs the result, which is the way to go on an architecture without a published release.
@@ -304,7 +304,7 @@ go build -o mc-wol-proxy .
 **Start here:**
 
 ```bash
-mc-wol-proxy check
+mcwod check
 ```
 
 It walks through the config, the SSH key, the server PC, the container and DuckDNS in the order they depend on each other, and names the step that is broken. Most of the cases below turn into one line of output.
@@ -331,7 +331,7 @@ It walks through the config, the SSH key, the server PC, the container and DuckD
 
 **Checking watcher logs:**
 - Docker: `docker compose logs -f` (in the `watcher` folder)
-- systemd: `journalctl -u mc-wol-proxy -f`
+- systemd: `journalctl -u mcwod -f`
 - Windows: check the terminal output from `windows-start.bat`
 
 ## Security
