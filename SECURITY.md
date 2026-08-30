@@ -203,7 +203,9 @@ serve the binary, so only use them with a source you control.
   scanners and internet crawlers from getting even a sleeping MOTD back, at the
   cost of rejecting players who connect by raw IP instead of the domain name.
   When DuckDNS is enabled, this list is populated automatically with your
-  DuckDNS domain.
+  DuckDNS domain. Forge clients and forwarding proxies append their own fields
+  to the address, everything after the first NUL byte is ignored when matching,
+  so they are not affected.
 - Turn on the Minecraft whitelist if the server is meant for a fixed group.
 - Protect the transfer port (25566 in transfer mode) with a host firewall.
   That port is published directly to the Minecraft container and the watcher

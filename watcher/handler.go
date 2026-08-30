@@ -282,9 +282,7 @@ func (h *Handler) isLocalClient(addr net.Addr) bool {
 	return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()
 }
 
-// When allowed_hostnames is non-empty, only connections from local IPs or
-// with a ServerAddress matching the list are accepted. Port scanners that
-// connect via raw IP are dropped without a response.
+// Port scanners connect by raw IP, so only listed names get an answer at all.
 func (h *Handler) isAllowedHostname(hs *Handshake, addr net.Addr) bool {
 	if len(h.cfg.Watcher.AllowedHostnames) == 0 {
 		return true
@@ -292,13 +290,25 @@ func (h *Handler) isAllowedHostname(hs *Handshake, addr net.Addr) bool {
 	if h.isLocalClient(addr) {
 		return true
 	}
+	requested := normalizeServerAddress(hs.ServerAddress)
 	for _, allowed := range h.cfg.Watcher.AllowedHostnames {
-		if strings.EqualFold(allowed, hs.ServerAddress) {
+		if strings.EqualFold(normalizeServerAddress(allowed), requested) {
 			return true
 		}
 	}
-	log.Infof("Dropping connection from %s: hostname %q not in allowed list", addr, hs.ServerAddress)
+	log.Infof("Dropping connection from %s: hostname %q not in allowed list", addr, sanitizeForLog(requested, 100))
 	return false
+}
+
+// Forge appends a NUL and "FML3" to the address, proxies that forward the
+// player IP append a NUL and their own fields, so only the part before the
+// first NUL is the hostname the player typed. A trailing dot is the DNS root
+// and names the same host, some clients keep it.
+func normalizeServerAddress(address string) string {
+	if end := strings.IndexByte(address, 0); end >= 0 {
+		address = address[:end]
+	}
+	return strings.TrimSuffix(strings.TrimSpace(address), ".")
 }
 
 func trailing(data []byte, offset int) []byte {
