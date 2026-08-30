@@ -16,6 +16,7 @@ type ServerSession struct {
 	client   *ssh.Client
 	password string
 	platform ServerPlatform
+	detach   func()
 }
 
 // What the server runs, decided once so every later command can be phrased for
@@ -84,6 +85,9 @@ func (s *ServerSession) Close() {
 	s.password = ""
 	if s.client != nil {
 		s.client.Close()
+	}
+	if s.detach != nil {
+		s.detach()
 	}
 }
 

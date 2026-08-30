@@ -53,3 +53,19 @@ To replace the whole thing instead, use one of these names in `assets/`:
 
 `mcwod get-server-icon` copies the picture your running server already uses, so
 you do not have to find the file yourself.
+
+## One world at a time
+
+If you keep several worlds, each can look different. Put its files in
+`assets/worlds/<name>/` and they are used while that world is the one people
+reach. Anything a world does not have of its own comes from `assets/`, so you
+only need to put down what actually differs.
+
+```
+assets/
+├── motd-sleeping.json          used by every world
+├── server-icon.png
+└── worlds/
+    └── creative/
+        └── motd-sleeping.json  used only while creative is the active world
+```

@@ -33,6 +33,25 @@ notes, so a version has to be listed here before it is tagged.
 
 ### Added
 
+- A world's Minecraft version and server kind can be changed from
+  `mcwod worlds`. A backup is taken on the server first and is not optional,
+  because Minecraft upgrades a world's format the first time it opens it and
+  the older server refuses to load it afterwards. Going backwards, or from a
+  mod server to a plainer one, says why it will not work and offers a fresh
+  world or a backup, with doing it anyway as the last option. Keeping the old
+  world means it is moved aside, never deleted.
+- Each world can have its own MOTD and pictures in `assets/worlds/<name>/`,
+  falling back to the shared ones for anything it does not override. They stay
+  on the watcher rather than moving to the server.
+- `mcwod worlds` keeps several Minecraft worlds side by side and switches
+  between them. Each one gets its own folder and its own compose file, so a
+  broken world is one broken world, and only the active one is ever started.
+  Switching says how many players it is about to disconnect and counts down for
+  ten seconds first. Removing a world takes it off the list and leaves the
+  files where they are.
+- The `worlds` block in `config.yml`. A config written before it existed
+  describes exactly one world and is read as that, so nothing has to be edited.
+
 - `mcwod players`, also reachable from the menu and as `mcwod whitelist`. It
   turns the whitelist on and off, adds and removes names, and toggles who is an
   admin from the same list. Taking away the last admin asks first, since a

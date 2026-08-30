@@ -125,6 +125,10 @@ mcwod check       # confirms everything is wired up
 
 **`mcwod`** on its own is the place to start. The first time it walks you through the setup, after that it shows what your server is doing and asks what you want to do.
 
+**`worlds`** keeps more than one world and switches between them. Each gets its own folder on the server and only one runs at a time, so your friends always reach the one you picked. Switching warns you if anyone is playing.
+
+It also changes a world's Minecraft version or server kind. That always makes a backup first, because a world that has been opened in a newer version cannot go back to an older one. Going backwards is allowed if you insist, but it tells you what will happen first.
+
 **`players`** is where you say who may join and who is an admin. It reads and writes your server's own settings, so what you set here survives the container being rebuilt. `whitelist` is the same command.
 
 **`config`** changes an existing setup through a menu, so nothing has to be edited by hand. `edit` and `settings` are the same command. Your own comments in `config.yml` are kept.
@@ -236,6 +240,8 @@ Everything below is optional and goes in `watcher/assets/`. Ready to copy exampl
 | `server-icon-sleeping.png` | replaces the sleeping icon outright, no Z drawn over it |
 | `server-icon-starting.png` | same for the booting icon |
 | `server-icon-live.png` | replaces the running server's own icon |
+
+If you keep several worlds, each can have its own files in `watcher/assets/worlds/<name>/`, and anything a world does not have of its own comes from `watcher/assets/`.
 
 A file beats the matching `motd.*` entry in `config.yml`, which beats the built-in default. The `-live` files are the ones that let you set the MOTD and the icon in one place instead of configuring them on the Minecraft server, and leaving them out keeps the server's own, which is the default.
 

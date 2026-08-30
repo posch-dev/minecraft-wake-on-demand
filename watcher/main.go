@@ -35,7 +35,7 @@ func main() {
 		os.Exit(runHome())
 	case "run":
 		os.Exit(runProxy())
-	case "check", "init", "setup-ssh", "config", "edit", "settings", "update", "get-server-icon", "learn-server-icon", "restore-compose", "players", "whitelist":
+	case "check", "init", "setup-ssh", "config", "edit", "settings", "update", "get-server-icon", "learn-server-icon", "restore-compose", "players", "whitelist", "worlds", "world":
 		// These print a laid out report, so log lines go to stderr instead of
 		// interleaving with it.
 		log.out = os.Stderr
@@ -54,6 +54,8 @@ func main() {
 			os.Exit(runRestoreCompose())
 		case "players", "whitelist":
 			os.Exit(runPlayers())
+		case "worlds", "world":
+			os.Exit(runWorlds())
 		default:
 			os.Exit(runConfigEdit())
 		}
@@ -85,6 +87,7 @@ Usage:
   mcwod update       install a newer release, after asking
   mcwod get-server-icon
                             copy the running server's icon into assets/
+  mcwod worlds              switch between worlds, make a new one
   mcwod players             who may join and who is an admin
   mcwod restore-compose
                             put back a docker-compose.yml this tool replaced

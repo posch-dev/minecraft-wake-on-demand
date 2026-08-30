@@ -153,3 +153,27 @@ func countdownBeforeRestart(p *prompter) bool {
 	fmt.Println("")
 	return true
 }
+
+// Version and kind live in the same environment block the players do.
+func setWorldEnvironment(compose, service, serverType, version string) (string, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte(compose), &doc); err != nil {
+		return "", fmt.Errorf("the server's settings are not valid YAML: %w", err)
+	}
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return "", fmt.Errorf("the server's settings are empty")
+	}
+	env, err := environmentNode(doc.Content[0], service)
+	if err != nil {
+		return "", err
+	}
+
+	setOrRemove(env, "TYPE", strings.ToUpper(strings.TrimSpace(serverType)))
+	setOrRemove(env, "VERSION", strings.TrimSpace(version))
+
+	out, err := yaml.Marshal(doc.Content[0])
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
