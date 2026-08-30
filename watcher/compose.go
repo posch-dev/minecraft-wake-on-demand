@@ -81,6 +81,9 @@ func minecraftService(spec ComposeSpec) *yaml.Node {
 		"AUTOPAUSE_TIMEOUT_EST", "3600",
 		"AUTOPAUSE_TIMEOUT_INIT", "600",
 		"ONLINE_MODE", "TRUE",
+		// Unsigned chat, so nothing a player types is held back or reported.
+		// Accounts are still verified, ONLINE_MODE above does that.
+		"ENFORCE_SECURE_PROFILE", "FALSE",
 		// Set even when the watcher proxies today, so switching to transfer
 		// mode later never means editing anything on the server PC again.
 		"ACCEPTS_TRANSFERS", "TRUE",
