@@ -59,9 +59,9 @@ func directCommand(cfg *Config, verb string) (string, error) {
 	container := cfg.Server.ContainerName
 	switch verb {
 	case remoteVerbStart:
-		return "docker start " + container, nil
+		return composeCommandUnix(cfg, "up -d", "docker start "+container), nil
 	case remoteVerbStop:
-		return "docker stop " + container, nil
+		return composeCommandUnix(cfg, "stop", "docker stop "+container), nil
 	case remoteVerbStatus:
 		return "docker inspect -f {{.State.Status}} " + container, nil
 	case remoteVerbPlayers:
@@ -73,6 +73,17 @@ func directCommand(cfg *Config, verb string) (string, error) {
 			"run 'mcwod setup-ssh' to install it")
 	}
 	return "", fmt.Errorf("unknown remote verb %q", verb)
+}
+
+// The backup container belongs to the same project, and docker start would
+// leave it behind. Without a known compose directory there is only the one
+// container to work with.
+func composeCommandUnix(cfg *Config, subcommand, fallback string) string {
+	dir := strings.TrimSpace(cfg.Server.ComposeDir)
+	if dir == "" {
+		return fallback
+	}
+	return "docker compose --project-directory " + shellQuote(dir) + " " + subcommand
 }
 
 // Absolute path so the sudoers rule can name it exactly. Filled in from the
@@ -119,18 +130,30 @@ func sudoersLine(user, systemctlPath, action string) string {
 	return fmt.Sprintf("%s ALL=(root) NOPASSWD: %s %s\n", user, systemctlPath, subcommand)
 }
 
-func remoteHelperScriptUnix(containerName, sleepCommand string) string {
+// The directory is baked in but may be empty, so the script decides at run time.
+func composeOrPlainUnix(subcommand, plain string) string {
+	return `if [ -n "$COMPOSE_DIR" ]; then exec docker compose --project-directory "$COMPOSE_DIR" ` +
+		subcommand + `; fi; exec ` + plain + ` "$CONTAINER"`
+}
+
+func composeOrPlainWindows(subcommand, plain string) string {
+	return "if ($composeDir) { docker compose --project-directory $composeDir " + subcommand +
+		" } else { " + plain + " $container }"
+}
+
+func remoteHelperScriptUnix(containerName, composeDir, sleepCommand string) string {
 	var b strings.Builder
 	b.WriteString("#!/bin/sh\n")
 	b.WriteString("# Forced command for the mcwod key, installed by 'mcwod setup-ssh'.\n")
 	b.WriteString("# The watcher sends one of the words below and nothing else ever runs, so a\n")
 	b.WriteString("# stolen key cannot do more than what is listed here.\n")
 	b.WriteString("set -eu\n\n")
-	b.WriteString("CONTAINER=" + shellQuote(containerName) + "\n\n")
+	b.WriteString("CONTAINER=" + shellQuote(containerName) + "\n")
+	b.WriteString("COMPOSE_DIR=" + shellQuote(composeDir) + "\n\n")
 	b.WriteString("case \"${SSH_ORIGINAL_COMMAND:-}\" in\n")
 	b.WriteString(remoteVerbHello + ")   echo " + shellQuote(remoteHelperMarker) + " ;;\n")
-	b.WriteString(remoteVerbStart + ")   exec docker start \"$CONTAINER\" ;;\n")
-	b.WriteString(remoteVerbStop + ")    exec docker stop \"$CONTAINER\" ;;\n")
+	b.WriteString(remoteVerbStart + ")   " + composeOrPlainUnix("up -d", "docker start") + " ;;\n")
+	b.WriteString(remoteVerbStop + ")    " + composeOrPlainUnix("stop", "docker stop") + " ;;\n")
 	b.WriteString(remoteVerbStatus + ")  exec docker inspect -f '{{.State.Status}}' \"$CONTAINER\" ;;\n")
 	b.WriteString(remoteVerbPlayers + ") exec docker exec \"$CONTAINER\" rcon-cli list ;;\n")
 	b.WriteString(remoteVerbWoLStatus + ") " + wolStatusCommandUnix + " ;;\n")
@@ -143,16 +166,17 @@ func remoteHelperScriptUnix(containerName, sleepCommand string) string {
 	return b.String()
 }
 
-func remoteHelperScriptWindows(containerName, sleepCommand string) string {
+func remoteHelperScriptWindows(containerName, composeDir, sleepCommand string) string {
 	var b strings.Builder
 	b.WriteString("# Forced command for the mcwod key.\n")
 	b.WriteString("# The watcher sends one of the words below and nothing else ever runs.\n")
 	b.WriteString("$ErrorActionPreference = 'Stop'\n")
-	b.WriteString("$container = " + powerShellQuote(containerName) + "\n\n")
+	b.WriteString("$container = " + powerShellQuote(containerName) + "\n")
+	b.WriteString("$composeDir = " + powerShellQuote(composeDir) + "\n\n")
 	b.WriteString("switch ($env:SSH_ORIGINAL_COMMAND) {\n")
 	b.WriteString("  '" + remoteVerbHello + "'   { " + powerShellQuote(remoteHelperMarker) + " }\n")
-	b.WriteString("  '" + remoteVerbStart + "'   { docker start $container }\n")
-	b.WriteString("  '" + remoteVerbStop + "'    { docker stop $container }\n")
+	b.WriteString("  '" + remoteVerbStart + "'   { " + composeOrPlainWindows("up -d", "docker start") + " }\n")
+	b.WriteString("  '" + remoteVerbStop + "'    { " + composeOrPlainWindows("stop", "docker stop") + " }\n")
 	b.WriteString("  '" + remoteVerbStatus + "'  { docker inspect -f '{{.State.Status}}' $container }\n")
 	b.WriteString("  '" + remoteVerbWoLStatus + "' { " + wolStatusCommandWindows + " }\n")
 	b.WriteString("  '" + remoteVerbPlayers + "' { docker exec $container rcon-cli list }\n")
@@ -166,9 +190,13 @@ func remoteHelperScriptWindows(containerName, sleepCommand string) string {
 
 // The restricted form is what SECURITY.md recommends: even a leaked key can
 // then only do what the forced command allows.
-func authorizedKeyEntry(publicKey, containerName string, restrict bool) string {
+func authorizedKeyEntry(publicKey, containerName, composeDir string, restrict bool) string {
 	if !restrict {
 		return publicKey + " mcwod"
+	}
+	if strings.TrimSpace(composeDir) != "" {
+		return forcedCommandEntry(publicKey,
+			"docker compose --project-directory "+shellQuote(composeDir)+" up -d")
 	}
 	return forcedCommandEntry(publicKey, "docker start "+containerName)
 }

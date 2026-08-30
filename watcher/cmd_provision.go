@@ -38,7 +38,7 @@ func provisionServer(ctx context.Context, p *prompter, cfg *Config, publicKey st
 	}
 
 	action := offerSleep(p, facts)
-	entry := authorizedKeyEntry(publicKey, cfg.Server.ContainerName, true)
+	entry := authorizedKeyEntry(publicKey, cfg.Server.ContainerName, cfg.Server.ComposeDir, true)
 	if action != "" {
 		cfg.Sleep.Action = action
 		if platform.Windows {

@@ -6,7 +6,7 @@ import (
 )
 
 func TestRemoteHelperScriptOnlyAllowsTheKnownVerbs(t *testing.T) {
-	script := remoteHelperScriptUnix("minecraft", "sudo -n /usr/bin/systemctl suspend")
+	script := remoteHelperScriptUnix("minecraft", "", "sudo -n /usr/bin/systemctl suspend")
 
 	for _, verb := range []string{
 		remoteVerbHello, remoteVerbStart, remoteVerbStop,
@@ -26,7 +26,7 @@ func TestRemoteHelperScriptOnlyAllowsTheKnownVerbs(t *testing.T) {
 }
 
 func TestRemoteHelperScriptLeavesOutSleepWhenNotWanted(t *testing.T) {
-	script := remoteHelperScriptUnix("minecraft", "")
+	script := remoteHelperScriptUnix("minecraft", "", "")
 
 	if strings.Contains(script, remoteVerbSleep+")") {
 		t.Error("without a sleep command the script must not offer the sleep verb")
@@ -37,7 +37,7 @@ func TestRemoteHelperScriptLeavesOutSleepWhenNotWanted(t *testing.T) {
 }
 
 func TestRemoteHelperScriptQuotesTheContainerName(t *testing.T) {
-	script := remoteHelperScriptUnix("odd'; rm -rf /; echo '", "")
+	script := remoteHelperScriptUnix("odd'; rm -rf /; echo '", "", "")
 
 	if strings.Contains(script, "rm -rf /;") && !strings.Contains(script, `'\'''`) {
 		t.Errorf("a container name with a quote in it broke out of the script:\n%s", script)
@@ -177,5 +177,70 @@ func TestSleepConfigRejectsAnUnknownActionAndShortDelays(t *testing.T) {
 	cfg.Sleep.IdleAfter = 5
 	if err := cfg.Validate(); err == nil {
 		t.Error("an idle_after below the floor should be refused")
+	}
+}
+
+// docker start leaves the backup container behind, which is why backups stopped
+// happening after every wake.
+func TestStartBringsTheWholeComposeProjectUp(t *testing.T) {
+	script := remoteHelperScriptUnix("minecraft", "/srv/minecraft", "")
+
+	for _, want := range []string{
+		`COMPOSE_DIR='/srv/minecraft'`,
+		`docker compose --project-directory "$COMPOSE_DIR" up -d`,
+		`docker compose --project-directory "$COMPOSE_DIR" stop`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("the helper is missing %q:\n%s", want, script)
+		}
+	}
+}
+
+// Someone who set the server up by hand has no compose directory recorded.
+func TestWithoutAComposeDirectoryOnlyTheContainerIsStarted(t *testing.T) {
+	script := remoteHelperScriptUnix("minecraft", "", "")
+
+	if !strings.Contains(script, "COMPOSE_DIR=''") {
+		t.Errorf("the helper should carry an empty directory:\n%s", script)
+	}
+	if !strings.Contains(script, `exec docker start "$CONTAINER"`) {
+		t.Errorf("the helper has no fallback:\n%s", script)
+	}
+}
+
+// A restricted key without the helper runs one fixed command, so that command
+// has to be the one that brings the project up.
+func TestRestrictedKeyStartsTheComposeProject(t *testing.T) {
+	entry := authorizedKeyEntry("ssh-ed25519 AAAAexample", "minecraft", "/srv/minecraft", true)
+	if !strings.Contains(entry, "docker compose --project-directory '/srv/minecraft' up -d") {
+		t.Errorf("forced command = %s", entry)
+	}
+
+	plain := authorizedKeyEntry("ssh-ed25519 AAAAexample", "minecraft", "", true)
+	if !strings.Contains(plain, "docker start minecraft") {
+		t.Errorf("forced command without a directory = %s", plain)
+	}
+}
+
+func TestDirectStartUsesComposeWhenTheDirectoryIsKnown(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.Server.ContainerName = "minecraft"
+	cfg.Server.ComposeDir = "/srv/minecraft"
+
+	command, err := directCommand(&cfg, remoteVerbStart)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if command != "docker compose --project-directory '/srv/minecraft' up -d" {
+		t.Errorf("start command = %q", command)
+	}
+
+	cfg.Server.ComposeDir = ""
+	command, err = directCommand(&cfg, remoteVerbStart)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if command != "docker start minecraft" {
+		t.Errorf("start command without a directory = %q", command)
 	}
 }

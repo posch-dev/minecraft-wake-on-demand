@@ -117,7 +117,7 @@ func runSetupSSH() int {
 		helperInstalled = true
 	} else {
 		restrict := p.yesNo("Restrict the key so it can only start the container (recommended)", true)
-		entry = authorizedKeyEntry(publicKey, cfg.Server.ContainerName, restrict)
+		entry = authorizedKeyEntry(publicKey, cfg.Server.ContainerName, cfg.Server.ComposeDir, restrict)
 	}
 
 	status, err := appendAuthorizedKey(session, entry)
