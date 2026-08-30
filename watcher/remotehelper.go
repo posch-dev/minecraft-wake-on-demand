@@ -7,9 +7,8 @@ import (
 	"strings"
 )
 
-// The watcher sends one of these words and nothing else. The helper script on
-// the server maps them to commands, so the key in authorized_keys never carries
-// a command the watcher could vary, and a leaked key can do exactly this much.
+// The watcher sends one of these words and nothing else, the helper maps them.
+// A leaked key can therefore do exactly this much and no more.
 const (
 	remoteVerbHello   = "hello"
 	remoteVerbStart   = "start"
@@ -51,9 +50,7 @@ const (
 	sudoersPath             = "/etc/sudoers.d/mc-wol-proxy"
 )
 
-// Commands the watcher sends when no helper is installed, which is the old
-// setup and a plain unrestricted key. Sleeping is missing on purpose, it needs
-// the sudoers line that only comes with the helper.
+// Used when no helper is installed. Sleep is absent, it needs the sudoers line.
 func directCommand(cfg *Config, verb string) (string, error) {
 	container := cfg.Server.ContainerName
 	switch verb {
@@ -196,23 +193,15 @@ func powerShellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }
 
-// The two shapes vanilla has used, "There are 3 of a max of 20 players online"
-// and the older "There are 0/20 players online". Matching on the numbers rather
-// than the sentence keeps it working on a server that is not running in
-// English, where only the surrounding words change.
-// The two shapes vanilla has used, "There are 3 of a max of 20 players online"
-// and the older "There are 0/20 players online". The last pattern takes the
-// first number in the line, which is what keeps a server running in another
-// language readable, since only the words around the numbers change.
+// Both vanilla shapes, then the first number in the line as a fallback.
+// Matching numbers not words keeps a non-English server readable.
 var playerCountPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(\d+)\s*(?:of a max of|/)\s*\d+`),
 	regexp.MustCompile(`(?i)there are\s+(\d+)`),
 	regexp.MustCompile(`^\D*?(\d+)\D`),
 }
 
-// Reports the number of players online. Not ok means the answer could not be
-// read, which callers have to treat as "someone might be playing" rather than
-// as zero.
+// Not ok means unreadable, which callers must treat as busy and not as empty.
 func parsePlayerCount(output string) (int, bool) {
 	for _, pattern := range playerCountPatterns {
 		if match := pattern.FindStringSubmatch(output); match != nil {

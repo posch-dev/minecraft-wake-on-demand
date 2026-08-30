@@ -5,10 +5,8 @@ import (
 	"strings"
 )
 
-// Writes the helper script and the sudoers rule on a Linux server. The two
-// files are staged as the normal user first and then moved into place by a
-// single sudo command, so nothing has to be piped into sudo alongside the
-// password.
+// Staged as the user, then moved by one sudo call, so only the password
+// goes to sudo over stdin.
 func installRemoteHelperUnix(s *ServerSession, cfg *Config) error {
 	sleepCommand := ""
 	if cfg.Sleep.Action != "" {
@@ -102,9 +100,8 @@ func windowsHelperInstructions(cfg *Config, publicKey string) string {
 	return b.String()
 }
 
-// Windows OpenSSH ignores the user's own authorized_keys for anyone in the
-// Administrators group, which is the single most common reason a key that looks
-// correct is never accepted.
+// Windows OpenSSH ignores the profile authorized_keys for admin accounts,
+// the usual reason a correct looking key is never accepted.
 func windowsAuthorizedKeysNote(user string) string {
 	return fmt.Sprintf(`The file is C:\Users\%s\.ssh\authorized_keys for a normal account.
 If the account is an administrator, Windows OpenSSH reads

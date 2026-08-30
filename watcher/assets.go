@@ -12,9 +12,7 @@ import (
 	"time"
 )
 
-// A status ping is unauthenticated and answered to anyone, so the reply has to
-// stay small. Without a cap a large icon would turn a 30 byte request into a
-// multi megabyte answer, which is a usable amplifier against our own uplink.
+// Unauthenticated and answered to anyone, so an uncapped icon is an amplifier.
 const (
 	maxIconBytes = 64 * 1024
 	maxMOTDBytes = 8 * 1024

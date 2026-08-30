@@ -172,9 +172,8 @@ func makeStatusResponse(motdJSON string, maxPlayers, online int, icon string, ve
 	return framePacket(body), nil
 }
 
-// A status response carrying a server icon is around 10 kB and never arrives in
-// a single Read, so the length prefix has to be honoured instead of hoping the
-// whole packet fits one segment. Returns the packet body without the prefix.
+// A response with an icon is around 10 kB and never arrives in one Read.
+// Returns the body without the length prefix.
 func readFramedPacket(r io.Reader, maxLen int) ([]byte, error) {
 	var length int32
 	var shift uint

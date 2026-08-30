@@ -42,7 +42,14 @@ type Waker struct {
 	stateMu     sync.Mutex
 	booting     bool
 	lastAttempt time.Time
-	failures    int
+	lastBootAt  time.Time
+
+	// Players forwarded through the watcher right now. Free to keep and exact
+	// in proxy mode, which is what saves the sleep monitor from polling.
+	sessionMu      sync.Mutex
+	activeSessions int
+	lastSessionEnd time.Time
+	failures       int
 
 	reachMu      sync.Mutex
 	reachValue   bool
@@ -256,6 +263,45 @@ func (w *Waker) learnServerInfo(body []byte) {
 	go w.saveServerInfo(learned)
 }
 
+// When the server PC last finished booting, so the sleep monitor can leave it
+// alone long enough for the first player to actually get in.
+func (w *Waker) LastBootAt() time.Time {
+	w.stateMu.Lock()
+	defer w.stateMu.Unlock()
+	return w.lastBootAt
+}
+
+func (w *Waker) SessionStarted() {
+	w.sessionMu.Lock()
+	defer w.sessionMu.Unlock()
+	w.activeSessions++
+}
+
+func (w *Waker) SessionEnded() {
+	w.sessionMu.Lock()
+	defer w.sessionMu.Unlock()
+	if w.activeSessions > 0 {
+		w.activeSessions--
+	}
+	if w.activeSessions == 0 {
+		w.lastSessionEnd = time.Now()
+	}
+}
+
+// Number of forwarded sessions, and when the last one ended. A zero time with
+// no sessions means none has ever been forwarded since the watcher started.
+func (w *Waker) Sessions() (int, time.Time) {
+	w.sessionMu.Lock()
+	defer w.sessionMu.Unlock()
+	return w.activeSessions, w.lastSessionEnd
+}
+
+// Ping only. The PC can be awake with the container stopped, which is exactly a
+// case worth sleeping, so this must not depend on the Minecraft port.
+func (w *Waker) HostReachable(ctx context.Context) bool {
+	return w.pinger.Ping(ctx, w.cfg.Server.IP, 1500*time.Millisecond)
+}
+
 func (w *Waker) cooldownRemaining() time.Duration {
 	w.stateMu.Lock()
 	defer w.stateMu.Unlock()
@@ -298,6 +344,7 @@ func (w *Waker) endBoot(ok bool) {
 	w.booting = false
 	if ok {
 		w.failures = 0
+		w.lastBootAt = time.Now()
 		return
 	}
 	w.failures++

@@ -212,9 +212,8 @@ func ensureKeyPair(path string) (ssh.Signer, error) {
 	return ssh.NewSignerFromKey(private)
 }
 
-// The key is only appended when it is not already there, so running setup-ssh
-// twice does not pile up duplicate lines. An older mc-wol-proxy line is left
-// alone, which is why the helper is verified with hello afterwards.
+// Appended only when absent, so a second run does not duplicate the line.
+// An older entry is left alone, which is why hello verifies afterwards.
 func appendAuthorizedKey(s *ServerSession, entry string) error {
 	fields := strings.Fields(entry)
 	if len(fields) < 2 {
@@ -240,9 +239,8 @@ func shellSafe(value string) string {
 	return strings.ReplaceAll(value, "'", "")
 }
 
-// Always asks about an unknown host, whatever server.ssh_strict_host_key says.
-// This runs with someone sitting in front of it, so the fingerprint gets shown
-// and confirmed rather than trusted silently the way the watcher does.
+// Always asks, whatever ssh_strict_host_key says. Someone is sitting here,
+// so the fingerprint gets shown instead of silently trusted.
 func interactiveHostKeyCallback(runner *SSHRunner, p *prompter) (ssh.HostKeyCallback, error) {
 	path := runner.cfg.ResolvedKnownHostsPath()
 	if err := ensureKnownHostsFile(path); err != nil {

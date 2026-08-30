@@ -233,9 +233,8 @@ func (r *SSHRunner) Run(ctx context.Context, command string) (string, error) {
 	}
 }
 
-// With the helper installed the watcher sends a bare verb and the script on the
-// server decides what it means. Without it the whole command goes over the wire,
-// which is what a plain key and the older forced command expect.
+// With the helper, a bare verb. Without it, the whole command, which is what
+// a plain key and the older forced command expect.
 func (r *SSHRunner) RunVerb(ctx context.Context, verb string) (string, error) {
 	if r.cfg.Server.RemoteHelper {
 		return r.Run(ctx, verb)

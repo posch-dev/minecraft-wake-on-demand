@@ -6,10 +6,7 @@ import (
 	"time"
 )
 
-// Status pings are short lived and far more numerous than logins, so they get
-// their own pool. Sharing one would let a handful of server list entries take
-// every slot a player could have used, and a full server would blank the entry
-// in everyone else's list.
+// Separate pools: shared, server list pings would eat the slots players need.
 const (
 	minStatusConnections = 64
 	statusPerLogin       = 5
