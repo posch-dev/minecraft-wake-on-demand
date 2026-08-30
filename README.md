@@ -1,9 +1,8 @@
 # Minecraft Wake-on-Demand
 
 [![Release](https://img.shields.io/github/v/release/posch-dev/minecraft-wake-on-demand)](https://github.com/posch-dev/minecraft-wake-on-demand/releases)
-[![CI](https://github.com/posch-dev/minecraft-wake-on-demand/actions/workflows/ci.yml/badge.svg)](https://github.com/posch-dev/minecraft-wake-on-demand/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Minecraft](https://img.shields.io/badge/Minecraft-Java%201.7.6%2B-brightgreen)](#faq)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Your Minecraft server PC is switched off. Somebody clicks **Join**, the PC turns
 itself on, the server starts, and everyone plays. When the last player leaves,
@@ -44,7 +43,6 @@ Runs on Linux and Windows.
    pass the player   send the wake-up packet
      through to      -> the PC switches on
      the server      -> Minecraft starts
-                     -> "reconnect in a moment"
 ```
 
 While the server PC sleeps the watcher answers the server list itself, and when somebody really wants to play on your Server, it
