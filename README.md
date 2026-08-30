@@ -193,7 +193,7 @@ By default, all traffic flows through the watcher. With transfer mode, the watch
 `mcwod init` offers it when you set up DuckDNS, and `mcwod config` turns it on or off later. To do it by hand:
 
 1. Forward a second port (e.g. `25566`) on your router directly to the server PC
-2. Set `accepts-transfers=true` in the server's `server.properties`
+2. Set `accepts-transfers=true` in the server's `server.properties`, unless MCWOD set the server up, which always does
 3. In `config.yml`:
 ```yaml
 transfer:

@@ -81,6 +81,9 @@ func minecraftService(spec ComposeSpec) *yaml.Node {
 		"AUTOPAUSE_TIMEOUT_EST", "3600",
 		"AUTOPAUSE_TIMEOUT_INIT", "600",
 		"ONLINE_MODE", "TRUE",
+		// Set even when the watcher proxies today, so switching to transfer
+		// mode later never means editing anything on the server PC again.
+		"ACCEPTS_TRANSFERS", "TRUE",
 	}
 	if spec.Admin != "" {
 		env = append(env, "OPS", spec.Admin)
