@@ -19,6 +19,21 @@ notes, so a version has to be listed here before it is tagged.
   not locked out. A rejected login gets `motd.server_full`.
 - `motd.server_full`, shown to a player who arrives when the login pool is
   full.
+- The watcher brings its own server list icon. Three blue Z that grow, with the
+  largest turning into a red exclamation mark while the PC boots. They ship
+  inside the binary, so a fresh install shows them without any files being put
+  anywhere. `assets/server-icon.png` is composed underneath at half opacity on
+  white, so an existing icon still shows through with the Z drawn over it.
+- Per state overrides. `assets/server-icon-sleeping.png`, `-starting.png` and
+  `-live.png` replace an icon outright, `assets/motd-live.json` and `motd.live`
+  do the same for the MOTD. With a `-live` override the watcher rewrites the
+  running server's status response instead of forwarding it unchanged, swapping
+  only the description and the favicon, so the player count, the version and the
+  sample stay real. Nothing set leaves the running server exactly as it was,
+  which is still the default.
+- `assets/examples/` with a copyable MOTD for all three states and a README
+  explaining the override order. The two MOTD files that used to sit in
+  `assets/` moved there, they only ever restated the config defaults.
 - The watcher can put the server PC back to sleep once nobody is playing,
   closing issue #6. Set `sleep.enabled: true` after `setup-ssh` installed the
   helper. In proxy mode it counts the sessions it forwards, which costs nothing

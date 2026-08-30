@@ -167,15 +167,19 @@ else
     NEEDS_CONFIG=0
 fi
 
-# copy default assets (never overwrite existing ones)
+# assets/ starts empty, the icons and MOTD live in the binary until someone
+# overrides them. examples/ is copied so there is something to copy from.
 mkdir -p "$INSTALL_DIR/assets"
-for f in "$SCRIPT_DIR/assets"/*; do
-    [ -f "$f" ] || continue
-    dest="$INSTALL_DIR/assets/$(basename "$f")"
-    if [ ! -f "$dest" ]; then
-        cp "$f" "$dest"
-    fi
-done
+if [ -d "$SCRIPT_DIR/assets/examples" ]; then
+    mkdir -p "$INSTALL_DIR/assets/examples"
+    for f in "$SCRIPT_DIR/assets/examples"/*; do
+        [ -f "$f" ] || continue
+        dest="$INSTALL_DIR/assets/examples/$(basename "$f")"
+        if [ ! -f "$dest" ]; then
+            cp "$f" "$dest"
+        fi
+    done
+fi
 chown -R "$RUN_USER:$RUN_USER" "$INSTALL_DIR/assets"
 
 # known_hosts lives next to the binary so the unit can keep the home read only

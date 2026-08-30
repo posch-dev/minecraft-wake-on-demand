@@ -103,15 +103,41 @@ func checkAssets(c *checker, cfg *Config) {
 	c.ok("assets directory %s", dir)
 
 	assets := NewAssets(cfg)
-	if assets.MOTDSleeping() == cfg.MOTD.Sleeping {
-		c.info("motd-sleeping.json not used, falling back to config.yml")
-	} else {
-		c.ok("motd-sleeping.json loaded")
+	for _, state := range []string{stateSleeping, stateStarting, stateLive} {
+		reportMOTDSource(c, cfg, assets, state)
 	}
-	if icon := assets.Icon(); icon == "" {
-		c.info("no server-icon.png, the server list shows the default icon")
+
+	if icon := assets.IconSleeping(); icon == "" {
+		c.warn("no icon for the sleeping state, the list shows the default block")
 	} else {
-		c.ok("server-icon.png loaded, %d bytes encoded", len(icon))
+		c.ok("sleeping icon ready, %d bytes encoded", len(icon))
+	}
+	if assets.IconLive() == "" {
+		c.info("no server-icon-live.png, the running server's own icon is passed through")
+	} else {
+		c.ok("server-icon-live.png overrides the running server's icon")
+	}
+}
+
+func reportMOTDSource(c *checker, cfg *Config, assets *Assets, state string) {
+	fromFile := map[string]func() string{
+		stateSleeping: assets.MOTDSleeping,
+		stateStarting: assets.MOTDStarting,
+		stateLive:     assets.MOTDLive,
+	}[state]()
+	fromConfig := map[string]string{
+		stateSleeping: cfg.MOTD.Sleeping,
+		stateStarting: cfg.MOTD.Starting,
+		stateLive:     cfg.MOTD.Live,
+	}[state]
+
+	switch {
+	case fromFile == "" && state == stateLive:
+		c.info("motd-live.json not set, the running server's own MOTD is passed through")
+	case fromFile != fromConfig:
+		c.ok("motd-%s.json loaded", state)
+	default:
+		c.info("motd-%s.json not used, falling back to config.yml", state)
 	}
 }
 

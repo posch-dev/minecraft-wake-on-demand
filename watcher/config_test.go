@@ -236,13 +236,15 @@ func TestExampleConfigMatchesTheDefaults(t *testing.T) {
 }
 
 // The server list shows two lines, so both MOTDs use both of them.
-func TestShippedMOTDsRenderTwoLines(t *testing.T) {
+func TestExampleMOTDsRenderTwoLines(t *testing.T) {
 	for _, c := range []struct {
-		file    string
+		file string
+		// Empty for live, which has no built in default by design.
 		builtin string
 	}{
-		{"assets/motd-sleeping.json", defaultMOTDSleeping},
-		{"assets/motd-starting.json", defaultMOTDStarting},
+		{"assets/examples/motd-sleeping.json", defaultMOTDSleeping},
+		{"assets/examples/motd-starting.json", defaultMOTDStarting},
+		{"assets/examples/motd-live.json", ""},
 	} {
 		data, err := os.ReadFile(c.file)
 		if err != nil {
@@ -258,6 +260,9 @@ func TestShippedMOTDsRenderTwoLines(t *testing.T) {
 			}
 		}
 
+		if c.builtin == "" {
+			continue
+		}
 		builtinLines := motdLines(t, c.builtin)
 		if !reflect.DeepEqual(lines, builtinLines) {
 			t.Errorf("%s and the built in default show different text\n  file:    %q\n  builtin: %q",
