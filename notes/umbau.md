@@ -1,5 +1,15 @@
 # Umbau des Watchers: ein Thema pro Ordner, eine Aufgabe pro Datei
 
+> **Umgesetzt am 2026-08-30 auf `dev`**, in dreizehn Commits von `2416cca`
+> bis `fe845cd`. Was unten steht, ist der Plan von vorher. Abweichungen:
+> `createworld.go` ist bei den Kommandos geblieben, weil es Fragen stellt;
+> DuckDNS und `testsupport` sind als eigene Pakete dazugekommen; `internal/cli`
+> ist mit 5.100 Zeilen das größte Paket, aber ein Kommando pro Datei. Aus 44
+> Dateien in einem `package main` wurden 23 Pakete, und `main.go` sind 105
+> Zeilen Dispatch. Nebenbei gefunden und mitrepariert: das Dockerfile kopierte
+> nur `*.go` und hätte das Image seit dem ersten `go:embed` nicht mehr bauen
+> können.
+
 ## Ausgangslage
 
 `watcher/` ist ein einziges flaches `package main`: 44 Quelldateien, 38 Testdateien,
