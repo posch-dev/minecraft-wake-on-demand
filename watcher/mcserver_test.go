@@ -49,6 +49,16 @@ func startFakeMCServer(t *testing.T, answerStatus bool, echo []byte) *fakeMCServ
 				if err != nil {
 					return
 				}
+				// The watcher probes readiness with protocol version -1, which
+				// no client sends. A real server answers it, so this one does.
+				hs, hsErr := parseHandshake(buf[:n])
+				if echo != nil && hsErr == nil && hs.ProtocolVersion == -1 {
+					probe, _ := makeStatusResponse(defaultMOTDSleeping, 42, 0, "", "1.21.4", 769)
+					conn.Write(probe)
+					conn.Read(buf)
+					return
+				}
+
 				server.mu.Lock()
 				server.received = append(server.received, buf[:n]...)
 				server.mu.Unlock()

@@ -208,7 +208,7 @@ func (w *Waker) MCPortReachable(ctx context.Context, force bool) bool {
 	if !force && time.Since(w.reachChecked) < mcReachableTTL {
 		return w.reachValue
 	}
-	value := dialSucceeds(ctx, w.mcAddress(), 2*time.Second)
+	value := w.mcAcceptsStatus(ctx)
 	w.reachValue = value
 	w.reachChecked = time.Now()
 	return value

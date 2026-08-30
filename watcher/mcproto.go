@@ -217,6 +217,49 @@ func readFramedPacket(r io.Reader, maxLen int) ([]byte, error) {
 }
 
 // Body of a status response packet, so packet id followed by the JSON string.
+// Fields are kept raw so everything the server sends that we do not model, the
+// mod list and the player sample among them, survives being rewritten.
+func rewriteStatusResponse(body []byte, motd, icon string) ([]byte, error) {
+	pktID, off, err := readVarInt(body, 0)
+	if err != nil {
+		return nil, err
+	}
+	if pktID != packetIDStatus {
+		return nil, ErrWrongPacketID
+	}
+	jsonLen, off, err := readVarInt(body, off)
+	if err != nil {
+		return nil, err
+	}
+	if jsonLen <= 0 || off+int(jsonLen) > len(body) {
+		return nil, ErrShortPacket
+	}
+
+	fields := map[string]json.RawMessage{}
+	if err := json.Unmarshal(body[off:off+int(jsonLen)], &fields); err != nil {
+		return nil, err
+	}
+	if motd != "" {
+		fields["description"] = json.RawMessage(motd)
+	}
+	if icon != "" {
+		quoted, err := json.Marshal(icon)
+		if err != nil {
+			return nil, err
+		}
+		fields["favicon"] = quoted
+	}
+
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(fields); err != nil {
+		return nil, err
+	}
+	encoded := bytes.TrimRight(buf.Bytes(), "' + NL + '")
+	return framePacket(append(writeVarInt(packetIDStatus), writeString(string(encoded))...)), nil
+}
+
 func parseStatusPayload(body []byte) (*statusPayload, error) {
 	pktID, off, err := readVarInt(body, 0)
 	if err != nil {
