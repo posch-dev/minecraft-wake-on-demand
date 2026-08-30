@@ -131,17 +131,29 @@ func TestLiveIconIsEmptyUnlessOverridden(t *testing.T) {
 	}
 }
 
-// The shared icon dresses up the sleeping states, it must not silently replace
-// the icon a running server already serves.
-func TestLiveIconIgnoresTheSharedIcon(t *testing.T) {
+// One file drives all three states, so nobody has to place the same picture
+// twice to have it shown while the server runs.
+func TestLiveIconFallsBackToTheSharedIcon(t *testing.T) {
 	assets, dir := assetsIn(t)
 	writePNG(t, filepath.Join(dir, "server-icon.png"), 64, 64, color.NRGBA{1, 2, 3, 255})
 
-	if got := assets.IconLive(); got != "" {
-		t.Errorf("live icon = %.40q, a shared server-icon.png must not override the running server", got)
+	if assets.IconLive() == "" {
+		t.Error("a shared server-icon.png should be shown while the server runs")
 	}
 	if assets.IconSleeping() == "" {
 		t.Error("the same shared icon should still feed the sleeping state")
+	}
+	// Plain while running, dressed up while asleep, so the two differ.
+	if assets.IconLive() == assets.IconSleeping() {
+		t.Error("the live icon should not carry the sleeping overlay")
+	}
+}
+
+// Nothing to show means the field is left out and the server answers for itself.
+func TestLiveIconIsEmptyWithoutAnyFile(t *testing.T) {
+	assets, _ := assetsIn(t)
+	if got := assets.IconLive(); got != "" {
+		t.Errorf("live icon = %.40q, want nothing", got)
 	}
 }
 
@@ -218,8 +230,8 @@ func TestIconIsCachedUntilTheFileChanges(t *testing.T) {
 	if assets.IconLive() == "" {
 		t.Fatal("icon should have been encoded")
 	}
-	if len(assets.iconCache) != 1 {
-		t.Fatalf("cache holds %d entries, want 1", len(assets.iconCache))
+	if _, cached := assets.iconCache[path]; !cached {
+		t.Fatalf("the file was not cached, the cache holds %v", assets.iconCache)
 	}
 
 	if err := os.Remove(path); err != nil {
@@ -292,6 +304,26 @@ func TestEmbeddedOverlaysAreValid64x64PNGs(t *testing.T) {
 		}
 		if width != iconEdge || height != iconEdge {
 			t.Errorf("the %s overlay is %dx%d, want %dx%d", name, width, height, iconEdge, iconEdge)
+		}
+	}
+}
+
+// No client should ever wait for a PNG to be composed, so it happens before the
+// first ping rather than during it.
+func TestIconsAreComposedBeforeTheFirstRequest(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, "assets")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := defaultConfig()
+	cfg.Path = filepath.Join(home, "config.yml")
+	writePNG(t, filepath.Join(dir, "server-icon.png"), 64, 64, color.NRGBA{1, 2, 3, 255})
+
+	assets := NewAssets(&cfg)
+	for _, state := range []string{stateSleeping, stateStarting} {
+		if _, cached := assets.iconCache["composed:"+state+":"+filepath.Join(dir, "server-icon.png")]; !cached {
+			t.Errorf("the %s icon was not composed up front, cache holds %d", state, len(assets.iconCache))
 		}
 	}
 }

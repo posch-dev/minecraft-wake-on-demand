@@ -115,9 +115,9 @@ func checkAssets(c *checker, cfg *Config) {
 		c.ok("sleeping icon ready, %d bytes encoded", len(icon))
 	}
 	if assets.IconLive() == "" {
-		c.info("no server-icon-live.png, the running server's own icon is passed through")
+		c.info("no server-icon.png, the running server's own icon is passed through")
 	} else {
-		c.ok("server-icon-live.png overrides the running server's icon")
+		c.ok("running server shows your icon, %d bytes encoded", len(assets.IconLive()))
 	}
 }
 

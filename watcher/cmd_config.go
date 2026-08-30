@@ -288,14 +288,14 @@ func (e *configEditor) showAssets() {
 	dir := e.cfg.AssetsDir()
 	fmt.Printf("\nAssets live in %s\n", dir)
 	fmt.Println("Examples to copy are in assets/examples/.")
-	fmt.Println("\nThe watcher ships its own sleeping and waking icon, three blue Z with the")
-	fmt.Println("largest turning into a red exclamation mark while the PC boots. Put a")
-	fmt.Println("64x64 server-icon.png there and it shows through underneath them.")
+	fmt.Println("\nPut one 64x64 server-icon.png there and it is used for all three states:")
+	fmt.Println("plain while the server runs, and dimmed under three blue Z while it")
+	fmt.Println("sleeps, the largest turning into a red exclamation mark while it boots.")
 	fmt.Println("\nTo replace something outright instead:")
 	fmt.Println("  motd-sleeping.json          motd-starting.json          motd-live.json")
 	fmt.Println("  server-icon-sleeping.png    server-icon-starting.png    server-icon-live.png")
-	fmt.Println("\nThe -live files override what the running server itself serves. Leave")
-	fmt.Println("them out and the server's own MOTD and icon are passed through.")
+	fmt.Println("\nWithout any of these the running server's own MOTD is passed through, and")
+	fmt.Println("its own icon too if there is no server-icon.png either.")
 }
 
 // Needs the password login, the restricted key cannot write files.
