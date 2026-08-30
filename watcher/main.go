@@ -7,8 +7,8 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/cli"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/proxy"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/update"
-	"golang.org/x/term"
 )
 
 // Set via ldflags in the release build.
@@ -26,7 +26,7 @@ func main() {
 	case "":
 		// systemd calls the binary with no argument, so a menu here would
 		// replace the service with a prompt nobody ever answers.
-		if !attachedToTerminal() {
+		if !ui.AttachedToTerminal() {
 			os.Exit(proxy.Run())
 		}
 		logging.SetOutput(os.Stderr)
@@ -68,10 +68,6 @@ func main() {
 		printUsage(os.Stderr)
 		os.Exit(2)
 	}
-}
-
-func attachedToTerminal() bool {
-	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 }
 
 func printUsage(w *os.File) {

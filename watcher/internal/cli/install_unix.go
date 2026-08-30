@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/embedded"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/fsx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
@@ -113,7 +114,7 @@ func registerAutostart(dir, binary string) error {
 
 // The unit ships with the default paths, so they follow the install dir.
 func renderSystemdUnit(dir, runUser string) string {
-	unit := strings.ReplaceAll(systemdUnitTemplate, "MCWOD_USER", runUser)
+	unit := strings.ReplaceAll(embedded.SystemdUnit, "MCWOD_USER", runUser)
 	return strings.ReplaceAll(unit, defaultInstallDir(), dir)
 }
 
@@ -159,7 +160,7 @@ func runWizard(binary, configPath string) error {
 // Piping the installer into a shell leaves stdin on the pipe, where the wizard
 // would read the rest of the script instead of an answer.
 func wizardInput() *os.File {
-	if attachedToTerminal() {
+	if ui.AttachedToTerminal() {
 		return os.Stdin
 	}
 	if tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
