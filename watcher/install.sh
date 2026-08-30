@@ -1,8 +1,9 @@
 #!/bin/bash
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_DIR="$(dirname "$SCRIPT_DIR")"
+# Piped into a shell there is no checkout to read from, so this script only
+# fetches a verified binary and lets 'mcwod install' do the rest.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
 SERVICE_FILE="/etc/systemd/system/mcwod.service"
 
 # Overridable so the install can be pointed at a mirror, and so the installer
@@ -14,14 +15,14 @@ API_BASE="${MCWOD_API_BASE:-${MC_WOL_API_BASE:-https://api.github.com}}"
 DOWNLOAD_BASE="${MCWOD_DOWNLOAD_BASE:-${MC_WOL_DOWNLOAD_BASE:-https://github.com}}"
 
 if [ "$EUID" -ne 0 ]; then
-    echo "Please run as root: sudo ./install.sh"
+    echo "Please run as root: curl -fsSL <url> | sudo bash"
     exit 1
 fi
 
 RUN_USER="${SUDO_USER:-$(whoami)}"
 if [ "$RUN_USER" = "root" ]; then
     echo "WARNING: No SUDO_USER detected, service will run as root."
-    echo "  Consider running with: sudo -E ./install.sh"
+    echo "  Consider running it with sudo from your own account instead."
 fi
 
 if [ "$1" = "--uninstall" ]; then
@@ -58,28 +59,18 @@ if [ "$1" = "--uninstall" ]; then
     exit 0
 fi
 
-echo "=== Minecraft Wake-on-Demand Proxy Installer ==="
+echo "=== Minecraft Wake-on-Demand installer ==="
 
-case "$(uname -m)" in
-    x86_64|amd64)   GOARCH="amd64" ;;
-    aarch64|arm64)  GOARCH="arm64" ;;
-    armv7l|armv7)   GOARCH="armv7" ;;
-    armv6l|armv6)   GOARCH="armv6" ;;
-    *)
-        echo "ERROR: Unsupported architecture $(uname -m)."
-        echo "  Build from source instead: sudo ./install.sh --build"
-        exit 1
-        ;;
-esac
-echo "Architecture: $(uname -m) -> $GOARCH"
-
-mkdir -p "$INSTALL_DIR"
-# The watcher caches the learned Minecraft version next to its binary, so the
-# directory has to belong to the service user, not to root.
-chown "$RUN_USER:$RUN_USER" "$INSTALL_DIR"
-BINARY="$INSTALL_DIR/mcwod"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+BINARY="$TMP/mcwod"
 
 if [ "$1" = "--build" ]; then
+    if [ -z "$SCRIPT_DIR" ] || [ ! -f "$SCRIPT_DIR/main.go" ]; then
+        echo "ERROR: --build needs the repository, and this script was piped in."
+        echo "  Clone it first, then run watcher/install.sh --build from there."
+        exit 1
+    fi
     if ! command -v go &>/dev/null; then
         echo "ERROR: --build needs the Go toolchain, which is not installed."
         echo "  Install it with: sudo apt install golang-go"
@@ -90,6 +81,19 @@ if [ "$1" = "--build" ]; then
     ( cd "$SCRIPT_DIR" && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$BINARY" . )
     echo "Built $BINARY"
 else
+    case "$(uname -m)" in
+        x86_64|amd64)   GOARCH="amd64" ;;
+        aarch64|arm64)  GOARCH="arm64" ;;
+        armv7l|armv7)   GOARCH="armv7" ;;
+        armv6l|armv6)   GOARCH="armv6" ;;
+        *)
+            echo "ERROR: Unsupported architecture $(uname -m)."
+            echo "  Build from source instead: ./install.sh --build"
+            exit 1
+            ;;
+    esac
+    echo "Architecture: $(uname -m) -> $GOARCH"
+
     # Downloads the release asset and refuses to install it unless the
     # checksum published alongside it matches.
     if command -v curl &>/dev/null; then
@@ -109,20 +113,18 @@ else
     VERSION="$(printf '%s' "$RELEASE_JSON" | grep -m1 '"tag_name"' | cut -d'"' -f4 || true)"
     if [ -z "$VERSION" ]; then
         echo "ERROR: Could not find a release to download."
-        echo "  Build from source instead: sudo ./install.sh --build"
+        echo "  Build from source instead: ./install.sh --build"
         exit 1
     fi
     echo "Latest release: $VERSION"
 
     ASSET="mcwod_linux_${GOARCH}"
     BASE="$DOWNLOAD_BASE/$REPO/releases/download/$VERSION"
-    TMP="$(mktemp -d)"
-    trap 'rm -rf "$TMP"' EXIT
 
     echo "Downloading $ASSET..."
     if ! $FETCH "$BASE/$ASSET" > "$TMP/$ASSET"; then
         echo "ERROR: Download failed."
-        echo "  Build from source instead: sudo ./install.sh --build"
+        echo "  Build from source instead: ./install.sh --build"
         exit 1
     fi
     if ! $FETCH "$BASE/checksums.txt" > "$TMP/checksums.txt"; then
@@ -148,88 +150,8 @@ else
     echo "Checksum verified."
 
     install -m 755 "$TMP/$ASSET" "$BINARY"
-    echo "Installed $BINARY"
 fi
 
-chmod 755 "$BINARY"
-
-# never overwrite existing config. The example is not one: putting it here
-# would make 'init' refuse to write the real thing.
-if [ -f "$INSTALL_DIR/config.yml" ]; then
-    echo "Config already exists at $INSTALL_DIR/config.yml (not overwritten)"
-    NEEDS_CONFIG=0
-elif [ -f "$REPO_DIR/config.yml" ]; then
-    cp "$REPO_DIR/config.yml" "$INSTALL_DIR/config.yml"
-    # The config holds the DuckDNS token, so only the service user may read it.
-    chown "$RUN_USER:$RUN_USER" "$INSTALL_DIR/config.yml"
-    chmod 600 "$INSTALL_DIR/config.yml"
-    echo "Copied config.yml from the repository to $INSTALL_DIR/config.yml"
-    NEEDS_CONFIG=0
-else
-    NEEDS_CONFIG=1
-fi
-
-# assets/ starts empty, the icons and MOTD live in the binary until someone
-# overrides them. examples/ is copied so there is something to copy from.
-mkdir -p "$INSTALL_DIR/assets"
-if [ -d "$SCRIPT_DIR/assets/examples" ]; then
-    mkdir -p "$INSTALL_DIR/assets/examples"
-    for f in "$SCRIPT_DIR/assets/examples"/*; do
-        [ -f "$f" ] || continue
-        dest="$INSTALL_DIR/assets/examples/$(basename "$f")"
-        if [ ! -f "$dest" ]; then
-            cp "$f" "$dest"
-        fi
-    done
-fi
-chown -R "$RUN_USER:$RUN_USER" "$INSTALL_DIR/assets"
-
-# known_hosts lives next to the binary so the unit can keep the home read only
-touch "$INSTALL_DIR/known_hosts"
-chown "$RUN_USER:$RUN_USER" "$INSTALL_DIR/known_hosts"
-chmod 600 "$INSTALL_DIR/known_hosts"
-
-# Two watchers would fight over port 25565 and the failures would look random,
-# so the one this replaces is stopped rather than left running.
-OLD_SERVICE="/etc/systemd/system/mc-wol-proxy.service"
-if [ -f "$OLD_SERVICE" ]; then
-    echo "Found the older mc-wol-proxy service. Stopping it, mcwod replaces it."
-    systemctl stop mc-wol-proxy 2>/dev/null || true
-    systemctl disable mc-wol-proxy 2>/dev/null || true
-    mv "$OLD_SERVICE" "$OLD_SERVICE.replaced-by-mcwod"
-    echo "  Its unit file is kept as $OLD_SERVICE.replaced-by-mcwod"
-    if [ -d /opt/mc-wol-proxy ] && [ "$INSTALL_DIR" != "/opt/mc-wol-proxy" ]; then
-        echo "  Your old config is still in /opt/mc-wol-proxy, copy it over with:"
-        echo "    sudo cp /opt/mc-wol-proxy/config.yml $INSTALL_DIR/config.yml"
-    fi
-fi
-
-# The unit ships with the default paths, so they follow INSTALL_DIR.
-sed -e "s/MCWOD_USER/$RUN_USER/g" -e "s|/opt/mcwod|$INSTALL_DIR|g" \
-    "$SCRIPT_DIR/mcwod.service" > "$SERVICE_FILE"
-systemctl daemon-reload
-echo "Installed systemd service (running as $RUN_USER)"
-
-if [ "$NEEDS_CONFIG" = "1" ]; then
-    echo ""
-    echo "=== Almost done ==="
-    echo "There is no config yet. Run these three as $RUN_USER, in this order,"
-    echo "without sudo, so the SSH key lands in that account and not root's:"
-    echo ""
-    echo "  MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY init"
-    echo "  MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY setup-ssh"
-    echo "  MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY check"
-    echo ""
-    echo "Then start it with: sudo systemctl enable --now mcwod"
-    exit 0
-fi
-
-systemctl enable mcwod
-systemctl restart mcwod
-
-echo ""
-echo "=== Installation complete ==="
-systemctl status mcwod --no-pager || true
-echo ""
-echo "Check the setup: MCWOD_CONFIG=$INSTALL_DIR/config.yml $BINARY check"
-echo "View logs:       journalctl -u mcwod -f"
+# The binary carries the unit file and the example assets, so from here on it
+# installs itself and everything below INSTALL_DIR belongs to RUN_USER.
+MCWOD_INSTALL_DIR="$INSTALL_DIR" "$BINARY" install
