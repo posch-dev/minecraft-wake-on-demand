@@ -141,6 +141,11 @@ notes, so a version has to be listed here before it is tagged.
 
 ### Fixed
 
+- The broadcast address is worked out from the watcher's own network interface
+  instead of assuming a `/24`. On a `/16` or `/22` the guess was simply wrong,
+  and the only symptom was that waking never worked. `init` no longer asks for
+  it at all, except when the server turns out to be in a different network,
+  where there is nothing local to work it out from.
 - The watcher generates its own SSH key at `~/.ssh/mc-wol-proxy` instead of
   reusing `~/.ssh/id_ed25519`. Finding a key already at the default path meant
   adopting it, so an internet facing service ended up holding the key its owner

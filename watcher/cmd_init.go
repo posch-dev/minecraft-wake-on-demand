@@ -136,9 +136,15 @@ func runInit() int {
 		cfg.Server.ContainerName = p.validated("Name of the Minecraft container", "minecraft", validateContainerName)
 	}
 
+	// Only asked when the watcher and the server are in different networks,
+	// where there is nothing local to work it out from.
 	if cfg.WoL.BroadcastAddress == "" {
-		fmt.Println("\n--- Network ---")
-		cfg.WoL.BroadcastAddress = p.validated("Broadcast address of your network", guessBroadcast(cfg.Server.IP), func(v string) error {
+		cfg.WoL.BroadcastAddress = guessBroadcast(cfg.Server.IP)
+	}
+	if cfg.WoL.BroadcastAddress == "255.255.255.255" {
+		fmt.Println("\nThat PC does not look like it is in the same network as this one.")
+		fmt.Println("Waking it needs the broadcast address of its network.")
+		cfg.WoL.BroadcastAddress = p.validated("Broadcast address", "255.255.255.255", func(v string) error {
 			if net.ParseIP(v) == nil {
 				return fmt.Errorf("that is not an IP address")
 			}
@@ -242,12 +248,55 @@ func askMAC(p *prompter, ip string) string {
 }
 
 // A /24 covers the overwhelming majority of home networks.
+// The watcher sits in the same network as the server, so the mask is right
+// here rather than guessed. Assuming /24 breaks silently on a /16 or /22, and
+// the only symptom is that waking never works.
 func guessBroadcast(serverIP string) string {
 	ip := net.ParseIP(serverIP).To4()
 	if ip == nil {
 		return "255.255.255.255"
 	}
+	if found := broadcastForIP(ip, localNetworks()); found != "" {
+		return found
+	}
 	return fmt.Sprintf("%d.%d.%d.255", ip[0], ip[1], ip[2])
+}
+
+func localNetworks() []*net.IPNet {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil
+	}
+	nets := []*net.IPNet{}
+	for _, addr := range addrs {
+		if network, ok := addr.(*net.IPNet); ok && network.IP.To4() != nil {
+			nets = append(nets, network)
+		}
+	}
+	return nets
+}
+
+// Host bits all set, which is the broadcast address of that subnet.
+func broadcastForIP(ip net.IP, nets []*net.IPNet) string {
+	for _, network := range nets {
+		if !network.Contains(ip) {
+			continue
+		}
+		mask := network.Mask
+		if len(mask) == net.IPv6len {
+			mask = mask[12:]
+		}
+		if len(mask) != net.IPv4len {
+			continue
+		}
+		base := network.IP.To4()
+		broadcast := make(net.IP, net.IPv4len)
+		for i := range broadcast {
+			broadcast[i] = base[i] | ^mask[i]
+		}
+		return broadcast.String()
+	}
+	return ""
 }
 
 func currentUserName() string {
