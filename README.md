@@ -245,9 +245,13 @@ Assets are read fresh when they change, so editing one takes effect without rest
 
 `init` offers it, and `config` has it as a menu entry. The watcher writes a `docker-compose.yml` on the server with the Minecraft container and an automatic backup container next to it, puts a generated RCON password in a `.env` with mode 600, and starts them. You never open a terminal on the server PC for this.
 
+It asks which server you want. `VANILLA` is the unmodified game, `PAPER` and `PURPUR` are faster and take plugins, and `FABRIC`, `FORGE`, `NEOFORGE` and `QUILT` run mods, which every player then needs installed too. The Minecraft version is asked for as well, with a concrete number rather than `LATEST`, because `LATEST` means the next image pull can move your server to a new version on its own. The container images themselves are pinned for the same reason.
+
 If there is already a compose file in that directory, the two services are added to it. Everything else in the file, other services, the top level keys, your comments, stays exactly as it was. Before anything is written a copy is kept as `docker-compose.yml.mcwol-bak-<time>`, the result has to pass `docker compose config`, and a service name that is already taken is refused rather than overwritten.
 
 `mc-wol-proxy restore-compose` puts one of those backups back, and keeps the current file as a backup on the way, so the restore itself is undoable.
+
+It also asks for a whitelist. Name the players who may join and only they can, with the first name becoming the server operator. Leave it empty and anyone who knows the address can connect, which is how a fresh Minecraft server behaves. Worth setting if the address is reachable from the internet.
 
 Accepting the Minecraft EULA is a separate question. Saying yes writes `EULA=TRUE` into the compose file, which is the same as accepting it yourself.
 

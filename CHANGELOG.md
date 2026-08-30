@@ -55,10 +55,16 @@ notes, so a version has to be listed here before it is tagged.
   the MAC lookup and unicast WoL need an address.
 - `init` and `config` can set the Minecraft container up on the server, so the
   server PC no longer has to be touched for that either. They write a compose
-  file with `itzg/minecraft-server` and `itzg/mc-backup`, RCON on, AUTOPAUSE on
-  and only the game port published, generate an RCON password into a `.env`
-  with mode 600, and bring the stack up. Accepting the Minecraft EULA is its own
-  question that says what it means.
+  file with `itzg/minecraft-server` and `itzg/mc-backup` on pinned tags, RCON
+  on, AUTOPAUSE on and only the game port published, generate an RCON password
+  into a `.env` with mode 600, and bring the stack up. The server type and the
+  Minecraft version are asked for, both with a concrete default rather than
+  `LATEST`, so a pull cannot move the server under the world. Accepting the
+  Minecraft EULA is its own question that says what it means.
+- The wizard asks for a whitelist. Naming players switches
+  `ENFORCE_WHITELIST` on and makes the first one the operator, leaving it empty
+  keeps the server open, which is what a fresh server is anyway. An enforced but
+  empty whitelist would lock out the owner too, so it is never written.
 - A compose file that is already there gets the two services added to it
   instead. Other services, the top level keys and every comment stay exactly as
   they were, a copy is kept as `docker-compose.yml.mcwol-bak-<time>` first,

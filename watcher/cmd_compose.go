@@ -88,10 +88,12 @@ func askComposeSpec(p *prompter, cfg *Config, target ComposeTarget) ComposeSpec 
 
 	spec.ServiceName = p.validated("Name for the container", spec.ServiceName, validateContainerName)
 	spec.BackupName = spec.ServiceName + "-backup"
-	spec.MCVersion = p.line("Minecraft version, LATEST for the newest", spec.MCVersion)
+	spec.ServerType = askServerType(p, spec.ServerType)
+	spec.MCVersion = askMCVersion(p, spec.MCVersion)
 	spec.Memory = p.line("Memory for the server, for example 4G", spec.Memory)
 	spec.MCPort = p.validatedPort("Port to publish on the server PC", spec.MCPort)
 	spec.DataDir = p.line("Where the world lives, relative to the compose file", spec.DataDir)
+	spec.Whitelist = askWhitelist(p)
 
 	spec.Backups = p.yesNo("Add the automatic backup container as well", true)
 	if spec.Backups {
@@ -99,6 +101,49 @@ func askComposeSpec(p *prompter, cfg *Config, target ComposeTarget) ComposeSpec 
 		spec.KeepBackupDays = p.validatedInt("Days to keep old backups", spec.KeepBackupDays, 1)
 	}
 	return spec
+}
+
+func askServerType(p *prompter, fallback string) string {
+	fmt.Println("\nVANILLA is the unmodified server. PAPER and PURPUR are faster and take")
+	fmt.Println("plugins. FABRIC, FORGE, NEOFORGE and QUILT run mods, and every player")
+	fmt.Println("then needs the same mods installed.")
+
+	answer := p.validated("Server type ("+strings.Join(serverTypes, ", ")+")", fallback,
+		func(v string) error {
+			if contains(serverTypes, strings.ToUpper(strings.TrimSpace(v))) {
+				return nil
+			}
+			return fmt.Errorf("pick one of %s", strings.Join(serverTypes, ", "))
+		})
+	return strings.ToUpper(strings.TrimSpace(answer))
+}
+
+// Empty means anyone with the address can join, which is the default a fresh
+// server has. The first name given also becomes the operator.
+func askWhitelist(p *prompter) []string {
+	fmt.Println("\nA whitelist means only the players you name can join, which is worth it")
+	fmt.Println("for a server whose address is on the internet. Leave it empty and anyone")
+	fmt.Println("who knows the address can connect.")
+
+	answer := p.line("Minecraft names allowed to join, comma separated", "")
+	names := []string{}
+	for _, name := range splitList(answer) {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			names = append(names, trimmed)
+		}
+	}
+	if len(names) > 0 {
+		fmt.Printf("  %s also becomes the server operator.\n", names[0])
+	}
+	return names
+}
+
+// A concrete version by default. LATEST moves the server under the world
+// whenever the image is pulled again.
+func askMCVersion(p *prompter, fallback string) string {
+	fmt.Println("\nA fixed version keeps the server the same every time it starts.")
+	fmt.Println("LATEST works too, but then an update can arrive on its own.")
+	return strings.TrimSpace(p.line("Minecraft version", fallback))
 }
 
 // An existing password is left alone, replacing it would break whatever else
@@ -141,19 +186,25 @@ func writeComposeFiles(p *prompter, s *ServerSession, target ComposeTarget,
 		fmt.Printf("The file that was there is now %s\n", backup)
 	}
 
+	// Before either file, the directory may not exist yet.
+	if out, err := s.Run(makeDirCommand(s, target.Dir)); err != nil {
+		fmt.Printf("\nCannot create %s: %v: %s\n", target.Dir, err, sanitizeForLog(out, 200))
+		return false
+	}
+
 	if password != "" {
 		env := appendRCONPassword(target.ExistingEnv, password)
 		if err := writeRemoteEnvFile(s, target.EnvFile, env); err != nil {
 			fmt.Printf("\n%v\n", err)
 			return false
 		}
-		fmt.Printf("RCON password written to %s\n", target.EnvFile)
+		if target.ExistingEnv == "" {
+			fmt.Printf("Created %s with the RCON password\n", target.EnvFile)
+		} else {
+			fmt.Printf("RCON password appended to %s\n", target.EnvFile)
+		}
 	}
 
-	if out, err := s.Run(makeDirCommand(s, target.Dir)); err != nil {
-		fmt.Printf("\nCannot create %s: %v: %s\n", target.Dir, err, sanitizeForLog(out, 200))
-		return false
-	}
 	if err := writeRemoteFile(s, target.File, content); err != nil {
 		fmt.Printf("\n%v\n", err)
 		return false

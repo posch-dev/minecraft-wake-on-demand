@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -258,5 +260,89 @@ func TestGeneratedPasswordNeedsNoQuoting(t *testing.T) {
 			t.Fatal("the same password came back twice")
 		}
 		seen[password] = true
+	}
+}
+
+// Two files naming the same images drift apart the moment one is bumped alone.
+func TestGeneratorAgreesWithTheShippedCompose(t *testing.T) {
+	shipped, err := os.ReadFile(filepath.Join("..", "server", "docker-compose.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, image := range []string{minecraftImage, backupImage} {
+		if !strings.Contains(string(shipped), image) {
+			t.Errorf("server/docker-compose.yml does not use %s, bump both together", image)
+		}
+	}
+}
+
+// LATEST is what the audit flagged, a generated file must not default to it.
+func TestGeneratedComposePinsItsImages(t *testing.T) {
+	body, err := newComposeFile(testSpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, floating := range []string{"minecraft-server:latest", "minecraft-server:java21", "mc-backup\n", "mc-backup\""} {
+		if strings.Contains(body, floating) {
+			t.Errorf("the generated file carries the floating tag %q:\n%s", floating, body)
+		}
+	}
+	if !strings.Contains(body, minecraftImage) || !strings.Contains(body, backupImage) {
+		t.Errorf("the pinned images are missing:\n%s", body)
+	}
+}
+
+func TestServerTypeReachesTheComposeFile(t *testing.T) {
+	spec := testSpec()
+	spec.ServerType = "FABRIC"
+
+	body, err := newComposeFile(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, `TYPE: "FABRIC"`) {
+		t.Errorf("the server type was not written:\n%s", body)
+	}
+}
+
+func TestDefaultSpecPinsAConcreteVersion(t *testing.T) {
+	spec := defaultComposeSpec("minecraft", 25565)
+
+	if strings.EqualFold(spec.MCVersion, "LATEST") {
+		t.Error("the default version must be concrete, LATEST moves on its own")
+	}
+	if !contains(serverTypes, spec.ServerType) {
+		t.Errorf("default server type %q is not one of the known types", spec.ServerType)
+	}
+}
+
+// An enforced but empty whitelist produces a server nobody can join.
+func TestEmptyWhitelistIsNotEnforced(t *testing.T) {
+	body, err := newComposeFile(testSpec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(body, "ENFORCE_WHITELIST") {
+		t.Errorf("no names given, the whitelist must not be switched on:\n%s", body)
+	}
+}
+
+func TestWhitelistNamesAreWrittenAndFirstBecomesOperator(t *testing.T) {
+	spec := testSpec()
+	spec.Whitelist = []string{"eliah", "someone", "third"}
+
+	body, err := newComposeFile(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`WHITELIST: "eliah,someone,third"`,
+		`ENFORCE_WHITELIST: "TRUE"`,
+		`OPS: "eliah"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the file is missing %s:\n%s", want, body)
+		}
 	}
 }
