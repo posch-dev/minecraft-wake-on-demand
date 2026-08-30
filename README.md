@@ -121,6 +121,8 @@ mc-wol-proxy check       # confirms everything is wired up
 
 **`init`** asks for the server's address, the user to log in as, and your DuckDNS details if you want them. Then it offers to log in once with that user's password and set the rest up itself: it reads the MAC address and broadcast address off the server, lists the containers so you can pick one instead of typing the name, checks whether Wake-on-LAN is armed in the network driver and offers to turn it on, and installs its own SSH key. The password is used for that one login and is not stored anywhere. Say no and it asks the questions instead, which works just as well.
 
+**`update`** installs a newer release. It shows what changed, asks first, and verifies the download against the checksums published with the release. Nothing is ever installed without being asked, and the watcher never updates itself in the background. `init`, `config` and `check` mention a new version in one line when there is one. That check asks GitHub once a day, which tells GitHub your IP, so set `update.check: false` in `config.yml` if you would rather it did not.
+
 **`config`** changes an existing setup through a menu, so nothing has to be edited by hand. `edit` and `settings` are the same command. Your own comments in `config.yml` are kept.
 
 **`setup-ssh`** creates the key, shows you the server's host key fingerprint so you can confirm it is the right machine, asks for your server password once, and installs the key. By default it restricts the key so it can only run `docker start`, which means a leaked key cannot do anything else. The password is used for that one login and is not stored.

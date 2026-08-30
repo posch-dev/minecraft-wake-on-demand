@@ -6,6 +6,7 @@ config.yml
 watcher/config.yml
 watcher/known_hosts
 .server-info.json
+.update-check.json
 watcher/state/
 server/data/
 

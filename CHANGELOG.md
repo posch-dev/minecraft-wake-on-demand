@@ -19,6 +19,18 @@ notes, so a version has to be listed here before it is tagged.
   not locked out. A rejected login gets `motd.server_full`.
 - `motd.server_full`, shown to a player who arrives when the login pool is
   full.
+- `mc-wol-proxy update` installs a newer release. It shows what changed, asks
+  before doing anything, verifies the download against the published
+  `checksums.txt` and refuses to install on a mismatch or a missing entry, and
+  will not follow a redirect off the release host. The new binary is staged
+  beside the old one and renamed over it, so a failed download cannot leave a
+  half written file where the service expects a program. **Nothing ever updates
+  by itself.**
+- `init`, `config` and `check` print one line when a newer release exists, with
+  the command to install it. The result is cached for a day and the check has a
+  two second timeout, so an offline machine barely notices. `update.check:
+  false` turns it off, and the README says why you might want to: it is a
+  request to GitHub, which tells GitHub the machine's IP.
 - `mc-wol-proxy config`, a menu for changing an existing setup, also reachable
   as `edit` and `settings`. Until now `init` refused to run once `config.yml`
   existed, so every later change meant editing YAML by hand. It writes through

@@ -52,6 +52,8 @@ func runConfigEdit() int {
 			if code := editor.saveAndCheck(); code != 0 {
 				return code
 			}
+		case "8":
+			editor.checkForUpdate()
 		case "q", "quit", "exit", "":
 			return editor.save()
 		default:
@@ -71,6 +73,7 @@ func (e *configEditor) printMenu() {
 	fmt.Println("  5) Auto-sleep       " + sleepSummary(c))
 	fmt.Println("  6) MOTD and icons   " + assetsSummary(c))
 	fmt.Println("  7) Run check")
+	fmt.Println("  8) Look for a newer version")
 	fmt.Println("  q) Save and quit")
 }
 
@@ -292,6 +295,22 @@ func (e *configEditor) showAssets() {
 	fmt.Println("them out and the server's own MOTD and icon are passed through.")
 }
 
+// Only ever reports, installing is what the update command is for.
+func (e *configEditor) checkForUpdate() {
+	fmt.Printf("\nInstalled version: %s\n", version)
+	release, err := fetchLatestReleaseNow()
+	if err != nil {
+		fmt.Printf("Could not reach the release API: %v\n", err)
+		return
+	}
+	fmt.Printf("Latest release:    %s\n", release.Tag)
+	if isNewerVersion(release.Tag, version) {
+		fmt.Println("\nInstall it with: sudo mc-wol-proxy update")
+		return
+	}
+	fmt.Println("\nAlready up to date.")
+}
+
 func (e *configEditor) saveAndCheck() int {
 	if code := e.save(); code != 0 {
 		return code
@@ -319,6 +338,7 @@ func (e *configEditor) save() int {
 		return 1
 	}
 	fmt.Printf("Saved to %s\n", e.cfg.Path)
+	defer printUpdateHint(e.cfg)
 	if e.cfg.Sleep.Enabled || e.cfg.Watcher.ListenPort != 0 {
 		fmt.Println("Restart the watcher for the changes to take effect:")
 		fmt.Println("  sudo systemctl restart mc-wol-proxy")

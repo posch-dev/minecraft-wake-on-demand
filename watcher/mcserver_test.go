@@ -62,6 +62,11 @@ func startFakeMCServer(t *testing.T, answerStatus bool, echo []byte) *fakeMCServ
 				if echo != nil {
 					conn.Write(echo)
 				}
+				if answerStatus || echo != nil {
+					// Closing straight after the write races the proxy copying
+					// it on, so the peer is left to hang up first.
+					conn.Read(buf)
+				}
 				if !answerStatus && echo == nil {
 					// Hold the connection open without ever answering.
 					time.Sleep(6 * time.Second)

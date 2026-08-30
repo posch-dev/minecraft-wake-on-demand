@@ -197,10 +197,12 @@ func runInit() int {
 	fmt.Println("\nNext steps:")
 	if provisioned {
 		fmt.Println("  mc-wol-proxy check           confirm everything is wired up")
+		printUpdateHint(&cfg)
 		return 0
 	}
 	fmt.Println("  1. mc-wol-proxy setup-ssh    give the watcher access to the server PC")
 	fmt.Println("  2. mc-wol-proxy check        confirm everything is wired up")
+	printUpdateHint(&cfg)
 	return 0
 }
 
