@@ -31,8 +31,8 @@ func main() {
 		if !attachedToTerminal() {
 			os.Exit(runProxy())
 		}
-		printUsage(os.Stdout)
-		os.Exit(0)
+		log.out = os.Stderr
+		os.Exit(runHome())
 	case "run":
 		os.Exit(runProxy())
 	case "check", "init", "setup-ssh", "config", "edit", "settings", "update", "get-server-icon", "learn-server-icon", "restore-compose":
@@ -74,7 +74,7 @@ func printUsage(w *os.File) {
 	fmt.Fprint(w, `mcwod, Minecraft Wake-on-Demand watcher
 
 Usage:
-  mcwod              a menu, or the watcher itself when run as a service
+  mcwod                     a menu, or the watcher when run as a service
   mcwod run          start the watcher
   mcwod init         answer a few questions and write config.yml
   mcwod config       change the configuration, guided

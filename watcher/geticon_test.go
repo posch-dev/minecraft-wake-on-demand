@@ -78,31 +78,77 @@ func TestDecodeFaviconDataURIRefusesAnOversizedIcon(t *testing.T) {
 func TestWriteServerIconKeepsWhatWasThere(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "server-icon.png")
-	if err := os.WriteFile(target, []byte("the old icon"), 0o644); err != nil {
+	if err := os.WriteFile(target, []byte("the old picture"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := writeServerIcon(target, []byte("the new icon")); err != nil {
+	if err := writeServerIcon(target, []byte("the new picture"), true); err != nil {
 		t.Fatal(err)
 	}
 
-	kept, err := os.ReadFile(target + ".bak")
+	kept, err := os.ReadFile(filepath.Join(dir, "server-icon-old.png"))
 	if err != nil {
-		t.Fatalf("the existing icon was replaced without a way back: %v", err)
+		t.Fatalf("the picture was replaced without a way back: %v", err)
 	}
-	if string(kept) != "the old icon" {
-		t.Errorf("backup holds %q", kept)
+	if string(kept) != "the old picture" {
+		t.Errorf("kept copy holds %q", kept)
 	}
 	written, _ := os.ReadFile(target)
-	if string(written) != "the new icon" {
+	if string(written) != "the new picture" {
 		t.Errorf("target holds %q", written)
+	}
+}
+
+// Answering no to the backup question means no backup, not a silent one.
+func TestWriteServerIconDropsTheOldOneWhenNotAsked(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "server-icon.png")
+	if err := os.WriteFile(target, []byte("the old picture"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeServerIcon(target, []byte("the new picture"), false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "server-icon-old.png")); err == nil {
+		t.Error("no copy was asked for, so none should have been made")
+	}
+}
+
+// A second run must not overwrite the copy the first one made.
+func TestKeptIconsAreNumbered(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "server-icon.png")
+
+	for i, body := range []string{"first", "second", "third"} {
+		if err := os.WriteFile(target, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := writeServerIcon(target, []byte("new"), true); err != nil {
+			t.Fatalf("round %d: %v", i, err)
+		}
+	}
+
+	for name, want := range map[string]string{
+		"server-icon-old.png":   "first",
+		"server-icon-old-2.png": "second",
+		"server-icon-old-3.png": "third",
+	} {
+		body, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Errorf("%s is missing: %v", name, err)
+			continue
+		}
+		if string(body) != want {
+			t.Errorf("%s holds %q, want %q", name, body, want)
+		}
 	}
 }
 
 func TestWriteServerIconCreatesTheAssetsDirectory(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "assets", "server-icon.png")
 
-	if err := writeServerIcon(target, []byte("icon")); err != nil {
+	if err := writeServerIcon(target, []byte("icon"), false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(target); err != nil {

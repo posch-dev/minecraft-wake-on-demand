@@ -1,35 +1,55 @@
-# Example assets
+# Examples
 
-Copy a file from here into `assets/` to use it. Nothing in `examples/` is read
-by the watcher.
+Nothing in this folder is used. Copy a file one level up into `assets/` and
+change the text, that is all there is to it.
 
-## MOTD
+```bash
+cp examples/motd-sleeping.json .
+```
 
-| File | Shown when |
-|------|------------|
-| `motd-sleeping.json` | the server PC is asleep |
-| `motd-starting.json` | it is waking up |
-| `motd-live.json` | it is running, **overrides the server's own MOTD** |
+## The message people see
 
-Each file holds one Minecraft text component. `\n` splits the two lines the
-server list shows. A file beats the matching `motd.*` entry in `config.yml`,
-which in turn beats the built-in default. Leave `motd-live.json` out and the
-running server's own MOTD is passed through untouched, which is the default.
+`motd-sleeping.json` is shown while your PC is asleep, `motd-starting.json`
+while it is waking up, and `motd-live.json` while it is running.
 
-## Icons
+Leave `motd-live.json` out and the running server's own message is shown, which
+is what most people want. Put it in and yours replaces it, so you can set the
+message here instead of on the server.
 
-The watcher ships its own sleeping and waking icons, three blue Z that grow, the
-largest turning into a red exclamation mark while the PC boots. They are drawn
-over an opaque white background, with `assets/server-icon.png` showing through
-at half opacity if you put one there.
+Each file holds two lines. `\n` is where the first line ends and the second
+begins, and it has to stay where it is.
 
-To replace an icon outright rather than have it drawn over, put a 64x64 PNG at:
+Colours Minecraft accepts:
+
+```
+black        dark_blue    dark_green   dark_aqua
+dark_red     dark_purple  gold         gray
+dark_gray    blue         green        aqua
+red          light_purple yellow       white
+```
+
+A file beats the matching `motd.*` line in `config.yml`, which beats the
+built-in text. So you only need a file for what you actually want to change.
+
+## The picture
+
+`server-icon.png` is the small square people see next to your server. Ours is a
+placeholder, replace it with your own.
+
+It has to be a **64x64 PNG** and under 64 kB. Anything else is skipped, and the
+reason is written to the log.
+
+Without one you get the built-in picture, three blue Z that turn into a red
+exclamation mark while the PC wakes up. Your own picture does not replace that,
+it shows through underneath it.
+
+To replace the whole thing instead, use one of these names in `assets/`:
 
 | File | Replaces |
 |------|----------|
-| `assets/server-icon-sleeping.png` | the whole sleeping icon |
-| `assets/server-icon-starting.png` | the whole waking icon |
-| `assets/server-icon-live.png` | the running server's own icon |
+| `server-icon-sleeping.png` | the sleeping picture, Z and all |
+| `server-icon-starting.png` | the waking picture |
+| `server-icon-live.png` | the running server's own picture |
 
-Icons must be exactly 64x64 and under 64 kB, anything else is skipped with a
-warning in the log.
+`mcwod get-server-icon` copies the picture your running server already uses, so
+you do not have to find the file yourself.

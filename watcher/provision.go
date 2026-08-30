@@ -20,6 +20,7 @@ type ServerFacts struct {
 
 	CanSuspend   bool
 	CanHibernate bool
+	MemoryGB     int
 	WakeOnLAN    wakeOnLANSetting
 }
 
@@ -53,6 +54,10 @@ func discoverUnix(s *ServerSession, facts *ServerFacts) {
 		facts.Broadcast = firstLine(out)
 	}
 
+	if out, err := s.Run("awk '/MemTotal/{print $2}' /proc/meminfo"); err == nil {
+		facts.MemoryGB = kilobytesToGB(firstLine(out))
+	}
+
 	// /sys/power/state lists what the kernel can actually do, mem is suspend
 	// to RAM and disk is hibernate.
 	if out, err := s.Run("cat /sys/power/state"); err == nil {
@@ -84,6 +89,9 @@ func discoverWindows(s *ServerSession, facts *ServerFacts) {
 	}
 	if out, err := s.Run(wolStatusCommandWindows); err == nil {
 		facts.WakeOnLAN = parseWakeOnLANSetting(out)
+	}
+	if out, err := s.Run("(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory"); err == nil {
+		facts.MemoryGB = bytesToGB(firstLine(out))
 	}
 	// Windows suspend over SSH is unreliable, hibernate is the honest option.
 	facts.CanHibernate = true
@@ -139,6 +147,39 @@ func parseRCONEnabled(env string) bool {
 		}
 	}
 	return false
+}
+
+func kilobytesToGB(value string) int {
+	kb, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return int(kb / (1024 * 1024))
+}
+
+func bytesToGB(value string) int {
+	bytes, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return int(bytes / (1024 * 1024 * 1024))
+}
+
+// A quarter of the machine, floored at 2G because less is not worth running and
+// capped at 8G because beyond that the garbage collector costs more than the
+// heap gains.
+func suggestedMemory(totalGB int) string {
+	if totalGB <= 0 {
+		return "4G"
+	}
+	suggested := totalGB / 4
+	if suggested < 2 {
+		suggested = 2
+	}
+	if suggested > 8 {
+		suggested = 8
+	}
+	return strconv.Itoa(suggested) + "G"
 }
 
 // A card left at Wake-on: d swallows the magic packet, which makes this whole

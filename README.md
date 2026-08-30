@@ -123,6 +123,8 @@ mcwod check       # confirms everything is wired up
 
 **`update`** installs a newer release. It shows what changed, asks first, and verifies the download against the checksums published with the release. Nothing is ever installed without being asked, and the watcher never updates itself in the background. `init`, `config` and `check` mention a new version in one line when there is one. That check asks GitHub once a day, which tells GitHub your IP, so set `update.check: false` in `config.yml` if you would rather it did not.
 
+**`mcwod`** on its own is the place to start. The first time it walks you through the setup, after that it shows what your server is doing and asks what you want to do.
+
 **`config`** changes an existing setup through a menu, so nothing has to be edited by hand. `edit` and `settings` are the same command. Your own comments in `config.yml` are kept.
 
 **`setup-ssh`** creates the key, shows you the server's host key fingerprint so you can confirm it is the right machine, asks for your server password once, and installs the key. By default it restricts the key so it can only run `docker start`, which means a leaked key cannot do anything else. The password is used for that one login and is not stored.

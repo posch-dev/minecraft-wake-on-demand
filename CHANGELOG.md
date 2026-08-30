@@ -5,6 +5,32 @@ notes, so a version has to be listed here before it is tagged.
 
 ## [Unreleased]
 
+### Changed
+
+- Running `mcwod` on its own now shows a menu instead of the help. The first
+  run goes straight into the setup, later ones show what the server is doing
+  and offer check, settings, the server picture and the update, with the new
+  version line in there too. Started as a service it still runs the watcher.
+- Every question in the wizard is written for somebody who has not used a
+  terminal before. Choices that used to need a typed word are numbered, the
+  reason for a question sits under it in grey instead of in front of it, and
+  the technical vocabulary is gone from the questions themselves.
+- The server type is asked for, so a mod server is a choice rather than
+  something to edit afterwards. The heap size is suggested from the RAM the
+  server actually reports, a quarter of it, no less than 2G and no more than 8G.
+- The admin is its own question. It used to be a side effect of naming a
+  whitelist, so a server without one had nobody who could run a command in the
+  game at all.
+- The whitelist is asked in two steps, first whether you want one and only then
+  for the names, with the admin filled in so nobody locks themselves out.
+- The DuckDNS token stays visible while you type it. It is pasted off a page
+  rather than remembered, and hiding it only makes it harder to check.
+- Transfer mode is no longer part of `init`. It is an optimisation with an
+  unpleasant failure mode and it lives in `mcwod config`.
+- `get-server-icon` explains itself before it asks, warns before it replaces a
+  picture that is already there, and keeps the old one as `server-icon-old.png`
+  only if you say so.
+
 ### Added
 
 - Server version and player slots are now learned from a status probe on first
@@ -141,6 +167,13 @@ notes, so a version has to be listed here before it is tagged.
 
 ### Changed
 
+- The wizard and `check` use colour: what you type is green, side notes are
+  grey, warnings amber and failures red. It is off whenever nothing is attached
+  to the terminal, so pipes and the journal stay clean, `NO_COLOR` and
+  `TERM=dumb` switch it off, and on Windows the console is put into virtual
+  terminal mode first because the older `conhost` otherwise prints the escape
+  codes as text.
+
 - **The tool is called `mcwod` now.** The binary, the release assets, the
   install directory `/opt/mcwod`, the systemd unit, the helper on the server,
   its sudoers file, the Wake-on-LAN unit, the SSH key and the environment
@@ -150,6 +183,13 @@ notes, so a version has to be listed here before it is tagged.
 - `install.sh` stops and disables an `mc-wol-proxy` service if it finds one and
   says where the old config is. Two watchers on port 25565 would have produced
   failures that look random rather than one clear message.
+
+### Added
+
+- `assets/examples/` ships a placeholder `server-icon.png` and the MOTD files
+  now say `CHANGE THIS TOP LINE` rather than repeating the built-in text, so it
+  is obvious what to edit. Its README lists the colours Minecraft accepts and
+  spells out that a file beats `config.yml`, which beats the built-in text.
 
 ### Fixed
 

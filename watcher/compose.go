@@ -27,6 +27,14 @@ const (
 // somebody who does not know the difference wants.
 var serverTypes = []string{"VANILLA", "PAPER", "PURPUR", "FABRIC", "FORGE", "NEOFORGE", "QUILT", "SPIGOT"}
 
+// The four worth offering, in the order somebody would work through them.
+var serverTypeChoices = []struct{ name, what string }{
+	{"VANILLA", "normal Minecraft, nothing added"},
+	{"PAPER", "same game, runs smoother, can use plugins"},
+	{"FABRIC", "for mods, every player needs the same mods"},
+	{"FORGE", "for mods, every player needs the same mods"},
+}
+
 // What the two services are built from, asked once and then just data.
 type ComposeSpec struct {
 	ServiceName    string
@@ -36,6 +44,7 @@ type ComposeSpec struct {
 	Memory         string
 	MCPort         int
 	DataDir        string
+	Admin          string
 	Whitelist      []string
 	BackupInterval string
 	KeepBackupDays int
@@ -71,12 +80,14 @@ func minecraftService(spec ComposeSpec) *yaml.Node {
 		"AUTOPAUSE_TIMEOUT_INIT", "600",
 		"ONLINE_MODE", "TRUE",
 	}
+	if spec.Admin != "" {
+		env = append(env, "OPS", spec.Admin)
+	}
 	// An enforced but empty whitelist locks everyone out, the owner included.
 	if len(spec.Whitelist) > 0 {
 		env = append(env,
 			"WHITELIST", strings.Join(spec.Whitelist, ","),
-			"ENFORCE_WHITELIST", "TRUE",
-			"OPS", spec.Whitelist[0])
+			"ENFORCE_WHITELIST", "TRUE")
 	}
 
 	service := mapping()
