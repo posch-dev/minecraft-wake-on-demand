@@ -3,6 +3,8 @@ package main
 import (
 	"slices"
 	"testing"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/compose"
 )
 
 // Numbers, because a wrong word means retyping and these people are reading a
@@ -91,12 +93,12 @@ func TestMemoryIsReadFromWhatTheServerReports(t *testing.T) {
 
 // Every choice offered has to be a type the compose file can actually use.
 func TestOfferedServerTypesAreAllKnown(t *testing.T) {
-	for _, choice := range serverTypeChoices {
-		if !slices.Contains(serverTypes, choice.name) {
-			t.Errorf("%q is offered but not a known server type", choice.name)
+	for _, choice := range compose.ServerTypeChoices {
+		if !slices.Contains(compose.ServerTypes, choice.Name) {
+			t.Errorf("%q is offered but not a known server type", choice.Name)
 		}
-		if choice.what == "" {
-			t.Errorf("%q is offered without saying what it is", choice.name)
+		if choice.What == "" {
+			t.Errorf("%q is offered without saying what it is", choice.Name)
 		}
 	}
 }

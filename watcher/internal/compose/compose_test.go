@@ -1,4 +1,4 @@
-package main
+package compose
 
 import (
 	"os"
@@ -31,7 +31,7 @@ volumes:
 `
 
 func testSpec() ComposeSpec {
-	spec := defaultComposeSpec("minecraft", 25565)
+	spec := DefaultComposeSpec("minecraft", 25565)
 	spec.MCVersion = "1.21.4"
 	return spec
 }
@@ -56,7 +56,7 @@ func services(t *testing.T, body string) map[string]any {
 }
 
 func TestNewComposeFileHasBothServices(t *testing.T) {
-	body, err := newComposeFile(testSpec())
+	body, err := NewComposeFile(testSpec())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestNewComposeFileHasBothServices(t *testing.T) {
 
 // RCON on the LAN would be a remote console with one password in front of it.
 func TestNewComposeFilePublishesOnlyTheGamePort(t *testing.T) {
-	body, err := newComposeFile(testSpec())
+	body, err := NewComposeFile(testSpec())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestNewComposeFilePublishesOnlyTheGamePort(t *testing.T) {
 
 // The watcher starts the container, docker must not race it on boot.
 func TestNewComposeFileDoesNotRestartOnItsOwn(t *testing.T) {
-	body, err := newComposeFile(testSpec())
+	body, err := NewComposeFile(testSpec())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,12 +103,12 @@ func TestNewComposeFileDoesNotRestartOnItsOwn(t *testing.T) {
 
 // The password goes into .env under our own name, never inline.
 func TestComposeReferencesThePasswordVariable(t *testing.T) {
-	body, err := newComposeFile(testSpec())
+	body, err := NewComposeFile(testSpec())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(body, "${"+rconPasswordVar) {
-		t.Errorf("the compose file does not read %s:\n%s", rconPasswordVar, body)
+	if !strings.Contains(body, "${"+RconPasswordVar) {
+		t.Errorf("the compose file does not read %s:\n%s", RconPasswordVar, body)
 	}
 }
 
@@ -116,7 +116,7 @@ func TestBackupServiceCanBeLeftOut(t *testing.T) {
 	spec := testSpec()
 	spec.Backups = false
 
-	body, err := newComposeFile(spec)
+	body, err := NewComposeFile(spec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestBackupServiceCanBeLeftOut(t *testing.T) {
 
 // The whole point of editing the node tree instead of rewriting the file.
 func TestAppendingKeepsForeignServicesAndComments(t *testing.T) {
-	body, err := addServicesToCompose(foreignCompose, testSpec())
+	body, err := AddServicesToCompose(foreignCompose, testSpec())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestAppendingKeepsForeignServicesAndComments(t *testing.T) {
 func TestAppendingRefusesAnExistingServiceName(t *testing.T) {
 	existing := "services:\n  minecraft:\n    image: something/else\n"
 
-	_, err := addServicesToCompose(existing, testSpec())
+	_, err := AddServicesToCompose(existing, testSpec())
 	if err == nil {
 		t.Fatal("a name collision must be refused")
 	}
@@ -170,13 +170,13 @@ func TestAppendingRefusesAnExistingServiceName(t *testing.T) {
 func TestAppendingRefusesTheBackupNameToo(t *testing.T) {
 	existing := "services:\n  minecraft-backup:\n    image: something/else\n"
 
-	if _, err := addServicesToCompose(existing, testSpec()); err == nil {
+	if _, err := AddServicesToCompose(existing, testSpec()); err == nil {
 		t.Error("a collision on the backup name must be refused as well")
 	}
 }
 
 func TestAppendingCreatesAMissingServicesKey(t *testing.T) {
-	body, err := addServicesToCompose("volumes:\n  pgdata: {}\n", testSpec())
+	body, err := AddServicesToCompose("volumes:\n  pgdata: {}\n", testSpec())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestAppendingCreatesAMissingServicesKey(t *testing.T) {
 
 func TestAppendingRefusesRubbish(t *testing.T) {
 	for _, existing := range []string{"", "just a string", "- a\n- list\n"} {
-		if _, err := addServicesToCompose(existing, testSpec()); err == nil {
+		if _, err := AddServicesToCompose(existing, testSpec()); err == nil {
 			t.Errorf("addServicesToCompose(%q) should have failed", existing)
 		}
 	}
@@ -197,31 +197,31 @@ func TestAppendingRefusesRubbish(t *testing.T) {
 func TestAppendRCONPasswordAddsThreeLines(t *testing.T) {
 	existing := "DB_PASSWORD=hunter2\nTZ=Europe/Vienna\n"
 
-	result := appendRCONPassword(existing, "s3cret")
+	result := AppendRCONPassword(existing, "s3cret")
 
 	if !strings.HasPrefix(result, existing) {
 		t.Errorf("what was there must stay untouched:\n%s", result)
 	}
 	added := strings.TrimPrefix(result, existing)
-	want := "\n# RCON password, added by Minecraft Wake-on-Demand\n" + rconPasswordVar + "=s3cret\n"
+	want := "\n# RCON password, added by Minecraft Wake-on-Demand\n" + RconPasswordVar + "=s3cret\n"
 	if added != want {
 		t.Errorf("appended %q, want %q", added, want)
 	}
 }
 
 func TestAppendRCONPasswordHandlesAnEmptyFile(t *testing.T) {
-	result := appendRCONPassword("", "s3cret")
+	result := AppendRCONPassword("", "s3cret")
 
 	if strings.HasPrefix(result, "\n\n") {
 		t.Errorf("an empty .env should not gain two blank lines: %q", result)
 	}
-	if !strings.Contains(result, rconPasswordVar+"=s3cret") {
+	if !strings.Contains(result, RconPasswordVar+"=s3cret") {
 		t.Errorf("the password is missing: %q", result)
 	}
 }
 
 func TestAppendRCONPasswordNormalisesAMissingNewline(t *testing.T) {
-	result := appendRCONPassword("TZ=Europe/Vienna", "s3cret")
+	result := AppendRCONPassword("TZ=Europe/Vienna", "s3cret")
 
 	if !strings.Contains(result, "TZ=Europe/Vienna\n\n# RCON password") {
 		t.Errorf("a file without a trailing newline was joined badly:\n%q", result)
@@ -231,16 +231,16 @@ func TestAppendRCONPasswordNormalisesAMissingNewline(t *testing.T) {
 // Our own name, because a foreign .env may already define RCON_PASSWORD and the
 // last definition would win.
 func TestPasswordVariableDoesNotCollideWithTheCommonName(t *testing.T) {
-	if rconPasswordVar == "RCON_PASSWORD" {
+	if RconPasswordVar == "RCON_PASSWORD" {
 		t.Fatal("the variable has to be distinct from the name other stacks use")
 	}
-	if hasRCONPasswordVar("RCON_PASSWORD=somebody-elses\n") {
+	if HasRCONPasswordVar("RCON_PASSWORD=somebody-elses\n") {
 		t.Error("a foreign RCON_PASSWORD must not read as ours")
 	}
-	if !hasRCONPasswordVar("X=1\n" + rconPasswordVar + "=ours\n") {
+	if !HasRCONPasswordVar("X=1\n" + RconPasswordVar + "=ours\n") {
 		t.Error("our own variable was not recognised")
 	}
-	if hasRCONPasswordVar("# " + rconPasswordVar + "=commented-out\n") {
+	if HasRCONPasswordVar("# " + RconPasswordVar + "=commented-out\n") {
 		t.Error("a commented line must not count as set")
 	}
 }
@@ -248,7 +248,7 @@ func TestPasswordVariableDoesNotCollideWithTheCommonName(t *testing.T) {
 func TestGeneratedPasswordNeedsNoQuoting(t *testing.T) {
 	seen := map[string]bool{}
 	for range 20 {
-		password, err := generateRCONPassword()
+		password, err := GenerateRCONPassword()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -283,7 +283,7 @@ func TestGeneratorAgreesWithTheShippedCompose(t *testing.T) {
 var datedImagePin = regexp.MustCompile(`^itzg/[a-z-]+:[0-9]{4}[.][0-9]+[.][0-9]+$`)
 
 func TestGeneratedComposePinsItsImages(t *testing.T) {
-	body, err := newComposeFile(testSpec())
+	body, err := NewComposeFile(testSpec())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestServerTypeReachesTheComposeFile(t *testing.T) {
 	spec := testSpec()
 	spec.ServerType = "FABRIC"
 
-	body, err := newComposeFile(spec)
+	body, err := NewComposeFile(spec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,19 +317,19 @@ func TestServerTypeReachesTheComposeFile(t *testing.T) {
 }
 
 func TestDefaultSpecPinsAConcreteVersion(t *testing.T) {
-	spec := defaultComposeSpec("minecraft", 25565)
+	spec := DefaultComposeSpec("minecraft", 25565)
 
 	if strings.EqualFold(spec.MCVersion, "LATEST") {
 		t.Error("the default version must be concrete, LATEST moves on its own")
 	}
-	if !slices.Contains(serverTypes, spec.ServerType) {
+	if !slices.Contains(ServerTypes, spec.ServerType) {
 		t.Errorf("default server type %q is not one of the known types", spec.ServerType)
 	}
 }
 
 // An enforced but empty whitelist produces a server nobody can join.
 func TestEmptyWhitelistIsNotEnforced(t *testing.T) {
-	body, err := newComposeFile(testSpec())
+	body, err := NewComposeFile(testSpec())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +342,7 @@ func TestWhitelistNamesAreWritten(t *testing.T) {
 	spec := testSpec()
 	spec.Whitelist = []string{"eliah", "someone", "third"}
 
-	body, err := newComposeFile(spec)
+	body, err := NewComposeFile(spec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestAdminIsWrittenWithoutAWhitelist(t *testing.T) {
 	spec := testSpec()
 	spec.Admin = "eliah"
 
-	body, err := newComposeFile(spec)
+	body, err := NewComposeFile(spec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,7 +374,7 @@ func TestAdminIsWrittenWithoutAWhitelist(t *testing.T) {
 }
 
 func TestNoAdminWritesNoOps(t *testing.T) {
-	body, err := newComposeFile(testSpec())
+	body, err := NewComposeFile(testSpec())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,7 +386,7 @@ func TestNoAdminWritesNoOps(t *testing.T) {
 // init offers transfer mode, so the server it creates has to accept transfers,
 // otherwise the tool hands players to a server that turns them away.
 func TestGeneratedComposeAcceptsTransfers(t *testing.T) {
-	body, err := newComposeFile(testSpec())
+	body, err := NewComposeFile(testSpec())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +398,7 @@ func TestGeneratedComposeAcceptsTransfers(t *testing.T) {
 // Signed chat lets the client hold messages back and offer them for reporting,
 // which is not what a server among friends is for.
 func TestGeneratedComposeLeavesChatUnsigned(t *testing.T) {
-	body, err := newComposeFile(testSpec())
+	body, err := NewComposeFile(testSpec())
 	if err != nil {
 		t.Fatal(err)
 	}

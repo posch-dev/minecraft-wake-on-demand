@@ -106,3 +106,24 @@ func (d *Document) Save() error {
 	}
 	return os.Chmod(d.path, 0o600)
 }
+
+func Mapping() *yaml.Node {
+	return &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+}
+
+func AddNode(parent *yaml.Node, key string, value *yaml.Node) {
+	parent.Content = append(parent.Content, Scalar(key), value)
+}
+
+func Scalar(value string) *yaml.Node {
+	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value}
+}
+
+func FindMapping(parent *yaml.Node, key string) *yaml.Node {
+	for i := 0; i+1 < len(parent.Content); i += 2 {
+		if parent.Content[i].Value == key && parent.Content[i+1].Kind == yaml.MappingNode {
+			return parent.Content[i+1]
+		}
+	}
+	return nil
+}

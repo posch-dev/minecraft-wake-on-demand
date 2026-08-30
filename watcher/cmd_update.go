@@ -12,6 +12,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/update"
 )
 
 // Always asks first. An unattended service replacing its own binary without
@@ -24,20 +25,20 @@ func runUpdate() int {
 		return 1
 	}
 
-	release, err := fetchLatestReleaseNow()
+	release, err := update.FetchLatestReleaseNow()
 	if err != nil {
 		fmt.Printf("\nCould not reach the release API: %v\n", err)
 		return 1
 	}
 
 	fmt.Printf("Latest release:    %s\n", release.Tag)
-	if !isNewerVersion(release.Tag, version) {
+	if !update.IsNewerVersion(release.Tag, version) {
 		fmt.Println("\nAlready up to date.")
 		return 0
 	}
 	printReleaseNotes(release.Body)
 
-	asset, err := releaseAssetName()
+	asset, err := update.ReleaseAssetName()
 	if err != nil {
 		fmt.Printf("\n%v\n", err)
 		fmt.Println("Build from source instead: sudo ./install.sh --build")
@@ -66,7 +67,7 @@ func runUpdate() int {
 	downloadCtx, cancelDownload := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancelDownload()
 
-	binary, err := downloadRelease(downloadCtx, release.Tag, asset)
+	binary, err := update.DownloadRelease(downloadCtx, release.Tag, asset)
 	if err != nil {
 		fmt.Printf("%v\n", err)
 		return 1

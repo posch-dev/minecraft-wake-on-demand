@@ -1,4 +1,4 @@
-package main
+package update
 
 import (
 	"context"
@@ -25,7 +25,7 @@ func TestIsNewerVersionComparesNumbersNotText(t *testing.T) {
 		"2.1.0":   "v2.0.0",
 	}
 	for candidate, current := range newer {
-		if !isNewerVersion(candidate, current) {
+		if !IsNewerVersion(candidate, current) {
 			t.Errorf("isNewerVersion(%q, %q) = false, want true", candidate, current)
 		}
 	}
@@ -38,7 +38,7 @@ func TestIsNewerVersionComparesNumbersNotText(t *testing.T) {
 		{"garbage", "v2.0.0"},
 	}
 	for _, c := range notNewer {
-		if isNewerVersion(c[0], c[1]) {
+		if IsNewerVersion(c[0], c[1]) {
 			t.Errorf("isNewerVersion(%q, %q) = true, want false", c[0], c[1])
 		}
 	}
@@ -46,10 +46,10 @@ func TestIsNewerVersionComparesNumbersNotText(t *testing.T) {
 
 // A release candidate is not a release, the suffix must not read as newer.
 func TestPrereleaseSuffixIsIgnored(t *testing.T) {
-	if isNewerVersion("v2.0.0-rc1", "v2.0.0") {
+	if IsNewerVersion("v2.0.0-rc1", "v2.0.0") {
 		t.Error("v2.0.0-rc1 should not count as newer than v2.0.0")
 	}
-	if !isNewerVersion("v2.1.0-rc1", "v2.0.0") {
+	if !IsNewerVersion("v2.1.0-rc1", "v2.0.0") {
 		t.Error("v2.1.0-rc1 is still a newer minor than v2.0.0")
 	}
 }
@@ -104,7 +104,7 @@ func TestDownloadReleaseVerifiesTheChecksum(t *testing.T) {
 	defer server.Close()
 	pointUpdateAt(t, server)
 
-	got, err := downloadRelease(context.Background(), "v9.9.9", "asset")
+	got, err := DownloadRelease(context.Background(), "v9.9.9", "asset")
 	if err != nil {
 		t.Fatalf("downloadRelease: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestDownloadReleaseRefusesAMismatchedChecksum(t *testing.T) {
 	defer server.Close()
 	pointUpdateAt(t, server)
 
-	_, err := downloadRelease(context.Background(), "v9.9.9", "asset")
+	_, err := DownloadRelease(context.Background(), "v9.9.9", "asset")
 	if err == nil {
 		t.Fatal("a mismatched checksum must not be installed")
 	}
@@ -133,7 +133,7 @@ func TestDownloadReleaseRefusesAnUnlistedAsset(t *testing.T) {
 	defer server.Close()
 	pointUpdateAt(t, server)
 
-	_, err := downloadRelease(context.Background(), "v9.9.9", "other-asset")
+	_, err := DownloadRelease(context.Background(), "v9.9.9", "other-asset")
 	if err == nil {
 		t.Fatal("an asset missing from checksums.txt must not be installed")
 	}
@@ -204,11 +204,11 @@ func TestUpdateCheckCanBeTurnedOff(t *testing.T) {
 	oldAPI := updateAPIBase
 	updateAPIBase = "http://127.0.0.1:1"
 	defer func() { updateAPIBase = oldAPI }()
-	printUpdateHint(&cfg)
+	PrintUpdateHint(&cfg)
 }
 
 func TestReleaseAssetNameMatchesThePublishedFiles(t *testing.T) {
-	name, err := releaseAssetName()
+	name, err := ReleaseAssetName()
 	if err != nil {
 		t.Skipf("no published build for this platform: %v", err)
 	}

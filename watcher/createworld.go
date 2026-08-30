@@ -5,6 +5,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/compose"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
@@ -18,7 +19,7 @@ func createWorld(p *ui.Prompter, s *remote.ServerSession, cfg *config.Config, fa
 		return config.World{}, false
 	}
 
-	spec := defaultComposeSpec("survival", cfg.NextFreeWorldPort())
+	spec := compose.DefaultComposeSpec("survival", cfg.NextFreeWorldPort())
 	spec.ServiceName = p.Validated("\nWhat should this world be called?", spec.ServiceName, validateContainerName)
 	if _, taken := cfg.FindWorld(spec.ServiceName); taken {
 		ui.PrintWarning("There is already a world called " + spec.ServiceName + ".")
@@ -27,7 +28,7 @@ func createWorld(p *ui.Prompter, s *remote.ServerSession, cfg *config.Config, fa
 	spec.BackupName = spec.ServiceName + "-backup"
 
 	dir := worldDirectory(s, cfg, spec.ServiceName)
-	target := inspectComposeTarget(s, dir)
+	target := compose.InspectComposeTarget(s, dir)
 	if target.Command == "" {
 		ui.PrintWarning("Docker Compose does not work on that PC.")
 		ui.PrintHint("Install the compose plugin there, then try again.")
@@ -65,7 +66,7 @@ func createWorld(p *ui.Prompter, s *remote.ServerSession, cfg *config.Config, fa
 		ui.PrintError(err.Error())
 		return config.World{}, false
 	}
-	content, err := newComposeFile(spec)
+	content, err := compose.NewComposeFile(spec)
 	if err != nil {
 		ui.PrintError(err.Error())
 		return config.World{}, false
@@ -94,7 +95,7 @@ func worldDirectory(s *remote.ServerSession, cfg *config.Config, name string) st
 	if base == "" {
 		base = parentDirectory(s, defaultComposeDir(s, cfg))
 	}
-	return joinRemote(s, base, name)
+	return compose.JoinRemote(s, base, name)
 }
 
 func parentDirectory(s *remote.ServerSession, dir string) string {

@@ -1,4 +1,4 @@
-package main
+package players
 
 import (
 	"strings"
@@ -31,18 +31,18 @@ const composeWithoutWhitelist = `services:
 `
 
 func TestReadPlayerList(t *testing.T) {
-	list, err := readPlayerList(composeWithPlayers, "minecraft")
+	list, err := ReadPlayerList(composeWithPlayers, "minecraft")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !list.enforced {
+	if !list.Enforced {
 		t.Error("the whitelist is enforced in the file")
 	}
-	if strings.Join(list.whitelist, ",") != "eliah,martin" {
-		t.Errorf("whitelist = %v", list.whitelist)
+	if strings.Join(list.Whitelist, ",") != "eliah,martin" {
+		t.Errorf("whitelist = %v", list.Whitelist)
 	}
-	if strings.Join(list.admins, ",") != "eliah" {
-		t.Errorf("admins = %v", list.admins)
+	if strings.Join(list.Admins, ",") != "eliah" {
+		t.Errorf("admins = %v", list.Admins)
 	}
 }
 
@@ -50,22 +50,22 @@ func TestReadPlayerList(t *testing.T) {
 func TestUnenforcedWhitelistReadsAsEmpty(t *testing.T) {
 	compose := strings.Replace(composeWithPlayers, `ENFORCE_WHITELIST: "TRUE"`, `ENFORCE_WHITELIST: "FALSE"`, 1)
 
-	list, err := readPlayerList(compose, "minecraft")
+	list, err := ReadPlayerList(compose, "minecraft")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if list.enforced || len(list.whitelist) != 0 {
-		t.Errorf("enforced = %v, whitelist = %v", list.enforced, list.whitelist)
+	if list.Enforced || len(list.Whitelist) != 0 {
+		t.Errorf("enforced = %v, whitelist = %v", list.Enforced, list.Whitelist)
 	}
-	if len(list.admins) != 1 {
-		t.Errorf("admins = %v, they exist without a whitelist", list.admins)
+	if len(list.Admins) != 1 {
+		t.Errorf("admins = %v, they exist without a whitelist", list.Admins)
 	}
 }
 
 func TestWritePlayerListKeepsEverythingElse(t *testing.T) {
-	list := playerList{admins: []string{"eliah"}, whitelist: []string{"eliah", "lena"}, enforced: true}
+	list := List{Admins: []string{"eliah"}, Whitelist: []string{"eliah", "lena"}, Enforced: true}
 
-	out, err := writePlayerList(composeWithPlayers, "minecraft", list)
+	out, err := WritePlayerList(composeWithPlayers, "minecraft", list)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,9 +81,9 @@ func TestWritePlayerListKeepsEverythingElse(t *testing.T) {
 
 // An empty key is a value to compose, so turning the list off has to remove it.
 func TestTurningTheWhitelistOffRemovesTheKeys(t *testing.T) {
-	list := playerList{admins: []string{"eliah"}}
+	list := List{Admins: []string{"eliah"}}
 
-	out, err := writePlayerList(composeWithPlayers, "minecraft", list)
+	out, err := WritePlayerList(composeWithPlayers, "minecraft", list)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,9 +97,9 @@ func TestTurningTheWhitelistOffRemovesTheKeys(t *testing.T) {
 
 func TestWritePlayerListAddsAnEnvironmentWhenThereIsNone(t *testing.T) {
 	compose := "services:\n  minecraft:\n    image: itzg/minecraft-server:2026.8.0-java21\n"
-	list := playerList{admins: []string{"eliah"}}
+	list := List{Admins: []string{"eliah"}}
 
-	out, err := writePlayerList(compose, "minecraft", list)
+	out, err := WritePlayerList(compose, "minecraft", list)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,10 +113,10 @@ func TestWritePlayerListAddsAnEnvironmentWhenThereIsNone(t *testing.T) {
 }
 
 func TestPlayerListRefusesAServiceThatIsNotThere(t *testing.T) {
-	if _, err := readPlayerList(composeWithPlayers, "not-there"); err == nil {
+	if _, err := ReadPlayerList(composeWithPlayers, "not-there"); err == nil {
 		t.Error("a missing service should be reported, not invented")
 	}
-	if _, err := readPlayerList("just a string", "minecraft"); err == nil {
+	if _, err := ReadPlayerList("just a string", "minecraft"); err == nil {
 		t.Error("rubbish should be reported")
 	}
 }
@@ -133,7 +133,7 @@ func TestSplitNamesIgnoresSpacingAndBlanks(t *testing.T) {
 }
 
 func TestWithoutNameIsCaseInsensitive(t *testing.T) {
-	got := withoutName([]string{"Eliah", "martin"}, "eliah")
+	got := WithoutName([]string{"Eliah", "martin"}, "eliah")
 
 	if strings.Join(got, ",") != "martin" {
 		t.Errorf("withoutName = %v, Minecraft names are not case sensitive here", got)
@@ -142,20 +142,20 @@ func TestWithoutNameIsCaseInsensitive(t *testing.T) {
 
 // Round trip, because the file this writes is the one it reads next time.
 func TestPlayerListSurvivesAWriteAndRead(t *testing.T) {
-	list := playerList{admins: []string{"eliah", "lena"}, whitelist: []string{"eliah", "lena", "martin"}, enforced: true}
+	list := List{Admins: []string{"eliah", "lena"}, Whitelist: []string{"eliah", "lena", "martin"}, Enforced: true}
 
-	out, err := writePlayerList(composeWithoutWhitelist, "minecraft", list)
+	out, err := WritePlayerList(composeWithoutWhitelist, "minecraft", list)
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := readPlayerList(out, "minecraft")
+	again, err := ReadPlayerList(out, "minecraft")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(again.admins, ",") != "eliah,lena" {
-		t.Errorf("admins came back as %v", again.admins)
+	if strings.Join(again.Admins, ",") != "eliah,lena" {
+		t.Errorf("admins came back as %v", again.Admins)
 	}
-	if strings.Join(again.whitelist, ",") != "eliah,lena,martin" {
-		t.Errorf("whitelist came back as %v", again.whitelist)
+	if strings.Join(again.Whitelist, ",") != "eliah,lena,martin" {
+		t.Errorf("whitelist came back as %v", again.Whitelist)
 	}
 }

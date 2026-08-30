@@ -17,6 +17,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/update"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -98,7 +99,7 @@ func runCheck() int {
 	default:
 		fmt.Println("Everything looks good.")
 	}
-	printUpdateHint(cfg)
+	update.PrintUpdateHint(cfg)
 	return code
 }
 

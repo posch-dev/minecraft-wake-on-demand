@@ -1,4 +1,4 @@
-package main
+package players
 
 import (
 	"fmt"
@@ -8,29 +8,39 @@ import (
 	"time"
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/yamledit"
 	"gopkg.in/yaml.v3"
 )
 
+// Who may join and who may run commands, both read from and written back to the
+// compose file. RCON would need the helper to take an argument, and the six
+// fixed words are what makes that key safe to leave on a server.
+type List struct {
+	Admins    []string
+	Whitelist []string
+	Enforced  bool
+}
+
 // The compose file is the source of truth, so the list survives the container
 // being rebuilt, which it would not if it only lived in the world folder.
-func readPlayerList(compose, service string) (playerList, error) {
+func ReadPlayerList(compose, service string) (List, error) {
 	env, err := serviceEnvironment(compose, service)
 	if err != nil {
-		return playerList{}, err
+		return List{}, err
 	}
-	list := playerList{
-		admins:    splitNames(env["OPS"]),
-		whitelist: splitNames(env["WHITELIST"]),
-		enforced:  strings.EqualFold(strings.TrimSpace(env["ENFORCE_WHITELIST"]), "true"),
+	list := List{
+		Admins:    splitNames(env["OPS"]),
+		Whitelist: splitNames(env["WHITELIST"]),
+		Enforced:  strings.EqualFold(strings.TrimSpace(env["ENFORCE_WHITELIST"]), "true"),
 	}
 	// A list nobody enforces is not a list, it just sits there.
-	if !list.enforced {
-		list.whitelist = nil
+	if !list.Enforced {
+		list.Whitelist = nil
 	}
 	return list, nil
 }
 
-func writePlayerList(compose, service string, list playerList) (string, error) {
+func WritePlayerList(compose, service string, list List) (string, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte(compose), &doc); err != nil {
 		return "", fmt.Errorf("the server's settings are not valid YAML: %w", err)
@@ -43,9 +53,9 @@ func writePlayerList(compose, service string, list playerList) (string, error) {
 		return "", err
 	}
 
-	setOrRemove(env, "OPS", strings.Join(list.admins, ","))
-	if list.enforced && len(list.whitelist) > 0 {
-		setOrRemove(env, "WHITELIST", strings.Join(list.whitelist, ","))
+	setOrRemove(env, "OPS", strings.Join(list.Admins, ","))
+	if list.Enforced && len(list.Whitelist) > 0 {
+		setOrRemove(env, "WHITELIST", strings.Join(list.Whitelist, ","))
 		setOrRemove(env, "ENFORCE_WHITELIST", "TRUE")
 	} else {
 		setOrRemove(env, "WHITELIST", "")
@@ -80,18 +90,18 @@ func serviceEnvironment(compose, service string) (map[string]string, error) {
 }
 
 func environmentNode(root *yaml.Node, service string) (*yaml.Node, error) {
-	services := findMapping(root, "services")
+	services := yamledit.FindMapping(root, "services")
 	if services == nil {
 		return nil, fmt.Errorf("the server's settings list no services")
 	}
-	node := findMapping(services, service)
+	node := yamledit.FindMapping(services, service)
 	if node == nil {
 		return nil, fmt.Errorf("there is no service called %q in the settings", service)
 	}
-	env := findMapping(node, "environment")
+	env := yamledit.FindMapping(node, "environment")
 	if env == nil {
-		env = mapping()
-		addNode(node, "environment", env)
+		env = yamledit.Mapping()
+		yamledit.AddNode(node, "environment", env)
 	}
 	return env, nil
 }
@@ -111,12 +121,12 @@ func setOrRemove(env *yaml.Node, key, value string) {
 		return
 	}
 	if value != "" {
-		addNode(env, key, quotedScalar(value))
+		yamledit.AddNode(env, key, quotedScalar(value))
 	}
 }
 
 func quotedScalar(value string) *yaml.Node {
-	node := scalar(value)
+	node := yamledit.Scalar(value)
 	node.Style = yaml.DoubleQuotedStyle
 	return node
 }
@@ -133,7 +143,7 @@ func splitNames(value string) []string {
 
 // Ten seconds and a way out, because somebody may be mid game and the person at
 // the keyboard is not necessarily the one playing.
-func countdownBeforeRestart(p *ui.Prompter) bool {
+func CountdownBeforeRestart(p *ui.Prompter) bool {
 	fmt.Println("")
 	ui.PrintWarning("Server will shut down in 10s for the changes to take effect.")
 	ui.PrintHint("Press Ctrl+C to abort.")
@@ -156,7 +166,7 @@ func countdownBeforeRestart(p *ui.Prompter) bool {
 }
 
 // Version and kind live in the same environment block the players do.
-func setWorldEnvironment(compose, service, serverType, version string) (string, error) {
+func SetWorldEnvironment(compose, service, serverType, version string) (string, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte(compose), &doc); err != nil {
 		return "", fmt.Errorf("the server's settings are not valid YAML: %w", err)
@@ -177,4 +187,14 @@ func setWorldEnvironment(compose, service, serverType, version string) (string, 
 		return "", err
 	}
 	return string(out), nil
+}
+
+func WithoutName(names []string, drop string) []string {
+	kept := []string{}
+	for _, name := range names {
+		if !strings.EqualFold(name, drop) {
+			kept = append(kept, name)
+		}
+	}
+	return kept
 }

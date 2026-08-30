@@ -12,6 +12,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/update"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/yamledit"
 )
 
@@ -340,13 +341,13 @@ func (e *configEditor) setUpContainer() {
 // Only ever reports, installing is what the update command is for.
 func (e *configEditor) checkForUpdate() {
 	fmt.Printf("\nInstalled version: %s\n", version)
-	release, err := fetchLatestReleaseNow()
+	release, err := update.FetchLatestReleaseNow()
 	if err != nil {
 		fmt.Printf("Could not reach the release API: %v\n", err)
 		return
 	}
 	fmt.Printf("Latest release:    %s\n", release.Tag)
-	if isNewerVersion(release.Tag, version) {
+	if update.IsNewerVersion(release.Tag, version) {
 		fmt.Println("\nInstall it with: sudo mcwod update")
 		return
 	}
@@ -380,7 +381,7 @@ func (e *configEditor) save() int {
 		return 1
 	}
 	fmt.Printf("Saved to %s\n", e.cfg.Path)
-	defer printUpdateHint(e.cfg)
+	defer update.PrintUpdateHint(e.cfg)
 	if e.cfg.Sleep.Enabled || e.cfg.Watcher.ListenPort != 0 {
 		fmt.Println("Restart the watcher for the changes to take effect:")
 		fmt.Println("  sudo systemctl restart mcwod")

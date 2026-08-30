@@ -14,6 +14,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/netprobe"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/update"
 	"golang.org/x/crypto/ssh"
 	"gopkg.in/yaml.v3"
 )
@@ -130,13 +131,13 @@ func runInit() int {
 	fmt.Println("")
 	if provisioned {
 		fmt.Println("Check that everything works: mcwod check")
-		printUpdateHint(&cfg)
+		update.PrintUpdateHint(&cfg)
 		return 0
 	}
 	fmt.Println("Two things left:")
 	fmt.Println("  mcwod setup-ssh   let the watcher reach that PC")
 	fmt.Println("  mcwod check       check that everything works")
-	printUpdateHint(&cfg)
+	update.PrintUpdateHint(&cfg)
 	return 0
 }
 

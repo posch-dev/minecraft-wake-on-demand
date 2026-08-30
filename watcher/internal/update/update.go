@@ -1,4 +1,4 @@
-package main
+package update
 
 import (
 	"context"
@@ -18,6 +18,9 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
+
+// Set from main, which is where the linker writes the release Current.
+var Current = "dev"
 
 // Overridable so the update path can be tested without publishing a release,
 // the same knobs install.sh uses.
@@ -49,7 +52,7 @@ func envOr(key, fallback string) string {
 
 // One line after init, config and check when something newer exists. Never acts
 // on it, an unattended service must not replace its own binary.
-func printUpdateHint(cfg *config.Config) {
+func PrintUpdateHint(cfg *config.Config) {
 	if cfg != nil && !cfg.Update.Check {
 		return
 	}
@@ -57,15 +60,15 @@ func printUpdateHint(cfg *config.Config) {
 	if err != nil || release == nil {
 		return
 	}
-	if !isNewerVersion(release.Tag, version) {
+	if !IsNewerVersion(release.Tag, Current) {
 		return
 	}
 	fmt.Printf("\nVersion %s is available, you have %s. Update with: sudo mcwod update\n",
-		release.Tag, version)
+		release.Tag, Current)
 }
 
 // Skips the cache, because someone asking for it wants the answer now.
-func fetchLatestReleaseNow() (*releaseInfo, error) {
+func FetchLatestReleaseNow() (*releaseInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return fetchLatestRelease(ctx)
@@ -130,7 +133,7 @@ func fetchLatestRelease(ctx context.Context) (*releaseInfo, error) {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "mcwod/"+version)
+	req.Header.Set("User-Agent", "mcwod/"+Current)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -153,11 +156,11 @@ func fetchLatestRelease(ctx context.Context) (*releaseInfo, error) {
 
 // Compares v2.10.0 against v2.9.0 by number, so the newer one wins rather than
 // the one that sorts later as text.
-func isNewerVersion(candidate, current string) bool {
+func IsNewerVersion(candidate, current string) bool {
 	if current == "dev" || current == "" {
 		return false
 	}
-	left, right := versionParts(candidate), versionParts(current)
+	left, right := VersionParts(candidate), VersionParts(current)
 	for i := range 3 {
 		if left[i] != right[i] {
 			return left[i] > right[i]
@@ -166,7 +169,7 @@ func isNewerVersion(candidate, current string) bool {
 	return false
 }
 
-func versionParts(tag string) [3]int {
+func VersionParts(tag string) [3]int {
 	var parts [3]int
 	trimmed := strings.TrimPrefix(strings.TrimSpace(tag), "v")
 	// A suffix like -rc1 is not a release, so it is cut before parsing.
@@ -182,7 +185,7 @@ func versionParts(tag string) [3]int {
 	return parts
 }
 
-func releaseAssetName() (string, error) {
+func ReleaseAssetName() (string, error) {
 	return assetNameFor(runtime.GOOS, runtime.GOARCH)
 }
 
@@ -199,7 +202,7 @@ func assetNameFor(goos, goarch string) (string, error) {
 
 // The checksum is the only thing between a release URL and running whatever
 // came back, so a mismatch or a missing entry refuses the install.
-func downloadRelease(ctx context.Context, tag, asset string) ([]byte, error) {
+func DownloadRelease(ctx context.Context, tag, asset string) ([]byte, error) {
 	base := updateDownloadURL + "/" + updateRepo + "/releases/download/" + url.PathEscape(tag)
 
 	binary, err := fetchBytes(ctx, base+"/"+asset, maxDownloadBytes)
@@ -244,7 +247,7 @@ func fetchBytes(ctx context.Context, endpoint string, limit int64) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "mcwod/"+version)
+	req.Header.Set("User-Agent", "mcwod/"+Current)
 
 	client := &http.Client{
 		Timeout: 5 * time.Minute,

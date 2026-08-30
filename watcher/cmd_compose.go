@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/compose"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
@@ -44,7 +45,7 @@ func offerContainerSetup(p *ui.Prompter, s *remote.ServerSession, cfg *config.Co
 	}
 
 	dir := p.Line("Where should the server live on that PC?", defaultComposeDir(s, cfg))
-	target := inspectComposeTarget(s, dir)
+	target := compose.InspectComposeTarget(s, dir)
 	if target.Command == "" {
 		ui.PrintWarning("Docker Compose does not work on that PC.")
 		ui.PrintHint("Install the compose plugin there, then try again.")
@@ -77,7 +78,7 @@ func offerContainerSetup(p *ui.Prompter, s *remote.ServerSession, cfg *config.Co
 
 // Without this the list stays empty and 'worlds' says the server was set up
 // before MCWOD kept track, about a world MCWOD just created itself.
-func rememberFirstWorld(cfg *config.Config, spec ComposeSpec, dir string) {
+func rememberFirstWorld(cfg *config.Config, spec compose.ComposeSpec, dir string) {
 	cfg.Worlds.List = append(cfg.Worlds.List, config.World{
 		Name:      spec.ServiceName,
 		Container: spec.ServiceName,
@@ -105,8 +106,8 @@ func defaultComposeDir(s *remote.ServerSession, cfg *config.Config) string {
 	return "/home/" + cfg.Server.SSHUser + "/minecraft"
 }
 
-func askComposeSpec(p *ui.Prompter, cfg *config.Config, facts ServerFacts) ComposeSpec {
-	spec := defaultComposeSpec(cfg.Server.ContainerName, cfg.Server.MCPort)
+func askComposeSpec(p *ui.Prompter, cfg *config.Config, facts ServerFacts) compose.ComposeSpec {
+	spec := compose.DefaultComposeSpec(cfg.Server.ContainerName, cfg.Server.MCPort)
 
 	spec.ServiceName = p.Validated("What should this world be called?", spec.ServiceName, validateContainerName)
 	spec.BackupName = spec.ServiceName + "-backup"
@@ -128,15 +129,15 @@ func askComposeSpec(p *ui.Prompter, cfg *config.Config, facts ServerFacts) Compo
 // terminal for the first time.
 func askServerType(p *ui.Prompter, fallback string) string {
 	fmt.Println("\nWhich kind of server?")
-	for i, choice := range serverTypeChoices {
-		fmt.Printf("  %d) %-9s %s\n", i+1, choice.name, ui.Hint(choice.what))
+	for i, choice := range compose.ServerTypeChoices {
+		fmt.Printf("  %d) %-9s %s\n", i+1, choice.Name, ui.Hint(choice.What))
 	}
 
 	answer := p.Validated("Pick one", "1", func(v string) error {
 		if _, ok := serverTypeByChoice(v); ok {
 			return nil
 		}
-		return fmt.Errorf("pick a number from 1 to %d", len(serverTypeChoices))
+		return fmt.Errorf("pick a number from 1 to %d", len(compose.ServerTypeChoices))
 	})
 	picked, _ := serverTypeByChoice(answer)
 	return picked
@@ -146,12 +147,12 @@ func askServerType(p *ui.Prompter, fallback string) string {
 func serverTypeByChoice(answer string) (string, bool) {
 	answer = strings.ToUpper(strings.TrimSpace(answer))
 	if index, err := strconv.Atoi(answer); err == nil {
-		if index >= 1 && index <= len(serverTypeChoices) {
-			return serverTypeChoices[index-1].name, true
+		if index >= 1 && index <= len(compose.ServerTypeChoices) {
+			return compose.ServerTypeChoices[index-1].Name, true
 		}
 		return "", false
 	}
-	if slices.Contains(serverTypes, answer) {
+	if slices.Contains(compose.ServerTypes, answer) {
 		return answer, true
 	}
 	return "", false
@@ -213,35 +214,35 @@ func askAdmin(p *ui.Prompter) string {
 
 // An existing password is left alone, replacing it would break whatever else
 // already reads it.
-func prepareRCONPassword(s *remote.ServerSession, target ComposeTarget) (string, error) {
-	if hasRCONPasswordVar(target.ExistingEnv) {
-		fmt.Printf("\n%s is already set in %s, keeping it.\n", rconPasswordVar, target.EnvFile)
+func prepareRCONPassword(s *remote.ServerSession, target compose.ComposeTarget) (string, error) {
+	if compose.HasRCONPasswordVar(target.ExistingEnv) {
+		fmt.Printf("\n%s is already set in %s, keeping it.\n", compose.RconPasswordVar, target.EnvFile)
 		return "", nil
 	}
-	password, err := generateRCONPassword()
+	password, err := compose.GenerateRCONPassword()
 	if err != nil {
 		return "", fmt.Errorf("cannot generate an RCON password: %w", err)
 	}
 	return password, nil
 }
 
-func buildComposeContent(target ComposeTarget, spec ComposeSpec) (string, error) {
+func buildComposeContent(target compose.ComposeTarget, spec compose.ComposeSpec) (string, error) {
 	if target.Exists() {
 		fmt.Printf("\n%s already exists, the two services are added to it.\n", target.File)
-		return addServicesToCompose(target.Existing, spec)
+		return compose.AddServicesToCompose(target.Existing, spec)
 	}
-	return newComposeFile(spec)
+	return compose.NewComposeFile(spec)
 }
 
-func writeComposeFiles(p *ui.Prompter, s *remote.ServerSession, target ComposeTarget,
-	spec ComposeSpec, content, password string) bool {
+func writeComposeFiles(p *ui.Prompter, s *remote.ServerSession, target compose.ComposeTarget,
+	spec compose.ComposeSpec, content, password string) bool {
 
 	if target.Exists() && !p.YesNo("Write the changed "+target.File, true) {
 		fmt.Println("Nothing was written.")
 		return false
 	}
 
-	backup, err := backupComposeFile(s, target)
+	backup, err := compose.BackupComposeFile(s, target)
 	if err != nil {
 		fmt.Printf("\n%v\n", err)
 		fmt.Println("Nothing was written, the existing file could not be copied first.")
@@ -258,8 +259,8 @@ func writeComposeFiles(p *ui.Prompter, s *remote.ServerSession, target ComposeTa
 	}
 
 	if password != "" {
-		env := appendRCONPassword(target.ExistingEnv, password)
-		if err := writeRemoteEnvFile(s, target.EnvFile, env); err != nil {
+		env := compose.AppendRCONPassword(target.ExistingEnv, password)
+		if err := compose.WriteRemoteEnvFile(s, target.EnvFile, env); err != nil {
 			fmt.Printf("\n%v\n", err)
 			return false
 		}
@@ -270,12 +271,12 @@ func writeComposeFiles(p *ui.Prompter, s *remote.ServerSession, target ComposeTa
 		}
 	}
 
-	if err := writeRemoteFile(s, target.File, content); err != nil {
+	if err := compose.WriteRemoteFile(s, target.File, content); err != nil {
 		fmt.Printf("\n%v\n", err)
 		return false
 	}
 
-	if err := validateComposeFile(s, target); err != nil {
+	if err := compose.ValidateComposeFile(s, target); err != nil {
 		fmt.Printf("\ncompose rejected the result: %v\n", err)
 		if backup != "" {
 			fmt.Printf("Put the old one back with: mcwod restore-compose\n")
@@ -288,7 +289,7 @@ func writeComposeFiles(p *ui.Prompter, s *remote.ServerSession, target ComposeTa
 		fmt.Printf("Start them yourself with: cd %s && %s up -d\n", target.Dir, target.Command)
 		return true
 	}
-	out, err := composeUp(s, target)
+	out, err := compose.ComposeUp(s, target)
 	if err != nil {
 		fmt.Printf("  could not start them: %v\n", err)
 		fmt.Printf("  %s\n", logging.Sanitize(out, 400))
@@ -341,7 +342,7 @@ func runRestoreCompose() int {
 	if dir == "" {
 		dir = p.Line("Where does your server live on that PC?", defaultComposeDir(session, cfg))
 	}
-	backups, _ := listComposeBackups(session, dir)
+	backups, _ := compose.ListComposeBackups(session, dir)
 	if len(backups) == 0 {
 		fmt.Printf("\nNo backups from mcwod in %s.\n", dir)
 		return 1
@@ -361,18 +362,18 @@ func runRestoreCompose() int {
 	index, _ := strconv.Atoi(strings.TrimSpace(choice))
 	chosen := backups[index-1]
 
-	target := inspectComposeTarget(session, dir)
-	if _, err := backupComposeFile(session, target); err != nil {
+	target := compose.InspectComposeTarget(session, dir)
+	if _, err := compose.BackupComposeFile(session, target); err != nil {
 		fmt.Printf("\nCannot keep the current file first: %v\n", err)
 		return 1
 	}
 
-	body, err := readRemoteFile(session, joinRemote(session, dir, chosen))
+	body, err := compose.ReadRemoteFile(session, compose.JoinRemote(session, dir, chosen))
 	if err != nil || strings.TrimSpace(body) == "" {
 		fmt.Printf("\nCannot read %s\n", chosen)
 		return 1
 	}
-	if err := writeRemoteFile(session, target.File, body); err != nil {
+	if err := compose.WriteRemoteFile(session, target.File, body); err != nil {
 		fmt.Printf("\n%v\n", err)
 		return 1
 	}

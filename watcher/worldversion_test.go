@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/players"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 )
 
@@ -19,7 +20,7 @@ const composeForVersionChange = `services:
 `
 
 func TestSetWorldEnvironmentChangesOnlyTheTwoKeys(t *testing.T) {
-	out, err := setWorldEnvironment(composeForVersionChange, "minecraft", "FABRIC", "1.21.8")
+	out, err := players.SetWorldEnvironment(composeForVersionChange, "minecraft", "FABRIC", "1.21.8")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +38,7 @@ func TestSetWorldEnvironmentChangesOnlyTheTwoKeys(t *testing.T) {
 }
 
 func TestSetWorldEnvironmentUppercasesTheType(t *testing.T) {
-	out, err := setWorldEnvironment(composeForVersionChange, "minecraft", "fabric", "1.21.8")
+	out, err := players.SetWorldEnvironment(composeForVersionChange, "minecraft", "fabric", "1.21.8")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +48,7 @@ func TestSetWorldEnvironmentUppercasesTheType(t *testing.T) {
 }
 
 func TestSetWorldEnvironmentRefusesAMissingService(t *testing.T) {
-	if _, err := setWorldEnvironment(composeForVersionChange, "not-there", "PAPER", "1.21.4"); err == nil {
+	if _, err := players.SetWorldEnvironment(composeForVersionChange, "not-there", "PAPER", "1.21.4"); err == nil {
 		t.Error("a service that is not there should be reported")
 	}
 }

@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/compose"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/players"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
@@ -126,7 +128,7 @@ func switchWorld(p *ui.Prompter, cfg *config.Config, doc *yamledit.Document) int
 	if !confirmPlayersWillDrop(p, cfg, session) {
 		return 0
 	}
-	if !countdownBeforeRestart(p) {
+	if !players.CountdownBeforeRestart(p) {
 		ui.PrintHint("Left as it was.")
 		return 0
 	}
@@ -152,8 +154,8 @@ func stopActiveWorld(cfg *config.Config, session *remote.ServerSession) {
 		return
 	}
 	fmt.Printf("Stopping %s...\n", active.Container)
-	target := inspectComposeTarget(session, active.Dir)
-	if _, err := session.Run(composeInvocation(session, target, "stop")); err != nil {
+	target := compose.InspectComposeTarget(session, active.Dir)
+	if _, err := session.Run(compose.ComposeInvocation(session, target, "stop")); err != nil {
 		ui.PrintWarning("It did not stop cleanly, the new world may fail to start.")
 	}
 }

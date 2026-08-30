@@ -1,4 +1,4 @@
-package main
+package compose
 
 import (
 	"fmt"
@@ -37,34 +37,34 @@ func detectComposeCommand(s *remote.ServerSession) string {
 	return ""
 }
 
-func inspectComposeTarget(s *remote.ServerSession, dir string) ComposeTarget {
+func InspectComposeTarget(s *remote.ServerSession, dir string) ComposeTarget {
 	target := ComposeTarget{
 		Dir:     dir,
-		File:    joinRemote(s, dir, "docker-compose.yml"),
-		EnvFile: joinRemote(s, dir, ".env"),
+		File:    JoinRemote(s, dir, "docker-compose.yml"),
+		EnvFile: JoinRemote(s, dir, ".env"),
 		Command: detectComposeCommand(s),
 	}
-	target.Existing, _ = readRemoteFile(s, target.File)
+	target.Existing, _ = ReadRemoteFile(s, target.File)
 	if target.Existing == "" {
 		// compose accepts either name, so the other one has to be looked at too.
-		alternate := joinRemote(s, dir, "compose.yaml")
-		if body, err := readRemoteFile(s, alternate); err == nil && strings.TrimSpace(body) != "" {
+		alternate := JoinRemote(s, dir, "compose.yaml")
+		if body, err := ReadRemoteFile(s, alternate); err == nil && strings.TrimSpace(body) != "" {
 			target.File = alternate
 			target.Existing = body
 		}
 	}
-	target.ExistingEnv, _ = readRemoteFile(s, target.EnvFile)
+	target.ExistingEnv, _ = ReadRemoteFile(s, target.EnvFile)
 	return target
 }
 
-func joinRemote(s *remote.ServerSession, dir, name string) string {
+func JoinRemote(s *remote.ServerSession, dir, name string) string {
 	if s.Platform().Windows {
 		return strings.TrimRight(dir, `\/`) + `\` + name
 	}
 	return strings.TrimRight(dir, "/") + "/" + name
 }
 
-func readRemoteFile(s *remote.ServerSession, path string) (string, error) {
+func ReadRemoteFile(s *remote.ServerSession, path string) (string, error) {
 	if s.Platform().Windows {
 		return s.Run("if (Test-Path -LiteralPath " + remote.PowerShellQuote(path) +
 			") { Get-Content -Raw -LiteralPath " + remote.PowerShellQuote(path) + " }")
@@ -73,11 +73,11 @@ func readRemoteFile(s *remote.ServerSession, path string) (string, error) {
 }
 
 // Nothing is overwritten without a copy of what was there first.
-func backupComposeFile(s *remote.ServerSession, target ComposeTarget) (string, error) {
+func BackupComposeFile(s *remote.ServerSession, target ComposeTarget) (string, error) {
 	if !target.Exists() {
 		return "", nil
 	}
-	backup := joinRemote(s, target.Dir, composeBackupName(time.Now().UTC().Format("20060102-150405")))
+	backup := JoinRemote(s, target.Dir, composeBackupName(time.Now().UTC().Format("20060102-150405")))
 
 	var command string
 	if s.Platform().Windows {
@@ -94,7 +94,7 @@ func backupComposeFile(s *remote.ServerSession, target ComposeTarget) (string, e
 
 // Written to a temporary name and moved into place, so an interrupted write
 // cannot leave a truncated compose file behind.
-func writeRemoteFile(s *remote.ServerSession, path, content string) error {
+func WriteRemoteFile(s *remote.ServerSession, path, content string) error {
 	marker := "MCWOLFILE"
 	if s.Platform().Windows {
 		command := fmt.Sprintf("$body = @'\n%s\n'@\nSet-Content -LiteralPath %s -Value $body -Encoding utf8",
@@ -117,8 +117,8 @@ func writeRemoteFile(s *remote.ServerSession, path, content string) error {
 }
 
 // The RCON password is in there, so other accounts on the server must not read it.
-func writeRemoteEnvFile(s *remote.ServerSession, path, content string) error {
-	if err := writeRemoteFile(s, path, content); err != nil {
+func WriteRemoteEnvFile(s *remote.ServerSession, path, content string) error {
+	if err := WriteRemoteFile(s, path, content); err != nil {
 		return err
 	}
 	if s.Platform().Windows {
@@ -137,22 +137,22 @@ func writeRemoteEnvFile(s *remote.ServerSession, path, content string) error {
 
 // compose parses the file itself, which catches anything the generator got
 // wrong before the old file is gone for good.
-func validateComposeFile(s *remote.ServerSession, target ComposeTarget) error {
+func ValidateComposeFile(s *remote.ServerSession, target ComposeTarget) error {
 	if target.Command == "" {
 		return fmt.Errorf("no docker compose on the server")
 	}
-	out, err := s.Run(composeInvocation(s, target, "config --quiet"))
+	out, err := s.Run(ComposeInvocation(s, target, "config --quiet"))
 	if err != nil {
 		return fmt.Errorf("%w: %s", err, logging.Sanitize(out, 400))
 	}
 	return nil
 }
 
-func composeUp(s *remote.ServerSession, target ComposeTarget) (string, error) {
-	return s.Run(composeInvocation(s, target, "up -d"))
+func ComposeUp(s *remote.ServerSession, target ComposeTarget) (string, error) {
+	return s.Run(ComposeInvocation(s, target, "up -d"))
 }
 
-func composeInvocation(s *remote.ServerSession, target ComposeTarget, args string) string {
+func ComposeInvocation(s *remote.ServerSession, target ComposeTarget, args string) string {
 	if s.Platform().Windows {
 		return "Set-Location -LiteralPath " + remote.PowerShellQuote(target.Dir) + "; " +
 			target.Command + " -f " + remote.PowerShellQuote(target.File) + " " + args
@@ -162,7 +162,7 @@ func composeInvocation(s *remote.ServerSession, target ComposeTarget, args strin
 }
 
 // Newest first, which is what someone restoring almost always wants.
-func listComposeBackups(s *remote.ServerSession, dir string) ([]string, error) {
+func ListComposeBackups(s *remote.ServerSession, dir string) ([]string, error) {
 	var command string
 	if s.Platform().Windows {
 		command = "Get-ChildItem -LiteralPath " + remote.PowerShellQuote(dir) + " -Filter " +

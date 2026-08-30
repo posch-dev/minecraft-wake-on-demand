@@ -1,4 +1,4 @@
-package main
+package compose
 
 import (
 	"crypto/rand"
@@ -7,12 +7,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/yamledit"
 	"gopkg.in/yaml.v3"
 )
 
 // The RCON password lives in .env under our own name, never as RCON_PASSWORD.
 // A foreign .env may already define that one, and the last definition wins.
-const rconPasswordVar = "MCWOD_RCON_PASSWORD"
+const RconPasswordVar = "MCWOD_RCON_PASSWORD"
 
 const composeBackupPrefix = "docker-compose.yml.mcwod-bak-"
 
@@ -27,10 +28,10 @@ const (
 
 // What itzg/minecraft-server understands as TYPE. Vanilla first, it is what
 // somebody who does not know the difference wants.
-var serverTypes = []string{"VANILLA", "PAPER", "PURPUR", "FABRIC", "FORGE", "NEOFORGE", "QUILT", "SPIGOT"}
+var ServerTypes = []string{"VANILLA", "PAPER", "PURPUR", "FABRIC", "FORGE", "NEOFORGE", "QUILT", "SPIGOT"}
 
 // The four worth offering, in the order somebody would work through them.
-var serverTypeChoices = []struct{ name, what string }{
+var ServerTypeChoices = []struct{ Name, What string }{
 	{"VANILLA", "normal Minecraft, nothing added"},
 	{"PAPER", "same game, runs smoother, can use plugins"},
 	{"FABRIC", "for mods, every player needs the same mods"},
@@ -53,7 +54,7 @@ type ComposeSpec struct {
 	Backups        bool
 }
 
-func defaultComposeSpec(containerName string, mcPort int) ComposeSpec {
+func DefaultComposeSpec(containerName string, mcPort int) ComposeSpec {
 	return ComposeSpec{
 		ServiceName:    containerName,
 		BackupName:     containerName + "-backup",
@@ -73,7 +74,7 @@ func minecraftService(spec ComposeSpec) *yaml.Node {
 	env := []string{
 		"EULA", "TRUE",
 		"ENABLE_RCON", "TRUE",
-		"RCON_PASSWORD", "${" + rconPasswordVar + ":?set " + rconPasswordVar + " in .env}",
+		"RCON_PASSWORD", "${" + RconPasswordVar + ":?set " + RconPasswordVar + " in .env}",
 		"TYPE", spec.ServerType,
 		"VERSION", spec.MCVersion,
 		"MEMORY", spec.Memory,
@@ -98,7 +99,7 @@ func minecraftService(spec ComposeSpec) *yaml.Node {
 			"ENFORCE_WHITELIST", "TRUE")
 	}
 
-	service := mapping()
+	service := yamledit.Mapping()
 	addScalar(service, "image", minecraftImage)
 	addScalar(service, "container_name", spec.ServiceName)
 	// The watcher starts it, so docker must not race it on boot.
@@ -114,13 +115,13 @@ func minecraftService(spec ComposeSpec) *yaml.Node {
 func backupService(spec ComposeSpec) *yaml.Node {
 	env := []string{
 		"RCON_HOST", spec.ServiceName,
-		"RCON_PASSWORD", "${" + rconPasswordVar + ":?set " + rconPasswordVar + " in .env}",
+		"RCON_PASSWORD", "${" + RconPasswordVar + ":?set " + RconPasswordVar + " in .env}",
 		"BACKUP_INTERVAL", spec.BackupInterval,
 		"PRUNE_BACKUPS_DAYS", strconv.Itoa(spec.KeepBackupDays),
 		"INITIAL_DELAY", "120",
 	}
 
-	service := mapping()
+	service := yamledit.Mapping()
 	addScalar(service, "image", backupImage)
 	addScalar(service, "container_name", spec.BackupName)
 	addScalar(service, "restart", "no")
@@ -131,15 +132,15 @@ func backupService(spec ComposeSpec) *yaml.Node {
 }
 
 // A whole file for a server that has none yet.
-func newComposeFile(spec ComposeSpec) (string, error) {
-	services := mapping()
-	addNode(services, spec.ServiceName, minecraftService(spec))
+func NewComposeFile(spec ComposeSpec) (string, error) {
+	services := yamledit.Mapping()
+	yamledit.AddNode(services, spec.ServiceName, minecraftService(spec))
 	if spec.Backups {
-		addNode(services, spec.BackupName, backupService(spec))
+		yamledit.AddNode(services, spec.BackupName, backupService(spec))
 	}
 
-	root := mapping()
-	addNode(root, "services", services)
+	root := yamledit.Mapping()
+	yamledit.AddNode(root, "services", services)
 	root.Content[0].HeadComment = "Written by mcwod. " +
 		"The RCON password lives in .env next to this file."
 
@@ -152,7 +153,7 @@ func newComposeFile(spec ComposeSpec) (string, error) {
 
 // Adds the services to a file that already has some, leaving every other
 // service and every comment exactly where it was.
-func addServicesToCompose(existing string, spec ComposeSpec) (string, error) {
+func AddServicesToCompose(existing string, spec ComposeSpec) (string, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte(existing), &doc); err != nil {
 		return "", fmt.Errorf("the existing docker-compose.yml is not valid YAML: %w", err)
@@ -165,10 +166,10 @@ func addServicesToCompose(existing string, spec ComposeSpec) (string, error) {
 		return "", fmt.Errorf("the existing docker-compose.yml is not a mapping")
 	}
 
-	services := findMapping(root, "services")
+	services := yamledit.FindMapping(root, "services")
 	if services == nil {
-		services = mapping()
-		addNode(root, "services", services)
+		services = yamledit.Mapping()
+		yamledit.AddNode(root, "services", services)
 	}
 
 	wanted := []string{spec.ServiceName}
@@ -176,14 +177,14 @@ func addServicesToCompose(existing string, spec ComposeSpec) (string, error) {
 		wanted = append(wanted, spec.BackupName)
 	}
 	for _, name := range wanted {
-		if findMapping(services, name) != nil {
+		if yamledit.FindMapping(services, name) != nil {
 			return "", fmt.Errorf("the file already has a service called %q, refusing to touch it", name)
 		}
 	}
 
-	addNode(services, spec.ServiceName, minecraftService(spec))
+	yamledit.AddNode(services, spec.ServiceName, minecraftService(spec))
 	if spec.Backups {
-		addNode(services, spec.BackupName, backupService(spec))
+		yamledit.AddNode(services, spec.BackupName, backupService(spec))
 	}
 
 	data, err := yaml.Marshal(root)
@@ -194,7 +195,7 @@ func addServicesToCompose(existing string, spec ComposeSpec) (string, error) {
 }
 
 // Three lines onto whatever is already there, so a foreign .env keeps working.
-func appendRCONPassword(existing, password string) string {
+func AppendRCONPassword(existing, password string) string {
 	var b strings.Builder
 	if trimmed := strings.TrimRight(existing, "\n"); trimmed != "" {
 		b.WriteString(trimmed)
@@ -202,14 +203,14 @@ func appendRCONPassword(existing, password string) string {
 	}
 	b.WriteString("\n")
 	b.WriteString("# RCON password, added by Minecraft Wake-on-Demand\n")
-	b.WriteString(rconPasswordVar + "=" + password + "\n")
+	b.WriteString(RconPasswordVar + "=" + password + "\n")
 	return b.String()
 }
 
-func hasRCONPasswordVar(env string) bool {
+func HasRCONPasswordVar(env string) bool {
 	for _, line := range strings.Split(env, "\n") {
 		key, _, found := strings.Cut(strings.TrimSpace(line), "=")
-		if found && strings.TrimSpace(key) == rconPasswordVar {
+		if found && strings.TrimSpace(key) == RconPasswordVar {
 			return true
 		}
 	}
@@ -217,7 +218,7 @@ func hasRCONPasswordVar(env string) bool {
 }
 
 // URL safe so it cannot need quoting in .env or in a shell.
-func generateRCONPassword() (string, error) {
+func GenerateRCONPassword() (string, error) {
 	raw := make([]byte, 24)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
@@ -225,52 +226,31 @@ func generateRCONPassword() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
-func mapping() *yaml.Node {
-	return &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-}
-
-func scalar(value string) *yaml.Node {
-	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value}
-}
-
-func addNode(parent *yaml.Node, key string, value *yaml.Node) {
-	parent.Content = append(parent.Content, scalar(key), value)
-}
-
 func addScalar(parent *yaml.Node, key, value string) {
-	node := scalar(value)
+	node := yamledit.Scalar(value)
 	node.Style = yaml.DoubleQuotedStyle
-	addNode(parent, key, node)
+	yamledit.AddNode(parent, key, node)
 }
 
 func addBool(parent *yaml.Node, key string, value bool) {
-	addNode(parent, key, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: strconv.FormatBool(value)})
+	yamledit.AddNode(parent, key, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: strconv.FormatBool(value)})
 }
 
 func addSequence(parent *yaml.Node, key string, values []string) {
 	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
 	for _, value := range values {
-		node := scalar(value)
+		node := yamledit.Scalar(value)
 		node.Style = yaml.DoubleQuotedStyle
 		seq.Content = append(seq.Content, node)
 	}
-	addNode(parent, key, seq)
+	yamledit.AddNode(parent, key, seq)
 }
 
 // Flat key, value pairs, which is what compose wants for environment.
 func addMapping(parent *yaml.Node, key string, pairs []string) {
-	node := mapping()
+	node := yamledit.Mapping()
 	for i := 0; i+1 < len(pairs); i += 2 {
 		addScalar(node, pairs[i], pairs[i+1])
 	}
-	addNode(parent, key, node)
-}
-
-func findMapping(parent *yaml.Node, key string) *yaml.Node {
-	for i := 0; i+1 < len(parent.Content); i += 2 {
-		if parent.Content[i].Value == key && parent.Content[i+1].Kind == yaml.MappingNode {
-			return parent.Content[i+1]
-		}
-	}
-	return nil
+	yamledit.AddNode(parent, key, node)
 }

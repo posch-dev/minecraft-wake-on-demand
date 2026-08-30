@@ -16,6 +16,8 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/proxy"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sleep"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/update"
 	"golang.org/x/term"
 )
 
@@ -23,6 +25,8 @@ import (
 var version = "dev"
 
 func main() {
+	update.Current = version
+
 	command := ""
 	if len(os.Args) > 1 {
 		command = os.Args[1]
@@ -147,7 +151,7 @@ func runProxy() int {
 		tasks.Add(1)
 		go func() {
 			defer tasks.Done()
-			runSleepMonitor(ctx, cfg, waker)
+			sleep.RunSleepMonitor(ctx, cfg, waker)
 		}()
 	}
 

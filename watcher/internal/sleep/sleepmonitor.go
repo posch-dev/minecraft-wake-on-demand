@@ -1,4 +1,4 @@
-package main
+package sleep
 
 import (
 	"context"
@@ -50,7 +50,7 @@ func NewSleepMonitor(cfg *config.Config, waker *boot.Waker) *SleepMonitor {
 	}
 }
 
-func runSleepMonitor(ctx context.Context, cfg *config.Config, waker *boot.Waker) {
+func RunSleepMonitor(ctx context.Context, cfg *config.Config, waker *boot.Waker) {
 	monitor := NewSleepMonitor(cfg, waker)
 	logging.Infof("Sleep monitor active, %s after %ds without players",
 		cfg.Sleep.Action, cfg.Sleep.IdleAfter)

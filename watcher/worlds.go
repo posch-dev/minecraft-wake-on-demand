@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/update"
 )
 
 func serverTypeTier(name string) int {
@@ -41,7 +43,7 @@ func compareVersions(left, right string) int {
 	if strings.EqualFold(right, "LATEST") {
 		return -1
 	}
-	a, b := versionParts(left), versionParts(right)
+	a, b := update.VersionParts(left), update.VersionParts(right)
 	for i := range 3 {
 		if a[i] != b[i] {
 			if a[i] > b[i] {

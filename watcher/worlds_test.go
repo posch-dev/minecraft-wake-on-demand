@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/compose"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 )
 
@@ -81,7 +82,7 @@ func TestServerTypeTiers(t *testing.T) {
 // A world MCWOD created itself must not show up as one it knows nothing about.
 func TestInitRecordsTheWorldItCreated(t *testing.T) {
 	cfg := config.Default()
-	spec := ComposeSpec{ServiceName: "survival", MCPort: 25565, MCVersion: "LATEST", ServerType: "FABRIC"}
+	spec := compose.ComposeSpec{ServiceName: "survival", MCPort: 25565, MCVersion: "LATEST", ServerType: "FABRIC"}
 
 	rememberFirstWorld(&cfg, spec, "/srv/survival")
 
@@ -103,7 +104,7 @@ func TestRememberingAWorldKeepsTheActiveOne(t *testing.T) {
 	cfg.Worlds.List = []config.World{{Name: "creative"}}
 	cfg.Worlds.Active = "creative"
 
-	rememberFirstWorld(&cfg, ComposeSpec{ServiceName: "survival"}, "/srv/survival")
+	rememberFirstWorld(&cfg, compose.ComposeSpec{ServiceName: "survival"}, "/srv/survival")
 
 	if cfg.Worlds.Active != "creative" {
 		t.Errorf("active world = %q, want creative", cfg.Worlds.Active)

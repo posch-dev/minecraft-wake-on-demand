@@ -9,6 +9,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/netprobe"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/update"
 )
 
 // What running mcwod with no argument does at a terminal. Nothing set up yet
@@ -24,7 +25,7 @@ func runHome() int {
 	p := ui.NewPrompter()
 	for {
 		printHomeStatus(cfg)
-		printUpdateHint(cfg)
+		update.PrintUpdateHint(cfg)
 		printHomeMenu()
 
 		switch strings.ToLower(strings.TrimSpace(p.Line("Choose", "q"))) {

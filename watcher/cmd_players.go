@@ -8,21 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/compose"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/players"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sshx"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
 )
-
-// Who may join and who may run commands, both read from and written back to the
-// compose file. RCON would need the helper to take an argument, and the six
-// fixed words are what makes that key safe to leave on a server.
-type playerList struct {
-	admins    []string
-	whitelist []string
-	enforced  bool
-}
 
 func runPlayers() int {
 	cfg, err := config.Load()
@@ -57,13 +50,13 @@ func runPlayers() int {
 	defer session.Close()
 	session.Detect()
 
-	target := inspectComposeTarget(session, cfg.Server.ComposeDir)
+	target := compose.InspectComposeTarget(session, cfg.Server.ComposeDir)
 	if !target.Exists() {
 		ui.PrintError("No compose file in " + cfg.Server.ComposeDir)
 		return 1
 	}
 
-	list, err := readPlayerList(target.Existing, cfg.Server.ContainerName)
+	list, err := players.ReadPlayerList(target.Existing, cfg.Server.ContainerName)
 	if err != nil {
 		ui.PrintError(err.Error())
 		return 1
@@ -77,7 +70,7 @@ func runPlayers() int {
 	return applyPlayerList(p, session, cfg, target, list)
 }
 
-func editPlayers(p *ui.Prompter, list *playerList, world string) bool {
+func editPlayers(p *ui.Prompter, list *players.List, world string) bool {
 	changed := false
 	for {
 		printPlayerList(list, world)
@@ -97,16 +90,16 @@ func editPlayers(p *ui.Prompter, list *playerList, world string) bool {
 	}
 }
 
-func printPlayerList(list *playerList, world string) {
+func printPlayerList(list *players.List, world string) {
 	fmt.Printf("\nWho can play on %s\n\n", world)
-	if !list.enforced {
+	if !list.Enforced {
 		ui.PrintHint("Anyone who knows the address can join.")
-		if len(list.admins) > 0 {
-			fmt.Printf("  Admins: %s\n", strings.Join(list.admins, ", "))
+		if len(list.Admins) > 0 {
+			fmt.Printf("  Admins: %s\n", strings.Join(list.Admins, ", "))
 		}
 	}
-	for _, name := range list.whitelist {
-		if slices.Contains(list.admins, name) {
+	for _, name := range list.Whitelist {
+		if slices.Contains(list.Admins, name) {
 			fmt.Printf("  %-16s %s\n", name, ui.Hint("admin"))
 			continue
 		}
@@ -114,7 +107,7 @@ func printPlayerList(list *playerList, world string) {
 	}
 
 	fmt.Println("")
-	if list.enforced {
+	if list.Enforced {
 		fmt.Println("  1) Let someone in")
 		fmt.Println("  2) Kick someone off the list")
 	} else {
@@ -124,56 +117,56 @@ func printPlayerList(list *playerList, world string) {
 	fmt.Println("  q) Back")
 }
 
-func letSomeoneIn(p *ui.Prompter, list *playerList) bool {
-	if !list.enforced {
+func letSomeoneIn(p *ui.Prompter, list *players.List) bool {
+	if !list.Enforced {
 		ui.PrintHint("Only the players you name will be able to join from now on.")
 	}
 	name := strings.TrimSpace(p.Line("Which Minecraft name?", ""))
 	if name == "" {
 		return false
 	}
-	if slices.Contains(list.whitelist, name) {
+	if slices.Contains(list.Whitelist, name) {
 		ui.PrintHint(name + " is already allowed in.")
 		return false
 	}
 
-	list.whitelist = append(list.whitelist, name)
-	list.enforced = true
+	list.Whitelist = append(list.Whitelist, name)
+	list.Enforced = true
 	fmt.Printf("  %s may now join.\n", name)
 	return true
 }
 
-func kickSomeoneOff(p *ui.Prompter, list *playerList) bool {
-	if len(list.whitelist) == 0 {
+func kickSomeoneOff(p *ui.Prompter, list *players.List) bool {
+	if len(list.Whitelist) == 0 {
 		ui.PrintHint("Nobody is on the list.")
 		return false
 	}
-	name, picked := pickName(p, list.whitelist, "Who should lose access?")
+	name, picked := pickName(p, list.Whitelist, "Who should lose access?")
 	if !picked {
 		return false
 	}
 
-	list.whitelist = withoutName(list.whitelist, name)
+	list.Whitelist = players.WithoutName(list.Whitelist, name)
 	fmt.Printf("  %s can no longer join.\n", name)
-	if len(list.whitelist) == 0 {
-		list.enforced = false
+	if len(list.Whitelist) == 0 {
+		list.Enforced = false
 		ui.PrintHint("The list is empty now, so anyone who knows the address can join.")
 	}
 	return true
 }
 
 // One entry that goes both ways, so the menu stays short.
-func toggleAdmin(p *ui.Prompter, list *playerList) bool {
-	choices := list.whitelist
-	if !list.enforced {
-		choices = list.admins
+func toggleAdmin(p *ui.Prompter, list *players.List) bool {
+	choices := list.Whitelist
+	if !list.Enforced {
+		choices = list.Admins
 	}
 	if len(choices) == 0 {
 		name := strings.TrimSpace(p.Line("Which Minecraft name should be the admin?", ""))
 		if name == "" {
 			return false
 		}
-		list.admins = append(list.admins, name)
+		list.Admins = append(list.Admins, name)
 		fmt.Printf("  %s is now an admin.\n", name)
 		return true
 	}
@@ -182,21 +175,21 @@ func toggleAdmin(p *ui.Prompter, list *playerList) bool {
 	if !picked {
 		return false
 	}
-	if !slices.Contains(list.admins, name) {
-		list.admins = append(list.admins, name)
+	if !slices.Contains(list.Admins, name) {
+		list.Admins = append(list.Admins, name)
 		fmt.Printf("  %s is now an admin.\n", name)
 		return true
 	}
 
 	// A server with no admin can only be fixed by editing files on the PC.
-	if len(list.admins) == 1 {
+	if len(list.Admins) == 1 {
 		ui.PrintWarning(name + " is your only admin. Without one, nobody can run")
 		ui.PrintWarning("commands in the game any more.")
 		if !p.YesNo("Take it away anyway?", false) {
 			return false
 		}
 	}
-	list.admins = withoutName(list.admins, name)
+	list.Admins = players.WithoutName(list.Admins, name)
 	fmt.Printf("  %s is not an admin any more.\n", name)
 	return true
 }
@@ -217,31 +210,21 @@ func pickName(p *ui.Prompter, names []string, question string) (string, bool) {
 	return names[index-1], true
 }
 
-func withoutName(names []string, drop string) []string {
-	kept := []string{}
-	for _, name := range names {
-		if !strings.EqualFold(name, drop) {
-			kept = append(kept, name)
-		}
-	}
-	return kept
-}
-
-func applyPlayerList(p *ui.Prompter, s *remote.ServerSession, cfg *config.Config, target ComposeTarget, list playerList) int {
-	updated, err := writePlayerList(target.Existing, cfg.Server.ContainerName, list)
+func applyPlayerList(p *ui.Prompter, s *remote.ServerSession, cfg *config.Config, target compose.ComposeTarget, list players.List) int {
+	updated, err := players.WritePlayerList(target.Existing, cfg.Server.ContainerName, list)
 	if err != nil {
 		ui.PrintError(err.Error())
 		return 1
 	}
-	if _, err := backupComposeFile(s, target); err != nil {
+	if _, err := compose.BackupComposeFile(s, target); err != nil {
 		ui.PrintError(err.Error())
 		return 1
 	}
-	if err := writeRemoteFile(s, target.File, updated); err != nil {
+	if err := compose.WriteRemoteFile(s, target.File, updated); err != nil {
 		ui.PrintError(err.Error())
 		return 1
 	}
-	if err := validateComposeFile(s, target); err != nil {
+	if err := compose.ValidateComposeFile(s, target); err != nil {
 		ui.PrintError("The server settings were rejected: " + err.Error())
 		ui.PrintHint("Put the old ones back with: mcwod restore-compose")
 		return 1
@@ -252,11 +235,11 @@ func applyPlayerList(p *ui.Prompter, s *remote.ServerSession, cfg *config.Config
 		ui.PrintHint("The change takes effect the next time it starts.")
 		return 0
 	}
-	if !countdownBeforeRestart(p) {
+	if !players.CountdownBeforeRestart(p) {
 		ui.PrintHint("Left running. The change takes effect the next time it starts.")
 		return 0
 	}
-	if out, err := composeUp(s, target); err != nil {
+	if out, err := compose.ComposeUp(s, target); err != nil {
 		ui.PrintError("Could not restart it: " + logging.Sanitize(out, 300))
 		return 1
 	}

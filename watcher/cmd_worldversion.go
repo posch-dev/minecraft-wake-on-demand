@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/compose"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/players"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/serverinfo"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
@@ -99,7 +101,7 @@ func decideAboutTheWorld(p *ui.Prompter, world config.World, serverType, version
 func applyWorldChange(p *ui.Prompter, s *remote.ServerSession, cfg *config.Config, doc *yamledit.Document,
 	world config.World, serverType, version string, keepWorld bool) int {
 
-	target := inspectComposeTarget(s, world.Dir)
+	target := compose.InspectComposeTarget(s, world.Dir)
 	if !target.Exists() {
 		ui.PrintError("No server settings in " + world.Dir)
 		return 1
@@ -108,33 +110,33 @@ func applyWorldChange(p *ui.Prompter, s *remote.ServerSession, cfg *config.Confi
 	if !backUpWorld(s, world, version) {
 		return 1
 	}
-	if !countdownBeforeRestart(p) {
+	if !players.CountdownBeforeRestart(p) {
 		ui.PrintHint("Left as it was. The backup is kept.")
 		return 0
 	}
 
 	fmt.Printf("Stopping %s...\n", world.Container)
-	if _, err := s.Run(composeInvocation(s, target, "stop")); err != nil {
+	if _, err := s.Run(compose.ComposeInvocation(s, target, "stop")); err != nil {
 		ui.PrintWarning("It did not stop cleanly.")
 	}
 	if !keepWorld && !moveWorldAside(s, world, version) {
 		return 1
 	}
 
-	updated, err := setWorldEnvironment(target.Existing, world.Container, serverType, version)
+	updated, err := players.SetWorldEnvironment(target.Existing, world.Container, serverType, version)
 	if err != nil {
 		ui.PrintError(err.Error())
 		return 1
 	}
-	if _, err := backupComposeFile(s, target); err != nil {
+	if _, err := compose.BackupComposeFile(s, target); err != nil {
 		ui.PrintError(err.Error())
 		return 1
 	}
-	if err := writeRemoteFile(s, target.File, updated); err != nil {
+	if err := compose.WriteRemoteFile(s, target.File, updated); err != nil {
 		ui.PrintError(err.Error())
 		return 1
 	}
-	if err := validateComposeFile(s, target); err != nil {
+	if err := compose.ValidateComposeFile(s, target); err != nil {
 		ui.PrintError("The new settings were rejected: " + err.Error())
 		ui.PrintHint("Put the old ones back with: mcwod restore-compose")
 		return 1
@@ -146,7 +148,7 @@ func applyWorldChange(p *ui.Prompter, s *remote.ServerSession, cfg *config.Confi
 	}
 
 	fmt.Printf("Starting %s on %s %s...\n", world.Container, version, prettyServerType(serverType))
-	if out, err := composeUp(s, target); err != nil {
+	if out, err := compose.ComposeUp(s, target); err != nil {
 		ui.PrintError("It did not start: " + logging.Sanitize(out, 300))
 		ui.PrintHint("Restore the backup in " + world.Dir + "/backups if it stays down.")
 		return 1
@@ -169,7 +171,7 @@ func backUpWorld(s *remote.ServerSession, world config.World, version string) bo
 		ui.PrintError("The backup failed, so nothing was changed: " + logging.Sanitize(out, 300))
 		return false
 	}
-	fmt.Printf("  Backup written to %s\n", joinRemote(s, world.Dir, "backups/"+name))
+	fmt.Printf("  Backup written to %s\n", compose.JoinRemote(s, world.Dir, "backups/"+name))
 	return true
 }
 
@@ -199,7 +201,7 @@ func moveWorldAside(s *remote.ServerSession, world config.World, version string)
 		ui.PrintError("Could not move the old world aside: " + logging.Sanitize(out, 200))
 		return false
 	}
-	fmt.Printf("  The old world is now %s\n", joinRemote(s, world.Dir, aside))
+	fmt.Printf("  The old world is now %s\n", compose.JoinRemote(s, world.Dir, aside))
 	return true
 }
 
