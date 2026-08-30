@@ -157,15 +157,13 @@ func runInit() int {
 	fmt.Println("Skip this if only players on your own network are going to join.")
 	cfg.DuckDNS.Enabled = p.yesNo("Use DuckDNS", true)
 	if cfg.DuckDNS.Enabled {
-		cfg.DuckDNS.Domain = p.validated("DuckDNS subdomain, without .duckdns.org", "", func(v string) error {
-			if v == "" {
-				return fmt.Errorf("this cannot be empty")
-			}
-			if strings.Contains(v, ".") {
-				return fmt.Errorf("only the subdomain, so 'mine' and not 'mine.duckdns.org'")
+		cfg.DuckDNS.Domain = p.validated("Your DuckDNS address", "", func(v string) error {
+			if normalizeDuckDNSDomain(v) == "" {
+				return fmt.Errorf("that is empty, it looks like yourname.duckdns.org")
 			}
 			return nil
 		})
+		cfg.DuckDNS.Domain = normalizeDuckDNSDomain(cfg.DuckDNS.Domain)
 		for cfg.DuckDNS.Token == "" {
 			cfg.DuckDNS.Token = p.secret("DuckDNS token")
 		}
@@ -179,7 +177,7 @@ func runInit() int {
 	if cfg.Transfer.Enabled {
 		fallbackHost := ""
 		if cfg.DuckDNS.Enabled {
-			fallbackHost = cfg.DuckDNS.Domain + ".duckdns.org"
+			fallbackHost = cfg.DuckDNSHost()
 		}
 		cfg.Transfer.Host = p.validated("Public hostname players are sent to", fallbackHost, func(v string) error {
 			if v == "" {
