@@ -22,7 +22,7 @@ type fakeServerAnswers struct {
 
 func sleepMonitorFor(t *testing.T, answers *fakeServerAnswers, transfer bool) (*SleepMonitor, *boot.Waker, *time.Time) {
 	t.Helper()
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	cfg.Server.RemoteHelper = true
 	cfg.Sleep.Enabled = true
 	cfg.Sleep.Action = "suspend"

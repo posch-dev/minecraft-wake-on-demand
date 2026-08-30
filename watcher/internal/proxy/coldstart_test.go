@@ -16,7 +16,7 @@ import (
 // A client that sends the login packet on its own must not be cut off with a
 // reset, which it reports as a socket error instead of showing the message.
 func TestColdStartLoginIsClosedCleanly(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	handler := NewHandler(cfg, boot.NewWaker(cfg))
 	client := serveOnce(t, handler)
 

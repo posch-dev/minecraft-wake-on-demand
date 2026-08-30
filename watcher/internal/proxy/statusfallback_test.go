@@ -89,7 +89,7 @@ func TestAStatusResponseWithoutOverridesIsPassedOnUnchanged(t *testing.T) {
 		`"description":{"text":"theirs"},"enforcesSecureChat":false}`
 	body := append(mcproto.WriteVarInt(mcproto.PacketIDStatus), mcproto.WriteString(original)...)
 
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	handler := NewHandler(cfg, boot.NewWaker(cfg))
 
 	framed, err := handler.dressStatusResponse(body)

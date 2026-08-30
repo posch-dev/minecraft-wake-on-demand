@@ -83,7 +83,7 @@ func decodeStatus(t *testing.T, frame []byte) mcproto.StatusPayload {
 }
 
 func TestStatusPingWhileSleeping(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	h := NewHandler(cfg, boot.NewWaker(cfg))
 	client := serveOnce(t, h)
 
@@ -105,7 +105,7 @@ func TestStatusPingWhileSleeping(t *testing.T) {
 
 // The client is allowed to send everything in one write, which used to be a bug.
 func TestStatusPingInOneSegment(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	h := NewHandler(cfg, boot.NewWaker(cfg))
 	client := serveOnce(t, h)
 
@@ -133,7 +133,7 @@ func TestStatusPingInOneSegment(t *testing.T) {
 }
 
 func TestLoginWhileSleepingSendsWaitMessage(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	// Keep the boot attempt from actually sending WoL and waiting for SSH.
 	cfg.Limits.BootCooldown = 3600
 	waker := boot.NewWaker(cfg)
@@ -166,7 +166,7 @@ func TestLoginWhileSleepingSendsWaitMessage(t *testing.T) {
 
 func TestStatusPingWhileSleepingShowsCachedInfo(t *testing.T) {
 	dir := t.TempDir()
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	cfg.Path = filepath.Join(dir, "config.yml")
 
 	cachePath := filepath.Join(dir, ".server-info.json")
@@ -197,7 +197,7 @@ func TestStatusPingWhileSleepingShowsCachedInfo(t *testing.T) {
 }
 
 func TestIsLocalClient(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	h := NewHandler(cfg, boot.NewWaker(cfg))
 
 	local := []string{"192.168.1.20:5000", "10.1.2.3:5000", "127.0.0.1:5000", "172.16.0.5:5000"}
@@ -217,7 +217,7 @@ func TestIsLocalClient(t *testing.T) {
 }
 
 func TestIsLocalClientHonoursConfiguredNetworks(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	cfg.Transfer.LocalNetworks = config.StringList{"192.168.1.0/24"}
 	h := NewHandler(cfg, boot.NewWaker(cfg))
 
@@ -235,7 +235,7 @@ func TestIsLocalClientHonoursConfiguredNetworks(t *testing.T) {
 // TCP may split a write anywhere, and only the first read used to be parsed.
 // A handshake arriving in pieces was dropped with no answer at all.
 func TestHandshakeSplitAcrossReads(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	h := NewHandler(cfg, boot.NewWaker(cfg))
 	client := serveOnce(t, h)
 
@@ -260,7 +260,7 @@ func TestHandshakeSplitAtEveryOffset(t *testing.T) {
 	request := mcproto.MakeStatusRequest()
 
 	for split := 1; split < len(handshake); split++ {
-		cfg := testsupport.SleepingConfig()
+		cfg := testsupport.SleepingConfig(t)
 		h := NewHandler(cfg, boot.NewWaker(cfg))
 		client := serveOnce(t, h)
 
@@ -281,7 +281,7 @@ func TestHandshakeSplitAtEveryOffset(t *testing.T) {
 }
 
 func TestAllowedHostnamesEmptyPermitsAll(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	h := NewHandler(cfg, boot.NewWaker(cfg))
 
 	remote, _ := net.ResolveTCPAddr("tcp", "8.8.8.8:5000")
@@ -292,7 +292,7 @@ func TestAllowedHostnamesEmptyPermitsAll(t *testing.T) {
 }
 
 func TestAllowedHostnamesBlocksUnknownRemote(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org"}
 	h := NewHandler(cfg, boot.NewWaker(cfg))
 
@@ -304,7 +304,7 @@ func TestAllowedHostnamesBlocksUnknownRemote(t *testing.T) {
 }
 
 func TestAllowedHostnamesAllowsMatchingRemote(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org", "192.168.1.100"}
 	h := NewHandler(cfg, boot.NewWaker(cfg))
 
@@ -316,7 +316,7 @@ func TestAllowedHostnamesAllowsMatchingRemote(t *testing.T) {
 }
 
 func TestAllowedHostnamesLocalBypassesCheck(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org"}
 	h := NewHandler(cfg, boot.NewWaker(cfg))
 
@@ -328,7 +328,7 @@ func TestAllowedHostnamesLocalBypassesCheck(t *testing.T) {
 }
 
 func TestAllowedHostnamesMatchIsCaseInsensitive(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	cfg.Watcher.AllowedHostnames = config.StringList{"MC.Example.Org"}
 	h := NewHandler(cfg, boot.NewWaker(cfg))
 
@@ -340,7 +340,7 @@ func TestAllowedHostnamesMatchIsCaseInsensitive(t *testing.T) {
 }
 
 func TestAllowedHostnamesAutoPopulatedFromDuckDNS(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	cfg.DuckDNS.Enabled = true
 	cfg.DuckDNS.Domain = "my-world"
 	cfg.DuckDNS.Token = "secret"
@@ -363,7 +363,7 @@ func TestAllowedHostnamesAutoPopulatedFromDuckDNS(t *testing.T) {
 }
 
 func TestAllowedHostnamesIgnoreForgeMarker(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org"}
 	h := NewHandler(cfg, boot.NewWaker(cfg))
 
@@ -382,7 +382,7 @@ func TestAllowedHostnamesIgnoreForgeMarker(t *testing.T) {
 }
 
 func TestAllowedHostnamesStillBlockOtherNames(t *testing.T) {
-	cfg := testsupport.SleepingConfig()
+	cfg := testsupport.SleepingConfig(t)
 	cfg.Watcher.AllowedHostnames = config.StringList{"mc.example.org"}
 	h := NewHandler(cfg, boot.NewWaker(cfg))
 
