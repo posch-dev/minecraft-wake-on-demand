@@ -12,6 +12,10 @@ cp examples/motd-sleeping.json .
 `motd-sleeping.json` is shown while your PC is asleep, `motd-starting.json`
 while it is waking up, and `motd-live.json` while it is running.
 
+`motd-login-wait.json` is different: it is not in the server list at all. It is
+what the person whose attempt to join woke the server reads on the disconnect
+screen, telling them to come back in a moment.
+
 Leave `motd-live.json` out and the running server's own message is shown, which
 is what most people want. Put it in and yours replaces it, so you can set the
 message here instead of on the server.
@@ -39,9 +43,9 @@ placeholder, replace it with your own.
 It has to be a **64x64 PNG** and under 64 kB. Anything else is skipped, and the
 reason is written to the log.
 
-Without one you get the built-in picture, three blue Z that turn into a red
-exclamation mark while the PC wakes up. Your own picture does not replace that,
-it shows through underneath it.
+One picture covers all three states: plain while the server runs, and at half
+opacity under the built-in three blue Z while it sleeps, the largest turning
+into a red exclamation mark while the PC wakes up.
 
 To replace the whole thing instead, use one of these names in `assets/`:
 
@@ -49,7 +53,7 @@ To replace the whole thing instead, use one of these names in `assets/`:
 |------|----------|
 | `server-icon-sleeping.png` | the sleeping picture, Z and all |
 | `server-icon-starting.png` | the waking picture |
-| `server-icon-live.png` | the running server's own picture |
+| `server-icon-live.png` | the running server's own picture, when it should differ |
 
 `mcwod get-server-icon` copies the picture your running server already uses, so
 you do not have to find the file yourself.

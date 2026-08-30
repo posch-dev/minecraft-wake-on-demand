@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	readBufferSize   = 4096
-	handshakeTimeout = 10 * time.Second
-	statusTimeout    = 5 * time.Second
-	loginReadTimeout = 10 * time.Second
+	readBufferSize    = 4096
+	handshakeTimeout  = 10 * time.Second
+	statusTimeout     = 5 * time.Second
+	loginReadTimeout  = 10 * time.Second
+	loginDrainTimeout = 1 * time.Second
 	// A status response with a 64x64 icon is around 10 kB, the rest is headroom
 	// for large player samples.
 	maxStatusResponseBytes = 256 * 1024
@@ -227,13 +228,15 @@ func (h *Handler) handleLogin(ctx context.Context, conn net.Conn, initial []byte
 	h.waker.SessionStarted()
 	defer h.waker.SessionEnded()
 
+	// Booting takes half a minute, longer than a client waits, so the player is
+	// told to come back rather than left staring at a bar that then fails.
 	if !h.waker.MCPortReachable(ctx, false) {
-		if !h.waker.FullBoot(ctx) {
-			log.Infof("Server not ready for %s, sending wait message", addr)
-			conn.SetWriteDeadline(time.Now().Add(statusTimeout))
-			conn.Write(makeLoginDisconnect(h.cfg.MOTD.LoginWait))
-			return
-		}
+		log.Infof("Login from %s starts the server, sending the wait message", addr)
+		conn.SetWriteDeadline(time.Now().Add(statusTimeout))
+		conn.Write(makeLoginDisconnect(h.assets.MOTDLoginWait()))
+		drainBeforeClose(conn)
+		go h.bootInBackground(ctx, addr)
+		return
 	}
 
 	if h.cfg.Transfer.Enabled {
@@ -361,6 +364,24 @@ func (h *Handler) handleTransfer(ctx context.Context, conn net.Conn, initial []b
 	log.Infof("Transferring %s to %s:%d", sanitizeForLog(name, 64), targetHost, targetPort)
 	conn.SetWriteDeadline(time.Now().Add(statusTimeout))
 	conn.Write(makeTransferPacket(targetHost, targetPort))
+}
+
+// Closing while the login packet is still unread resets the connection, and the
+// client reports a socket error instead of showing the message it was just
+// sent. Waiting a moment for it costs nothing, the answer is already out.
+func drainBeforeClose(conn net.Conn) {
+	conn.SetReadDeadline(time.Now().Add(loginDrainTimeout))
+	conn.Read(make([]byte, readBufferSize))
+}
+
+// The boot outlives the connection that asked for it, so the server is up by
+// the time that player comes back.
+func (h *Handler) bootInBackground(ctx context.Context, addr net.Addr) {
+	if h.waker.FullBoot(ctx) {
+		log.Infof("Server is ready, %s can reconnect", addr)
+		return
+	}
+	log.Errorf("The boot %s asked for did not finish", addr)
 }
 
 func (h *Handler) proxy(ctx context.Context, client net.Conn, initial []byte) {

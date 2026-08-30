@@ -237,6 +237,7 @@ Everything below is optional and goes in `watcher/assets/`. Ready to copy exampl
 | `motd-sleeping.json` | text shown while the server is off |
 | `motd-starting.json` | text shown while it is booting |
 | `motd-live.json` | text shown while it is running, replacing the server's own MOTD |
+| `motd-login-wait.json` | text the person whose join woke the server reads on the disconnect screen |
 | `server-icon.png` | your 64x64 icon: plain while the server runs, at half opacity under the Z while it does not |
 | `server-icon-sleeping.png` | replaces the sleeping icon outright, no Z drawn over it |
 | `server-icon-starting.png` | same for the booting icon |
