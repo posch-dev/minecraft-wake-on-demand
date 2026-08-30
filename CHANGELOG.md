@@ -19,6 +19,14 @@ notes, so a version has to be listed here before it is tagged.
   not locked out. A rejected login gets `motd.server_full`.
 - `motd.server_full`, shown to a player who arrives when the login pool is
   full.
+- `mc-wol-proxy config`, a menu for changing an existing setup, also reachable
+  as `edit` and `settings`. Until now `init` refused to run once `config.yml`
+  existed, so every later change meant editing YAML by hand. It writes through
+  the parsed document rather than re-marshalling the config, so the comments
+  people put in their own file survive, and it validates before writing so a
+  menu session cannot leave behind a config the watcher would refuse to start
+  with. The config file is also forced back to mode 0600 on save, since it
+  holds the DuckDNS token.
 - `init` can set the server up over SSH. It asks for the address and the user
   separately, logs in once with a password and then finds out the rest instead
   of asking: the MAC address and broadcast address off the interface carrying

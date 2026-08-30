@@ -98,6 +98,12 @@ the service user and sets mode 600, so the token is not world readable on the
 watcher. `mc-wol-proxy init` writes it with mode 600 for the same reason, and
 reads the token without echoing it to the screen.
 
+`mc-wol-proxy config` writes the file back with mode 600 explicitly, because
+writing to an existing file leaves its mode alone and the token has to stay
+unreadable to other accounts on the watcher. It edits the parsed YAML rather
+than rewriting the file from the config struct, so a comment you put next to
+your own token is not silently dropped.
+
 `server/.env` holds the RCON password. Compose refuses to start without it
 rather than falling back to an image default. RCON's port 25575 is not published
 and must stay that way.
