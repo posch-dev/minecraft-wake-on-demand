@@ -13,6 +13,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/serverinfo"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/ui"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/worlds"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/yamledit"
 )
 
@@ -54,7 +55,7 @@ func changeWorldVersion(p *ui.Prompter, cfg *config.Config, doc *yamledit.Docume
 // Refused moves are still offered, but only after the backup has been made and
 // only once somebody has said out loud that they want it.
 func decideAboutTheWorld(p *ui.Prompter, world config.World, serverType, version string) (bool, bool) {
-	problem := worldMoveProblem(world.Type, serverType, world.Version, version)
+	problem := worlds.WorldMoveProblem(world.Type, serverType, world.Version, version)
 	if problem == "" {
 		fmt.Println("")
 		fmt.Println("  1) Keep the world and upgrade it")

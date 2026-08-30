@@ -192,7 +192,7 @@ func makeWorld(p *ui.Prompter, cfg *config.Config, doc *yamledit.Document) int {
 	facts := ServerFacts{Platform: session.Detect()}
 	discoverContainers(session, &facts)
 
-	world, ok := createWorld(p, session, cfg, facts)
+	world, ok := CreateWorld(p, session, cfg, facts)
 	if !ok {
 		return 0
 	}

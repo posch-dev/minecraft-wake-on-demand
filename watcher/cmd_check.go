@@ -12,6 +12,7 @@ import (
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/assets"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/duckdns"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/netprobe"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/remote"
@@ -402,7 +403,7 @@ func checkDuckDNS(c *checker, cfg *config.Config, ctx context.Context) {
 		c.info("disabled in config.yml")
 		return
 	}
-	if err := updateDuckDNS(ctx, cfg); err != nil {
+	if err := duckdns.UpdateDuckDNS(ctx, cfg); err != nil {
 		c.fail("update for %s failed: %v", cfg.DuckDNSHost(), err)
 		c.hint("check duckdns.domain and duckdns.token")
 		return

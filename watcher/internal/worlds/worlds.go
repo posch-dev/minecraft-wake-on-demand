@@ -1,4 +1,4 @@
-package main
+package worlds
 
 import (
 	"fmt"
@@ -18,7 +18,7 @@ func serverTypeTier(name string) int {
 }
 
 // Empty when the move is fine, otherwise why it is not.
-func worldMoveProblem(fromType, toType, fromVersion, toVersion string) string {
+func WorldMoveProblem(fromType, toType, fromVersion, toVersion string) string {
 	if serverTypeTier(toType) < serverTypeTier(fromType) {
 		return fmt.Sprintf("Going from %s to %s cannot take the world along. Mods write "+
 			"their own blocks into it, and the plainer server does not know them.",

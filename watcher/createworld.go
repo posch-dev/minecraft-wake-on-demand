@@ -13,7 +13,7 @@ import (
 
 // A world of its own, in its own folder, so a broken one is one broken world
 // and restore-compose stays unambiguous.
-func createWorld(p *ui.Prompter, s *remote.ServerSession, cfg *config.Config, facts ServerFacts) (config.World, bool) {
+func CreateWorld(p *ui.Prompter, s *remote.ServerSession, cfg *config.Config, facts ServerFacts) (config.World, bool) {
 	if !facts.Platform.HasDocker {
 		ui.PrintWarning("Docker is not installed on that PC, so there is nothing to set up.")
 		return config.World{}, false
@@ -39,7 +39,7 @@ func createWorld(p *ui.Prompter, s *remote.ServerSession, cfg *config.Config, fa
 		ui.PrintHint("Pick another name, or remove what is there first.")
 		return config.World{}, false
 	}
-	if !acceptEULAOnce(p, cfg) {
+	if !AcceptEULAOnce(p, cfg) {
 		return config.World{}, false
 	}
 
@@ -110,7 +110,7 @@ func parentDirectory(s *remote.ServerSession, dir string) string {
 }
 
 // Asked once and remembered, nobody wants to accept the same licence per world.
-func acceptEULAOnce(p *ui.Prompter, cfg *config.Config) bool {
+func AcceptEULAOnce(p *ui.Prompter, cfg *config.Config) bool {
 	if cfg.EULAAccepted {
 		return true
 	}

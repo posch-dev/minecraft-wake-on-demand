@@ -1,4 +1,4 @@
-package main
+package duckdns
 
 import (
 	"context"
@@ -26,7 +26,7 @@ func duckDNSURL(cfg *config.Config) string {
 	return duckDNSEndpoint + "?" + params.Encode()
 }
 
-func updateDuckDNS(ctx context.Context, cfg *config.Config) error {
+func UpdateDuckDNS(ctx context.Context, cfg *config.Config) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, duckDNSURL(cfg), nil)
 	if err != nil {
 		return err
@@ -53,10 +53,10 @@ func updateDuckDNS(ctx context.Context, cfg *config.Config) error {
 	return fmt.Errorf("DuckDNS answered %q instead of OK", logging.Sanitize(answer, 64))
 }
 
-func runDuckDNSUpdater(ctx context.Context, cfg *config.Config) {
+func RunDuckDNSUpdater(ctx context.Context, cfg *config.Config) {
 	interval := time.Duration(cfg.DuckDNS.UpdateIntervalHours) * time.Hour
 	for {
-		updateDuckDNS(ctx, cfg)
+		UpdateDuckDNS(ctx, cfg)
 		select {
 		case <-ctx.Done():
 			return

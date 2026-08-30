@@ -40,7 +40,7 @@ func offerContainerSetup(p *ui.Prompter, s *remote.ServerSession, cfg *config.Co
 		return false
 	}
 
-	if !acceptEULAOnce(p, cfg) {
+	if !AcceptEULAOnce(p, cfg) {
 		return false
 	}
 

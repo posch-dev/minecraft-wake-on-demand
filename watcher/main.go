@@ -14,6 +14,7 @@ import (
 
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/boot"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/config"
+	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/duckdns"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/logging"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/proxy"
 	"github.com/posch-dev/minecraft-wake-on-demand/watcher/internal/sleep"
@@ -143,7 +144,7 @@ func runProxy() int {
 		tasks.Add(1)
 		go func() {
 			defer tasks.Done()
-			runDuckDNSUpdater(ctx, cfg)
+			duckdns.RunDuckDNSUpdater(ctx, cfg)
 		}()
 	}
 
