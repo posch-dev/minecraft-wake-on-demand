@@ -32,6 +32,16 @@ notes, so a version has to be listed here before it is tagged.
   prints the PowerShell helper, the `icacls` calls that keep it writable only by
   administrators, and a note that OpenSSH reads
   `administrators_authorized_keys` rather than the profile for admin accounts.
+- `check` asks the server real questions once the helper is installed instead of
+  guessing from a refused command. It confirms the helper answers `hello` with
+  its marker, reports the container state, reads the player count, and reports
+  whether Wake-on-LAN is armed in the network driver. A card with
+  `Wake-on: d` is the most common reason this project appears to do nothing at
+  all, and nothing else in the setup would have revealed it.
+- `check` gained a Sleep section that reports the configured action, warns when
+  `sleep.grace_period` is shorter than a boot takes, and points out that
+  transfer mode makes the sleep monitor poll over SSH rather than count the
+  sessions it forwards.
 - `server.remote_helper` and the `sleep` config block. The watcher refuses to
   start with `sleep.enabled` and no helper, because an older forced command
   would silently run `docker start` for every verb it is sent, including
