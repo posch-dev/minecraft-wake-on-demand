@@ -3,265 +3,168 @@
 Notable changes per release. The section matching a tag becomes that release's
 notes, so a version has to be listed here before it is tagged.
 
-## [Unreleased]
+## 2.1.0
 
-### Changed
+### You need to know
 
-- Running `mcwod` on its own now shows a menu instead of the help. The first
-  run goes straight into the setup, later ones show what the server is doing
-  and offer check, settings, the server picture and the update, with the new
-  version line in there too. Started as a service it still runs the watcher.
-- Every question in the wizard is written for somebody who has not used a
-  terminal before. Choices that used to need a typed word are numbered, the
-  reason for a question sits under it in grey instead of in front of it, and
-  the technical vocabulary is gone from the questions themselves.
-- The server type is asked for, so a mod server is a choice rather than
-  something to edit afterwards. The heap size is suggested from the RAM the
-  server actually reports, a quarter of it, no less than 2G and no more than 8G.
-- The admin is its own question. It used to be a side effect of naming a
-  whitelist, so a server without one had nobody who could run a command in the
-  game at all.
-- The whitelist is asked in two steps, first whether you want one and only then
-  for the names, with the admin filled in so nobody locks themselves out.
-- The DuckDNS token stays visible while you type it. It is pasted off a page
-  rather than remembered, and hiding it only makes it harder to check.
-- Transfer mode is no longer part of `init`. It is an optimisation with an
-  unpleasant failure mode and it lives in `mcwod config`.
-- `get-server-icon` explains itself before it asks, warns before it replaces a
-  picture that is already there, and keeps the old one as `server-icon-old.png`
-  only if you say so.
+- **The watcher no longer uses `~/.ssh/id_ed25519`, and there is no fallback to
+  it.** Only the key it generates itself at `~/.ssh/mcwod` is ever used. If your
+  install was set up before this version, run `mcwod setup-ssh`.
 
 ### Added
 
-- A world's Minecraft version and server kind can be changed from
-  `mcwod worlds`. A backup is taken on the server first and is not optional,
-  because Minecraft upgrades a world's format the first time it opens it and
-  the older server refuses to load it afterwards. Going backwards, or from a
-  mod server to a plainer one, says why it will not work and offers a fresh
-  world or a backup, with doing it anyway as the last option. Keeping the old
-  world means it is moved aside, never deleted.
+- `mcwod install` sets the whole thing up from the binary itself. The unit and
+  the example assets ride along inside it, so one downloaded file is a complete
+  installation and `install.sh` can be piped into a shell. On Linux it asks the
+  setup questions as the account that called `sudo`. On Windows it installs into
+  your own profile and starts with your session; a real service is still to come.
+- `mcwod worlds` keeps several worlds side by side and switches between them.
+  Each gets its own folder and compose file, only the active one runs, and
+  switching counts down before it disconnects anyone.
+- `mcwod worlds` also changes a world's Minecraft version or server kind. It
+  backs the world up on the server first, and that is not optional. Going
+  backwards says why it will not work and offers a fresh world instead.
 - Each world can have its own MOTD and pictures in `assets/worlds/<name>/`,
-  falling back to the shared ones for anything it does not override. They stay
-  on the watcher rather than moving to the server.
-- `mcwod worlds` keeps several Minecraft worlds side by side and switches
-  between them. Each one gets its own folder and its own compose file, so a
-  broken world is one broken world, and only the active one is ever started.
-  Switching says how many players it is about to disconnect and counts down for
-  ten seconds first. Removing a world takes it off the list and leaves the
-  files where they are.
-- The `worlds` block in `config.yml`. A config written before it existed
-  describes exactly one world and is read as that, so nothing has to be edited.
-
-- `mcwod players`, also reachable from the menu and as `mcwod whitelist`. It
-  turns the whitelist on and off, adds and removes names, and toggles who is an
-  admin from the same list. Taking away the last admin asks first, since a
-  server with none can only be repaired by editing files on the PC.
-- `server.compose_dir` remembers where the server's compose file lives, so
-  `restore-compose` and `players` no longer ask for it.
-
-- Server version and player slots are now learned from a status probe on first
-  boot and cached in `.server-info.json` next to the config. The server list
-  ping while the server is asleep reports the real version instead of protocol
-  -1, so clients no longer show "Incompatible Version", and it shows the real
-  number of slots instead of `motd.max_players`.
-- Concurrent connections are capped. Logins are limited to the server's own
-  player slots, or to `limits.max_logins` when that is set, and status pings get
-  a separate pool of five times that with a floor of 64. `limits.max_per_ip`
-  (default 8) applies to each pool on its own, so a household behind one NAT is
-  not locked out. A rejected login gets `motd.server_full`.
-- `motd.server_full`, shown to a player who arrives when the login pool is
-  full.
-- `mcwod update` installs a newer release. It shows what changed, asks
-  before doing anything, verifies the download against the published
-  `checksums.txt` and refuses to install on a mismatch or a missing entry, and
-  will not follow a redirect off the release host. The new binary is staged
-  beside the old one and renamed over it, so a failed download cannot leave a
-  half written file where the service expects a program. **Nothing ever updates
-  by itself.**
-- `init`, `config` and `check` print one line when a newer release exists, with
-  the command to install it. The result is cached for a day and the check has a
-  two second timeout, so an offline machine barely notices. `update.check:
-  false` turns it off, and the README says why you might want to: it is a
-  request to GitHub, which tells GitHub the machine's IP.
-- `mcwod config`, a menu for changing an existing setup, also reachable
-  as `edit` and `settings`. Until now `init` refused to run once `config.yml`
-  existed, so every later change meant editing YAML by hand. It writes through
-  the parsed document rather than re-marshalling the config, so the comments
-  people put in their own file survive, and it validates before writing so a
-  menu session cannot leave behind a config the watcher would refuse to start
-  with. The config file is also forced back to mode 0600 on save, since it
-  holds the DuckDNS token.
-- `init` can set the server up over SSH. It asks for the address and the user
-  separately, logs in once with a password and then finds out the rest instead
-  of asking: the MAC address and broadcast address off the interface carrying
-  the default route, the containers and which port the Minecraft one publishes,
-  whether RCON is on, whether the kernel can suspend or hibernate, and whether
-  Wake-on-LAN is armed in the network driver. It installs its own key and, if
-  asked, the sleep helper. Everything found is shown before it is used, and
-  answering no falls back to the questions.
-- A network card left at `Wake-on: d` is offered a fix on the spot, both
-  immediately and through a small systemd unit that re-arms it after every boot,
-  because most distributions reset the setting. That single line is the most
-  common reason this project appears to do nothing at all.
-- `server.ip` accepts a hostname as well as an IP now. It has to resolve, since
-  the MAC lookup and unicast WoL need an address.
-- `init` and `config` can set the Minecraft container up on the server, so the
-  server PC no longer has to be touched for that either. They write a compose
+  falling back to the shared ones.
+- `mcwod players`, also reachable as `mcwod whitelist`. Turns the whitelist on
+  and off, adds and removes names, and says who is an admin. Removing the last
+  admin asks first.
+- `mcwod config` changes an existing setup through a menu, also spelled `edit`
+  and `settings`. Your own comments in `config.yml` survive it, and it validates
+  before writing.
+- `mcwod update` installs a newer release. It shows what changed, asks first,
+  and verifies the download against the published `checksums.txt`. **Nothing
+  ever updates by itself.**
+- `init`, `config` and `check` mention a newer release in one line. Cached for a
+  day, two second timeout, `update.check: false` turns it off.
+- `init` can set the server up over one password login. It reads the MAC and
+  broadcast address, lists the containers, checks RCON, suspend support and
+  Wake-on-LAN, and installs its own key. Everything it finds is shown first.
+- A network card left at `Wake-on: d` is offered a fix, both now and through a
+  small unit that re-arms it after every boot. That one line is the most common
+  reason this project appears to do nothing.
+- `init` and `config` can set the Minecraft container up. They write a compose
   file with `itzg/minecraft-server` and `itzg/mc-backup` on pinned tags, RCON
-  on, AUTOPAUSE on and only the game port published, generate an RCON password
-  into a `.env` with mode 600, and bring the stack up. The server type and the
-  Minecraft version are asked for, both with a concrete default rather than
-  `LATEST`, so a pull cannot move the server under the world. Accepting the
-  Minecraft EULA is its own question that says what it means.
-- The wizard asks for a whitelist. Naming players switches
-  `ENFORCE_WHITELIST` on and makes the first one the operator, leaving it empty
-  keeps the server open, which is what a fresh server is anyway. An enforced but
-  empty whitelist would lock out the owner too, so it is never written.
-- A compose file that is already there gets the two services added to it
-  instead. Other services, the top level keys and every comment stay exactly as
-  they were, a copy is kept as `docker-compose.yml.mcwod-bak-<time>` first,
-  `docker compose config` has to accept the result before it counts, and a
-  service name that already exists is refused rather than overwritten. An
-  existing `.env` gets three appended lines and nothing else, under
-  `MCWOD_RCON_PASSWORD` so a foreign `RCON_PASSWORD` cannot be shadowed.
-- `mcwod restore-compose` puts back a compose file the watcher replaced.
-  The version it replaces is kept as a backup on the way, so the restore is
-  itself undoable. It uses the password login, not the restricted key, which
-  keeps that key at its six verbs.
-- The Docker warning now says what is actually different per platform. On
-  Windows it points out that Docker Desktop only runs while a user is logged in,
-  so a resumed PC can come back without its container.
-- `mcwod get-server-icon`, also spelled `learn-server-icon`, copies the
-  icon a running server already serves into `assets/server-icon.png`. It is a
-  command and not something the proxy picks up on its own, because answering an
-  unauthenticated status ping must never write to disk. An icon that was already
-  there is kept as `.bak`.
-- The watcher brings its own server list icon. Three blue Z that grow, with the
-  largest turning into a red exclamation mark while the PC boots. They ship
-  inside the binary, so a fresh install shows them without any files being put
-  anywhere. `assets/server-icon.png` is composed underneath at half opacity on
-  white, so an existing icon still shows through with the Z drawn over it.
-- Per state overrides. `assets/server-icon-sleeping.png`, `-starting.png` and
-  `-live.png` replace an icon outright, `assets/motd-live.json` and `motd.live`
-  do the same for the MOTD. With a `-live` override the watcher rewrites the
-  running server's status response instead of forwarding it unchanged, swapping
-  only the description and the favicon, so the player count, the version and the
-  sample stay real. Nothing set leaves the running server exactly as it was,
-  which is still the default.
-- `assets/examples/` with a copyable MOTD for all three states and a README
-  explaining the override order. The two MOTD files that used to sit in
-  `assets/` moved there, they only ever restated the config defaults.
-- The watcher can put the server PC back to sleep once nobody is playing,
-  closing issue #6. Set `sleep.enabled: true` after `setup-ssh` installed the
-  helper. In proxy mode it counts the sessions it forwards, which costs nothing
-  and does not touch the Minecraft port, so it never fights the container's own
-  autopause. In transfer mode, where sessions skip the watcher entirely, it
-  polls over SSH instead. The counter only decides whether the server is worth
-  asking, the answer from the server always decides whether it sleeps, and an
-  answer that cannot be read counts as busy rather than as empty.
-- `setup-ssh` can now install `mcwod-remote` on the server, a helper script
-  owned by root that accepts only the fixed words `hello`, `start`, `stop`,
-  `status`, `players` and `sleep` and refuses everything else. The key in
-  `authorized_keys` is bound to that script, so the watcher can stop the
-  container and suspend the PC without the key ever being able to run an
-  arbitrary command. On Linux the matching `sudoers` rule is installed too,
-  checked with `visudo -c` before it goes anywhere near `/etc`, and it names one
-  exact `systemctl` subcommand without a wildcard.
-- `setup-ssh` detects whether the server runs Linux or Windows and whether it
-  has docker, systemctl and passwordless sudo, instead of asking. On Windows it
-  prints the PowerShell helper, the `icacls` calls that keep it writable only by
-  administrators, and a note that OpenSSH reads
-  `administrators_authorized_keys` rather than the profile for admin accounts.
-- `check` asks the server real questions once the helper is installed instead of
-  guessing from a refused command. It confirms the helper answers `hello` with
-  its marker, reports the container state, reads the player count, and reports
-  whether Wake-on-LAN is armed in the network driver. A card with
-  `Wake-on: d` is the most common reason this project appears to do nothing at
-  all, and nothing else in the setup would have revealed it.
-- `check` gained a Sleep section that reports the configured action, warns when
-  `sleep.grace_period` is shorter than a boot takes, and points out that
-  transfer mode makes the sleep monitor poll over SSH rather than count the
-  sessions it forwards.
-- `server.remote_helper` and the `sleep` config block. The watcher refuses to
-  start with `sleep.enabled` and no helper, because an older forced command
-  would silently run `docker start` for every verb it is sent, including
-  `sleep`.
-- Optional `watcher.allowed_hostnames` list. When non-empty, the watcher drops
-  connections from non-local IPs whose handshake ServerAddress is not in the
-  list, keeping port scanners and internet crawlers from getting any response.
-  Auto-populated from the DuckDNS domain when DuckDNS is enabled.
+  on, AUTOPAUSE on, transfers accepted, an RCON password in a `.env` with mode
+  600, and bring it up.
+  The version is asked for rather than left at `LATEST`.
+- An existing compose file gets the two services added instead. Other services,
+  keys and comments stay, a backup is kept, `docker compose config` has to
+  accept the result, and an existing service name is refused.
+- `mcwod restore-compose` puts back a compose file the watcher replaced, keeping
+  the replaced one as a backup.
+- The wizard asks for a whitelist and for the admin separately. An enforced but
+  empty whitelist is never written.
+- `mcwod get-server-icon` copies the icon a running server serves into
+  `assets/server-icon.png`. It is a command, not something the proxy picks up,
+  because answering a status ping must never write to disk.
+- The watcher brings its own server list icon: three blue Z, the largest turning
+  into a red exclamation mark while the PC boots. They ship inside the binary.
+- Per state overrides. `server-icon-sleeping.png`, `-starting.png` and
+  `-live.png` replace an icon outright, `motd-live.json` and `motd.live` do the
+  same for the MOTD. A `-live` override swaps only the description and the
+  favicon, so the player count and version stay real.
+- `assets/motd-login-wait.json` and `motd.login_wait`, the message shown to
+  whoever's join woke the server.
+- `assets/examples/` with a copyable MOTD for every state, a placeholder icon
+  and a README explaining the override order.
+- The watcher can put the server PC back to sleep once nobody plays, closing
+  issue #6. Set `sleep.enabled: true` after `setup-ssh` installed the helper. An
+  answer it cannot read counts as busy, never as empty.
+- `setup-ssh` can install `mcwod-remote` on the server, a root owned script that
+  accepts six fixed words and nothing else. The key is bound to it, so a leaked
+  key cannot run an arbitrary command. The `sudoers` rule is checked with
+  `visudo -c` before it goes near `/etc`.
+- `setup-ssh` works out whether the server runs Linux or Windows and what it
+  has, instead of asking. On Windows it prints the helper and the `icacls` calls
+  that go with it.
+- `check` asks the server real questions once the helper is there: the marker,
+  the container state, the player count, and whether Wake-on-LAN is armed. It
+  also reports the sleep setup.
+- The version and player slots are learned from a status probe and cached, so a
+  sleeping server reports its real version instead of protocol -1.
+- Concurrent connections are capped. Logins are held to the server's own slots,
+  status pings get their own pool, and `limits.max_per_ip` applies to each so a
+  household behind one NAT is not locked out.
+- `motd.server_full`, shown when the login pool is full.
+- `server.compose_dir` remembers where the compose file lives.
+- `server.remote_helper` and the `sleep` block. The watcher refuses to start
+  with `sleep.enabled` and no helper.
+- The `worlds` block in `config.yml`. An older config describes one world and is
+  read as that.
+- `server.ip` takes a hostname as well as an IP, as long as it resolves.
+- Optional `watcher.allowed_hostnames`. Connections from outside whose handshake
+  names something else are dropped, which keeps port scanners from getting an
+  answer.
 
 ### Changed
 
-- The wizard and `check` use colour: what you type is green, side notes are
-  grey, warnings amber and failures red. It is off whenever nothing is attached
-  to the terminal, so pipes and the journal stay clean, `NO_COLOR` and
-  `TERM=dumb` switch it off, and on Windows the console is put into virtual
-  terminal mode first because the older `conhost` otherwise prints the escape
-  codes as text.
-
-- **The tool is called `mcwod` now.** The binary, the release assets, the
-  install directory `/opt/mcwod`, the systemd unit, the helper on the server,
-  its sudoers file, the Wake-on-LAN unit, the SSH key and the environment
-  variables all follow. `MC_WOL_*` still works and warns once, so a mirror or a
-  script that sets them keeps running. The repository and the Go module path
-  are unchanged.
-- `install.sh` stops and disables an `mc-wol-proxy` service if it finds one and
-  says where the old config is. Two watchers on port 25565 would have produced
-  failures that look random rather than one clear message.
-
-### Added
-
-- `assets/examples/` ships a placeholder `server-icon.png` and the MOTD files
-  now say `CHANGE THIS TOP LINE` rather than repeating the built-in text, so it
-  is obvious what to edit. Its README lists the colours Minecraft accepts and
-  spells out that a file beats `config.yml`, which beats the built-in text.
+- **The tool is called `mcwod` now.** The binary, the release assets,
+  `/opt/mcwod`, the unit, the helper, the SSH key and the environment variables
+  all follow. `MC_WOL_*` still works and warns once.
+- A player whose join wakes the server is told to come back instead of being
+  held on the connection. Waking takes longer than any client waits.
+- Your `server-icon.png` feeds all three states, plain while the server runs and
+  at half opacity under the Z while it sleeps.
+- A generated compose sets `ENFORCE_SECURE_PROFILE: "FALSE"`, so chat is
+  unsigned and nothing is held back or reportable. `ONLINE_MODE` is untouched.
+- Waking brings the whole compose project up, so the backup service comes back
+  with the server.
+- `mcwod` on its own shows a menu instead of the help. Started as a service it
+  still runs the watcher.
+- The wizard is written for somebody who has not used a terminal. Choices are
+  numbered, the reason sits above the question in grey, and the jargon is gone.
+- The wizard and `check` use colour: what you type green, side notes grey,
+  warnings amber, failures red. Off whenever nothing is attached to a terminal,
+  and `NO_COLOR` turns it off.
+- The server type is asked for, so a mod server is a choice. The heap size is
+  suggested from the RAM the server reports.
+- The DuckDNS token stays visible while you type it. It is pasted off a page,
+  and hiding it only makes it harder to check.
+- `get-server-icon` warns before it replaces a picture and keeps the old one
+  only if you say so.
+- `install.sh` stops an `mc-wol-proxy` service if it finds one. Two watchers on
+  port 25565 would have failed in ways that look random.
+- Transfer mode is only offered in the wizard to people who use DuckDNS.
+  Everyone else has nothing to forward.
+- Transfer mode needs 1.20.5 (protocol 766), the first version with the
+  Transfer packet. Proxy mode still supports 1.7.6+.
 
 ### Fixed
 
-- `duckdns.domain` takes the address either way round. `eliahmc` and
-  `eliahmc.duckdns.org` both work, and the suffix is trimmed on load. It used to
-  be a hard startup error, which is an odd thing to refuse given that the long
-  form is what the DuckDNS page shows you.
-- Running `mcwod` with no argument at a terminal prints the help instead
-  of silently starting the proxy. Started as a service, where nothing is
-  attached, it still runs the proxy, so existing installations are unaffected.
-  The systemd unit, the Docker image and both Windows starters now say `run`
-  outright rather than relying on that.
-- The broadcast address is worked out from the watcher's own network interface
-  instead of assuming a `/24`. On a `/16` or `/22` the guess was simply wrong,
-  and the only symptom was that waking never worked. `init` no longer asks for
-  it at all, except when the server turns out to be in a different network,
-  where there is nothing local to work it out from.
-- The watcher generates its own SSH key at `~/.ssh/mcwod` instead of
-  reusing `~/.ssh/id_ed25519`. Finding a key already at the default path meant
-  adopting it, so an internet facing service ended up holding the key its owner
-  logs in with everywhere else. Existing installs keep using the key they have
-  and `check` points out how to move off it.
-
-- The status response from the real server is now read by its length prefix
-  instead of from a single 4096 byte read. A response carrying a server icon is
-  around 10 kB and never arrives in one segment, so version learning silently
-  did nothing on every server that had an icon configured.
-- A server icon over 64 kB or with dimensions other than 64x64 is skipped with a
-  warning instead of being sent. An unauthenticated status ping is answered to
-  anyone, so an oversized icon turned a 30 byte request into a multi megabyte
-  reply. MOTD files are capped at 8 kB for the same reason, and the icon is
-  base64 encoded once per change instead of once per ping.
-- `watcher.allowed_hostnames` no longer rejects Forge players and players
-  behind a forwarding proxy. Both append their own fields after a NUL byte to
-  the address in the handshake, so `mc.example.org` arrived as
-  `mc.example.org\0FML3\0` and never matched. Only the part before the first
-  NUL is compared now, and a trailing dot is ignored.
-- The Login Success packet no longer carries a stale `0x01` strict error
-  handling byte for clients whose protocol is outside 766-767, which crashed
-  1.21.2+ and other versions with `DecoderException: 1 extra byte`.
-
-### Changed
-
-- Minimum supported version in transfer mode is 1.20.5 (protocol 766), the
-  first version with the clientbound Transfer packet. Proxy mode still supports
-  1.7.6+.
+- Login Success carries the session id that clients from protocol 776 expect.
+  Minecraft 26.2 refused every login without it. The packet has changed shape
+  three times now and each range is written the way it expects.
+- Login Success no longer carries a stale strict error handling byte outside
+  766-767, which crashed 1.21.2+ with `DecoderException: 1 extra byte`.
+- The status request is forwarded to the real server. Clients may send it apart
+  from the handshake, and only the handshake was passed on, so a running server
+  showed up in the list as asleep.
+- The watcher waits for Minecraft to answer before calling the server live. The
+  published port came about 24 seconds earlier.
+- The watcher generates its own SSH key and never adopts `~/.ssh/id_ed25519`.
+  An internet facing service ended up holding the key its owner logs in with
+  everywhere else.
+- `setup-ssh` replaces an outdated entry for its own key instead of leaving it.
+  Every other line in `authorized_keys` stays as it was.
+- `install.sh` no longer strands a first install. It put the example config in
+  place, which made the `init` it then told you to run refuse to start, and it
+  printed that step with `sudo`, so `setup-ssh` wrote the key under `/root`
+  where the service cannot read it.
+- `install.sh` no longer prints a curl write error over every install.
+- The setup questions no longer repeat forever when their answers run out. A
+  closed input gives empty reads forever, and one validated question filled a
+  log with 197 MB in seconds.
+- `duckdns.domain` takes the address either way round, with or without the
+  suffix. It used to be a hard startup error.
+- `mcwod` with no argument at a terminal no longer silently starts the proxy.
+  The unit, the image and both Windows starters say `run` outright.
+- The broadcast address is read off the watcher's own interface instead of
+  assuming a `/24`. On a `/16` the guess was wrong and waking simply never
+  worked.
+- An icon over 64 kB or not 64x64 is skipped with a warning. A status ping is
+  answered to anyone, so an oversized icon turned a 30 byte request into a
+  multi megabyte reply. MOTD files are capped at 8 kB.
 
 ## 2.0.0
 
