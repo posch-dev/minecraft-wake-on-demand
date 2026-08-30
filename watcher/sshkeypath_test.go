@@ -47,17 +47,18 @@ func TestOwnKeyWinsOverTheSharedOne(t *testing.T) {
 	}
 }
 
-// An install from before the watcher had its own key keeps working.
-func TestExistingSharedKeyKeepsWorking(t *testing.T) {
+// A personal key lying at the default path is not adopted, not even when the
+// watcher has no key of its own yet.
+func TestSharedKeyIsNeverPickedUp(t *testing.T) {
 	home := homeWith(t, sharedKeyName)
 	cfg := defaultConfig()
 
-	want := filepath.Join(home, ".ssh", sharedKeyName)
+	want := filepath.Join(home, ".ssh", watcherKeyName)
 	if got := cfg.ResolvedSSHKeyPath(); got != want {
 		t.Errorf("key path = %q, want %q", got, want)
 	}
-	if !cfg.UsesSharedSSHKey() {
-		t.Error("check has to be able to warn about this case")
+	if cfg.UsesSharedSSHKey() {
+		t.Error("the shared key was picked up")
 	}
 }
 
@@ -71,5 +72,16 @@ func TestConfiguredPathAlwaysWins(t *testing.T) {
 	}
 	if cfg.UsesSharedSSHKey() {
 		t.Error("an explicit path is never the shared key")
+	}
+}
+
+// Writing the path in by hand is allowed, check warns about it.
+func TestConfiguredSharedKeyStillWarns(t *testing.T) {
+	home := homeWith(t, sharedKeyName)
+	cfg := defaultConfig()
+	cfg.Server.SSHKeyPath = filepath.Join(home, ".ssh", sharedKeyName)
+
+	if !cfg.UsesSharedSSHKey() {
+		t.Error("check has to be able to warn about this case")
 	}
 }
