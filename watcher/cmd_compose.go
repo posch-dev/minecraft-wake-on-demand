@@ -277,7 +277,7 @@ func writeComposeFiles(p *prompter, s *ServerSession, target ComposeTarget,
 	}
 	fmt.Printf("Written to %s, compose accepts it.\n", target.File)
 
-	if !p.yesNo("Start the containers now", true) {
+	if !p.yesNo("Start the containers now?", true) {
 		fmt.Printf("Start them yourself with: cd %s && %s up -d\n", target.Dir, target.Command)
 		return true
 	}

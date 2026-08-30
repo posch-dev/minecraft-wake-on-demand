@@ -190,7 +190,8 @@ The config is looked for in `MCWOD_CONFIG`, then next to the binary, then one di
 
 By default, all traffic flows through the watcher. With transfer mode, the watcher only handles the wake-up part, then redirects the player directly to the server. Better performance, but needs an extra port forward.
 
-To enable:
+`mcwod init` offers it when you set up DuckDNS, and `mcwod config` turns it on or off later. To do it by hand:
+
 1. Forward a second port (e.g. `25566`) on your router directly to the server PC
 2. Set `accepts-transfers=true` in the server's `server.properties`
 3. In `config.yml`:
