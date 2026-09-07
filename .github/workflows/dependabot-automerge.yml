@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: What kind of update is this
         id: meta
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@v3
 
       # Patch only. x/crypto and x/net are compiled in, so anything
       # bigger gets looked at by hand.
